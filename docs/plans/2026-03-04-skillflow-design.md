@@ -26,7 +26,7 @@ SkillFlow 是一个面向**个人开发者**的桌面客户端工具，用于统
 
 | 层次 | 技术 |
 |------|------|
-| 后端业务逻辑 | Go（最新稳定版） |
+| 后端业务逻辑 | Go 1.26 |
 | 桌面 UI 框架 | Wails v2 |
 | 前端 | React + TypeScript |
 | 前端状态管理 | Zustand / Jotai |
@@ -107,9 +107,10 @@ type Skill struct {
     Source      SourceType
     SourceURL   string     // GitHub 来源时记录仓库 URL
     SourceSubPath string   // GitHub 仓库内子路径，如 skills/skill-a
-    SourceSHA   string     // 安装时记录的 commit SHA（用于更新检测）
-    InstalledAt time.Time
-    UpdatedAt   time.Time
+    SourceSHA     string     // 安装时记录的 commit SHA（用于更新检测）
+    LatestSHA     string     // 检测到更新后记录的最新 SHA（用于 UI 显示红色角标）
+    InstalledAt   time.Time
+    UpdatedAt     time.Time
     LastCheckedAt time.Time
 }
 ```
@@ -219,8 +220,8 @@ type RemoteFile struct {
 type CloudProvider interface {
     Name() string
     Init(credentials map[string]string) error
-    // 增量同步，保持云端与本地目录结构完全一致
-    Sync(ctx context.Context, localDir string, bucket string, remotePath string) error
+    // 增量同步，保持云端与本地目录结构完全一致；onProgress 回调用于向前端报告当前上传文件
+    Sync(ctx context.Context, localDir string, bucket string, remotePath string, onProgress func(file string)) error
     Restore(ctx context.Context, bucket string, remotePath string, localDir string) error
     List(ctx context.Context, bucket string, remotePath string) ([]RemoteFile, error)
     // 动态返回该 provider 所需的凭证字段，用于 UI 动态渲染配置表单
@@ -265,7 +266,9 @@ SkillFlow 维护自己的中央 skills 存储目录作为 source of truth：
 ### 6.2 Skills 分类管理
 
 - 支持创建、重命名、删除分类（对应本地子目录）
-- Dashboard 左侧分类面板支持拖拽排序
+  - 重命名：将本地目录重命名，并更新该分类下所有 skill 元数据中的 Category 字段
+  - 删除：若分类下有 skill，需提示用户确认；删除后 skill 移至"未分类"
+- Dashboard 左侧分类面板支持拖拽排序（顺序持久化到配置）
 - Skills 卡片支持跨分类拖拽（拖到左侧分类上）
 - 安装/导入时可选择目标分类
 
@@ -288,10 +291,18 @@ SkillFlow 维护自己的中央 skills 存储目录作为 source of truth：
 
 ### 6.5 更新检测（仅 GitHub 来源）
 
-- 记录安装时 skill 目录对应的最新 commit SHA
+- 记录安装时 skill 目录对应的最新 commit SHA（`SourceSHA`）
 - 检测时调用 `GET /repos/{owner}/{repo}/commits?path={subPath}&per_page=1` 对比 SHA
-- 触发时机：应用启动时后台静默检测 + 用户手动触发
-- 有更新时 SkillCard 显示红色角标，用户确认后重新下载覆盖
+- 触发时机：应用启动时后台静默检测 + 用户在 Dashboard 手动点击"检查更新"
+- 检测到更新时：将最新 SHA 写入 `LatestSHA` 字段，通过 notify hub 推送事件到前端
+- 前端收到事件后，对应 SkillCard 显示红色角标
+
+**更新执行流程：**
+1. 用户点击 SkillCard 上的"更新"按钮
+2. 重新从 GitHub 下载该 skill 目录内容（覆盖本地）
+3. 将 `SourceSHA` 更新为 `LatestSHA`，清空 `LatestSHA`
+4. 更新 `UpdatedAt` 时间戳
+5. 触发自动云备份
 
 ### 6.6 跨工具同步
 
@@ -316,10 +327,12 @@ SkillFlow 维护自己的中央 skills 存储目录作为 source of truth：
 ### 6.7 云端备份
 
 - 支持云厂商：阿里云 OSS、腾讯云 COS、华为云 OBS（架构支持扩展）
-- 触发方式：skills 变动时自动触发 + 用户手动触发
-- 同步策略：增量同步，云端与本地目录结构完全镜像（不压缩）
-- 凭证安全：敏感凭证存入系统密钥链（macOS Keychain / Windows Credential Manager）
-- 配置 UI：根据 `RequiredCredentials()` 动态渲染各云厂商的配置表单
+- 触发方式：
+  - **自动触发**：以下操作完成后自动备份：安装 skill、删除 skill、更新 skill、同步拉取
+  - **手动触发**：用户点击备份页面"立即备份"按钮
+- 同步策略：增量同步，云端与本地目录结构完全镜像（不压缩，不打包）
+- 凭证安全：敏感凭证（Secret Key 等）存入系统密钥链（macOS Keychain / Windows Credential Manager），非敏感字段（endpoint、bucket 等）存 config.json
+- 配置 UI：根据 `RequiredCredentials()` 动态渲染各云厂商的配置表单，Secret 字段使用密码输入框
 
 ---
 

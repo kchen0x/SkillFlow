@@ -1016,6 +1016,58 @@ func (s *Storage) UpdateMeta(sk *Skill) error {
     return s.saveMeta(sk)
 }
 
+func (s *Storage) RenameCategory(oldName, newName string) error {
+    oldPath := filepath.Join(s.root, oldName)
+    newPath := filepath.Join(s.root, newName)
+    if err := os.Rename(oldPath, newPath); err != nil {
+        return err
+    }
+    // Update all skill metadata in this category
+    skills, err := s.ListAll()
+    if err != nil {
+        return err
+    }
+    for _, sk := range skills {
+        if sk.Category == oldName {
+            sk.Category = newName
+            sk.Path = filepath.Join(newPath, sk.Name)
+            sk.UpdatedAt = time.Now()
+            if err := s.saveMeta(sk); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
+}
+
+func (s *Storage) DeleteCategory(name string) error {
+    skills, err := s.ListAll()
+    if err != nil {
+        return err
+    }
+    // Move skills to uncategorized before deleting
+    for _, sk := range skills {
+        if sk.Category == name {
+            if err := s.MoveCategory(sk.ID, ""); err != nil {
+                return err
+            }
+        }
+    }
+    return os.Remove(filepath.Join(s.root, name))
+}
+
+// OverwriteFromDir replaces an existing skill's directory contents from srcDir, used for updates.
+func (s *Storage) OverwriteFromDir(id, srcDir string) error {
+    sk, err := s.Get(id)
+    if err != nil {
+        return err
+    }
+    if err := os.RemoveAll(sk.Path); err != nil {
+        return err
+    }
+    return copyDir(srcDir, sk.Path)
+}
+
 func (s *Storage) saveMeta(sk *Skill) error {
     if err := os.MkdirAll(s.metaDir, 0755); err != nil {
         return err
@@ -1317,6 +1369,36 @@ func (g *GitHubInstaller) downloadFile(ctx context.Context, url, category, skill
     defer f.Close()
     _, err = io.Copy(f, resp.Body)
     return err
+}
+
+// DownloadTo downloads a skill candidate from GitHub into targetDir.
+// Called by app layer after scanning, before importing into storage.
+func (g *GitHubInstaller) DownloadTo(ctx context.Context, source InstallSource, c SkillCandidate, targetDir string) error {
+    owner, repo, err := parseGitHubURI(source.URI)
+    if err != nil {
+        return err
+    }
+    return g.downloadDir(ctx, owner, repo, c.Path, "", c.Name)
+}
+
+// GetLatestSHA fetches the latest commit SHA for a skill's subdirectory path.
+func (g *GitHubInstaller) GetLatestSHA(ctx context.Context, repoURL, subPath string) (string, error) {
+    owner, repo, err := parseGitHubURI(repoURL)
+    if err != nil {
+        return "", err
+    }
+    url := fmt.Sprintf("%s/repos/%s/%s/commits?path=%s&per_page=1", g.baseURL, owner, repo, subPath)
+    req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+    resp, err := g.client.Do(req)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()
+    var commits []struct{ SHA string `json:"sha"` }
+    if err := json.NewDecoder(resp.Body).Decode(&commits); err != nil || len(commits) == 0 {
+        return "", err
+    }
+    return commits[0].SHA, nil
 }
 
 func parseGitHubURI(uri string) (owner, repo string, err error) {
@@ -1990,11 +2072,16 @@ package main
 
 import (
     "context"
+    "fmt"
+    "os"
+    "path/filepath"
+    "github.com/shinerio/skillflow/core/backup"
     "github.com/shinerio/skillflow/core/config"
     "github.com/shinerio/skillflow/core/install"
     "github.com/shinerio/skillflow/core/notify"
     "github.com/shinerio/skillflow/core/registry"
     "github.com/shinerio/skillflow/core/skill"
+    toolsync "github.com/shinerio/skillflow/core/sync"
     "github.com/shinerio/skillflow/core/update"
     "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -2024,6 +2111,34 @@ func (a *App) startup(ctx context.Context) {
     go a.checkUpdatesOnStartup()
 }
 
+// autoBackup triggers cloud backup after any mutating operation if cloud is enabled.
+func (a *App) autoBackup() {
+    cfg, err := a.config.Load()
+    if err != nil || !cfg.Cloud.Enabled || cfg.Cloud.Provider == "" {
+        return
+    }
+    provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
+    if !ok {
+        return
+    }
+    if err := provider.Init(cfg.Cloud.Credentials); err != nil {
+        return
+    }
+    a.hub.Publish(notify.Event{Type: notify.EventBackupStarted})
+    err = provider.Sync(a.ctx, cfg.SkillsStorageDir, cfg.Cloud.BucketName, cfg.Cloud.RemotePath,
+        func(file string) {
+            a.hub.Publish(notify.Event{
+                Type:    notify.EventBackupProgress,
+                Payload: notify.BackupProgressPayload{CurrentFile: file},
+            })
+        })
+    if err != nil {
+        a.hub.Publish(notify.Event{Type: notify.EventBackupFailed, Payload: err.Error()})
+    } else {
+        a.hub.Publish(notify.Event{Type: notify.EventBackupCompleted})
+    }
+}
+
 // --- Skills ---
 
 func (a *App) ListSkills() ([]*skill.Skill, error) {
@@ -2038,39 +2153,92 @@ func (a *App) CreateCategory(name string) error {
     return a.storage.CreateCategory(name)
 }
 
+func (a *App) RenameCategory(oldName, newName string) error {
+    return a.storage.RenameCategory(oldName, newName)
+}
+
+func (a *App) DeleteCategory(name string) error {
+    return a.storage.DeleteCategory(name)
+}
+
 func (a *App) MoveSkillCategory(skillID, category string) error {
     return a.storage.MoveCategory(skillID, category)
 }
 
 func (a *App) DeleteSkill(skillID string) error {
-    return a.storage.Delete(skillID)
+    if err := a.storage.Delete(skillID); err != nil {
+        return err
+    }
+    go a.autoBackup()
+    return nil
 }
 
 // --- Install ---
 
+// ScanGitHub scans a GitHub repo for valid skills, marking already-installed ones.
 func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
     inst := install.NewGitHubInstaller("")
-    return inst.Scan(a.ctx, install.InstallSource{Type: "github", URI: repoURL})
+    candidates, err := inst.Scan(a.ctx, install.InstallSource{Type: "github", URI: repoURL})
+    if err != nil {
+        return nil, err
+    }
+    // Mark already-installed skills
+    existing, _ := a.storage.ListAll()
+    existingNames := map[string]bool{}
+    for _, sk := range existing {
+        existingNames[sk.Name] = true
+    }
+    for i := range candidates {
+        candidates[i].Installed = existingNames[candidates[i].Name]
+    }
+    return candidates, nil
 }
 
+// InstallFromGitHub downloads selected skills from GitHub and imports them into storage.
 func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandidate, category string) error {
-    // For each candidate, download to tmp then import via storage
     inst := install.NewGitHubInstaller("")
-    return inst.Install(a.ctx, install.InstallSource{Type: "github", URI: repoURL}, candidates, category)
+    source := install.InstallSource{Type: "github", URI: repoURL}
+
+    // Download each candidate to tmp, then import via storage
+    for _, c := range candidates {
+        tmpDir := filepath.Join(os.TempDir(), "skillflow-install", c.Name)
+        defer os.RemoveAll(tmpDir)
+
+        if err := inst.DownloadTo(a.ctx, source, c, tmpDir); err != nil {
+            return fmt.Errorf("download %s: %w", c.Name, err)
+        }
+
+        // Get commit SHA for the skill directory
+        sha, _ := inst.GetLatestSHA(a.ctx, repoURL, c.Path)
+
+        _, err := a.storage.Import(tmpDir, category, skill.SourceGitHub, repoURL, c.Path)
+        if err != nil {
+            return err
+        }
+        // Update SHA in meta after import
+        skills, _ := a.storage.ListAll()
+        for _, sk := range skills {
+            if sk.Name == c.Name && sk.SourceURL == repoURL {
+                sk.SourceSHA = sha
+                _ = a.storage.UpdateMeta(sk)
+                break
+            }
+        }
+    }
+    go a.autoBackup()
+    return nil
 }
 
 func (a *App) ImportLocal(dir, category string) (*skill.Skill, error) {
-    return a.storage.Import(dir, category, skill.SourceManual, "", "")
+    sk, err := a.storage.Import(dir, category, skill.SourceManual, "", "")
+    if err != nil {
+        return nil, err
+    }
+    go a.autoBackup()
+    return sk, nil
 }
 
 // --- Sync ---
-
-type ConflictResolution string
-
-const (
-    ConflictOverwrite ConflictResolution = "overwrite"
-    ConflictSkip      ConflictResolution = "skip"
-)
 
 func (a *App) GetEnabledTools() ([]config.ToolConfig, error) {
     cfg, err := a.config.Load()
@@ -2086,18 +2254,153 @@ func (a *App) GetEnabledTools() ([]config.ToolConfig, error) {
     return enabled, nil
 }
 
+// ScanToolSkills lists all skills in a tool's directory for the pull page.
 func (a *App) ScanToolSkills(toolName string) ([]*skill.Skill, error) {
     cfg, _ := a.config.Load()
     for _, t := range cfg.Tools {
         if t.Name == toolName {
-            adapter, ok := registry.GetAdapter(toolName)
-            if !ok {
-                adapter = newFilesystemAdapterFromConfig(t)
-            }
+            adapter := getAdapter(t)
             return adapter.Pull(a.ctx, t.SkillsDir)
         }
     }
     return nil, nil
+}
+
+// PushToTools pushes selected skills to target tools, flattened (no category dirs).
+// Returns list of conflict skill names that were skipped.
+func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]string, error) {
+    cfg, _ := a.config.Load()
+    skills, err := a.storage.ListAll()
+    if err != nil {
+        return nil, err
+    }
+
+    // Filter selected skills
+    idSet := map[string]bool{}
+    for _, id := range skillIDs {
+        idSet[id] = true
+    }
+    var selected []*skill.Skill
+    for _, sk := range skills {
+        if idSet[sk.ID] {
+            selected = append(selected, sk)
+        }
+    }
+
+    var conflicts []string
+    for _, toolName := range toolNames {
+        for _, t := range cfg.Tools {
+            if t.Name != toolName {
+                continue
+            }
+            adapter := getAdapter(t)
+            for _, sk := range selected {
+                dst := filepath.Join(t.SkillsDir, sk.Name)
+                if _, err := os.Stat(dst); err == nil {
+                    conflicts = append(conflicts, fmt.Sprintf("%s -> %s", sk.Name, toolName))
+                    continue
+                }
+            }
+            _ = adapter.Push(a.ctx, selected, t.SkillsDir)
+        }
+    }
+    return conflicts, nil
+}
+
+// PushToToolsForce pushes and overwrites conflicts.
+func (a *App) PushToToolsForce(skillIDs []string, toolNames []string) error {
+    cfg, _ := a.config.Load()
+    skills, _ := a.storage.ListAll()
+    idSet := map[string]bool{}
+    for _, id := range skillIDs {
+        idSet[id] = true
+    }
+    var selected []*skill.Skill
+    for _, sk := range skills {
+        if idSet[sk.ID] {
+            selected = append(selected, sk)
+        }
+    }
+    for _, toolName := range toolNames {
+        for _, t := range cfg.Tools {
+            if t.Name == toolName {
+                _ = getAdapter(t).Push(a.ctx, selected, t.SkillsDir)
+            }
+        }
+    }
+    return nil
+}
+
+// PullFromTool imports selected skills from a tool into SkillFlow storage.
+func (a *App) PullFromTool(toolName string, skillNames []string, category string) ([]string, error) {
+    cfg, _ := a.config.Load()
+    nameSet := map[string]bool{}
+    for _, n := range skillNames {
+        nameSet[n] = true
+    }
+    for _, t := range cfg.Tools {
+        if t.Name != toolName {
+            continue
+        }
+        adapter := getAdapter(t)
+        candidates, err := adapter.Pull(a.ctx, t.SkillsDir)
+        if err != nil {
+            return nil, err
+        }
+        var conflicts []string
+        for _, sk := range candidates {
+            if !nameSet[sk.Name] {
+                continue
+            }
+            _, err := a.storage.Import(sk.Path, category, skill.SourceManual, "", "")
+            if err != nil {
+                if err == skill.ErrSkillExists {
+                    conflicts = append(conflicts, sk.Name)
+                }
+            }
+        }
+        go a.autoBackup()
+        return conflicts, nil
+    }
+    return nil, nil
+}
+
+// PullFromToolForce imports selected skills, overwriting existing ones.
+func (a *App) PullFromToolForce(toolName string, skillNames []string, category string) error {
+    cfg, _ := a.config.Load()
+    nameSet := map[string]bool{}
+    for _, n := range skillNames {
+        nameSet[n] = true
+    }
+    for _, t := range cfg.Tools {
+        if t.Name != toolName {
+            continue
+        }
+        adapter := getAdapter(t)
+        candidates, _ := adapter.Pull(a.ctx, t.SkillsDir)
+        for _, sk := range candidates {
+            if !nameSet[sk.Name] {
+                continue
+            }
+            existing, _ := a.storage.ListAll()
+            for _, e := range existing {
+                if e.Name == sk.Name {
+                    _ = a.storage.Delete(e.ID)
+                    break
+                }
+            }
+            _, _ = a.storage.Import(sk.Path, category, skill.SourceManual, "", "")
+        }
+        go a.autoBackup()
+    }
+    return nil
+}
+
+func getAdapter(t config.ToolConfig) toolsync.ToolAdapter {
+    if a, ok := registry.GetAdapter(t.Name); ok {
+        return a
+    }
+    return toolsync.NewFilesystemAdapter(t.Name, t.SkillsDir)
 }
 
 // --- Config ---
@@ -2108,6 +2411,84 @@ func (a *App) GetConfig() (config.AppConfig, error) {
 
 func (a *App) SaveConfig(cfg config.AppConfig) error {
     return a.config.Save(cfg)
+}
+
+func (a *App) AddCustomTool(name, skillsDir string) error {
+    cfg, err := a.config.Load()
+    if err != nil {
+        return err
+    }
+    cfg.Tools = append(cfg.Tools, config.ToolConfig{
+        Name:      name,
+        SkillsDir: skillsDir,
+        Enabled:   true,
+        Custom:    true,
+    })
+    return a.config.Save(cfg)
+}
+
+func (a *App) RemoveCustomTool(name string) error {
+    cfg, err := a.config.Load()
+    if err != nil {
+        return err
+    }
+    filtered := cfg.Tools[:0]
+    for _, t := range cfg.Tools {
+        if !(t.Custom && t.Name == name) {
+            filtered = append(filtered, t)
+        }
+    }
+    cfg.Tools = filtered
+    return a.config.Save(cfg)
+}
+
+// --- Backup ---
+
+func (a *App) BackupNow() error {
+    a.autoBackup()
+    return nil
+}
+
+func (a *App) ListCloudFiles() ([]backup.RemoteFile, error) {
+    cfg, err := a.config.Load()
+    if err != nil {
+        return nil, err
+    }
+    provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
+    if !ok {
+        return nil, fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
+    }
+    if err := provider.Init(cfg.Cloud.Credentials); err != nil {
+        return nil, err
+    }
+    return provider.List(a.ctx, cfg.Cloud.BucketName, cfg.Cloud.RemotePath)
+}
+
+func (a *App) RestoreFromCloud() error {
+    cfg, err := a.config.Load()
+    if err != nil {
+        return err
+    }
+    provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
+    if !ok {
+        return fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
+    }
+    if err := provider.Init(cfg.Cloud.Credentials); err != nil {
+        return err
+    }
+    return provider.Restore(a.ctx, cfg.Cloud.BucketName, cfg.Cloud.RemotePath, cfg.SkillsStorageDir)
+}
+
+// ListCloudProviders returns all registered provider names and their required credential fields.
+func (a *App) ListCloudProviders() []map[string]any {
+    var result []map[string]any
+    for _, p := range registry.AllCloudProviders() {
+        result = append(result, map[string]any{
+            "name":   p.Name(),
+            "fields": p.RequiredCredentials(),
+        })
+    }
+    return result
 }
 
 // --- Updates ---
@@ -2136,6 +2517,30 @@ func (a *App) CheckUpdates() error {
             })
         }
     }
+    return nil
+}
+
+// UpdateSkill re-downloads a GitHub skill and updates local files and SHA.
+func (a *App) UpdateSkill(skillID string) error {
+    sk, err := a.storage.Get(skillID)
+    if err != nil {
+        return err
+    }
+    inst := install.NewGitHubInstaller("")
+    tmpDir := filepath.Join(os.TempDir(), "skillflow-update", sk.Name)
+    defer os.RemoveAll(tmpDir)
+
+    c := install.SkillCandidate{Name: sk.Name, Path: sk.SourceSubPath}
+    if err := inst.DownloadTo(a.ctx, install.InstallSource{Type: "github", URI: sk.SourceURL}, c, tmpDir); err != nil {
+        return err
+    }
+    if err := a.storage.OverwriteFromDir(skillID, tmpDir); err != nil {
+        return err
+    }
+    sk.SourceSHA = sk.LatestSHA
+    sk.LatestSHA = ""
+    _ = a.storage.UpdateMeta(sk)
+    go a.autoBackup()
     return nil
 }
 
@@ -2280,150 +2685,79 @@ git commit -m "feat: add frontend layout with sidebar navigation"
 - Create: `frontend/src/pages/Dashboard.tsx`
 - Create: `frontend/src/components/SkillCard.tsx`
 - Create: `frontend/src/components/CategoryPanel.tsx`
+- Create: `frontend/src/components/ContextMenu.tsx`
+- Create: `frontend/src/components/GitHubInstallDialog.tsx`
+- Create: `frontend/src/components/ConflictDialog.tsx`
 
-**Step 1: Implement SkillCard component**
+**Step 1: Implement ContextMenu component**
 
 ```tsx
-// frontend/src/components/SkillCard.tsx
-import { Github, FolderOpen, RefreshCw } from 'lucide-react'
+// frontend/src/components/ContextMenu.tsx
+import { useEffect, useRef } from 'react'
 
-interface Skill {
-  id: string; name: string; category: string
-  source: 'github' | 'manual'; hasUpdate: boolean
-}
+interface MenuItem { label: string; onClick: () => void; danger?: boolean }
+interface Props { x: number; y: number; items: MenuItem[]; onClose: () => void }
 
-interface Props { skill: Skill; onDelete: () => void; onUpdate?: () => void }
+export default function ContextMenu({ x, y, items, onClose }: Props) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
 
-export default function SkillCard({ skill, onDelete, onUpdate }: Props) {
   return (
     <div
-      draggable
-      onDragStart={e => e.dataTransfer.setData('skillId', skill.id)}
-      className="relative bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-grab hover:border-indigo-500 transition-colors group"
+      ref={ref}
+      style={{ position: 'fixed', top: y, left: x, zIndex: 9999 }}
+      className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-36"
     >
-      {skill.hasUpdate && (
-        <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-red-500" />
-      )}
-      <div className="flex items-center gap-2 mb-2">
-        {skill.source === 'github'
-          ? <Github size={14} className="text-gray-400" />
-          : <FolderOpen size={14} className="text-gray-400" />
-        }
-        <span className="text-xs text-gray-400">{skill.source}</span>
-      </div>
-      <p className="font-medium text-sm truncate">{skill.name}</p>
-      <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        {skill.hasUpdate && (
-          <button onClick={onUpdate} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-            <RefreshCw size={12} /> 更新
-          </button>
-        )}
-        <button onClick={onDelete} className="text-xs text-red-400 hover:text-red-300 ml-auto">删除</button>
-      </div>
-    </div>
-  )
-}
-```
-
-**Step 2: Implement CategoryPanel with drag-drop**
-
-```tsx
-// frontend/src/components/CategoryPanel.tsx
-interface Props {
-  categories: string[]
-  selected: string | null
-  onSelect: (cat: string | null) => void
-  onDrop: (skillId: string, category: string) => void
-}
-
-export default function CategoryPanel({ categories, selected, onSelect, onDrop }: Props) {
-  const handleDragOver = (e: React.DragEvent) => e.preventDefault()
-  const handleDrop = (e: React.DragEvent, cat: string) => {
-    const id = e.dataTransfer.getData('skillId')
-    if (id) onDrop(id, cat)
-  }
-
-  return (
-    <div className="w-48 flex-shrink-0 border-r border-gray-800 p-3">
-      <CategoryItem
-        label="全部" isSelected={selected === null}
-        onSelect={() => onSelect(null)}
-        onDragOver={handleDragOver} onDrop={() => {}}
-      />
-      {categories.map(cat => (
-        <CategoryItem
-          key={cat} label={cat} isSelected={selected === cat}
-          onSelect={() => onSelect(cat)}
-          onDragOver={handleDragOver}
-          onDrop={e => handleDrop(e, cat)}
-        />
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => { item.onClick(); onClose() }}
+          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700 ${item.danger ? 'text-red-400' : 'text-gray-200'}`}
+        >
+          {item.label}
+        </button>
       ))}
     </div>
   )
 }
-
-function CategoryItem({ label, isSelected, onSelect, onDragOver, onDrop }: any) {
-  return (
-    <div
-      onClick={onSelect}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      className={`px-3 py-2 rounded-lg text-sm cursor-pointer mb-0.5 transition-colors ${
-        isSelected ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'
-      }`}
-    >
-      {label}
-    </div>
-  )
-}
 ```
 
-**Step 3: Implement Dashboard page**
+**Step 2: Implement ConflictDialog component**
 
 ```tsx
-// frontend/src/pages/Dashboard.tsx
-import { useEffect, useState } from 'react'
-import { ListSkills, ListCategories, MoveSkillCategory, DeleteSkill } from '../../wailsjs/go/main/App'
-import CategoryPanel from '../components/CategoryPanel'
-import SkillCard from '../components/SkillCard'
+// frontend/src/components/ConflictDialog.tsx
+interface Props {
+  conflicts: string[]
+  onOverwrite: (name: string) => void
+  onSkip: (name: string) => void
+  onDone: () => void
+}
 
-export default function Dashboard() {
-  const [skills, setSkills] = useState<any[]>([])
-  const [categories, setCategories] = useState<string[]>([])
-  const [selectedCat, setSelectedCat] = useState<string | null>(null)
-
-  const load = async () => {
-    const [s, c] = await Promise.all([ListSkills(), ListCategories()])
-    setSkills(s ?? [])
-    setCategories(c ?? [])
-  }
-
-  useEffect(() => { load() }, [])
-
-  const filtered = selectedCat ? skills.filter(s => s.Category === selectedCat) : skills
-
-  const handleDrop = async (skillId: string, category: string) => {
-    await MoveSkillCategory(skillId, category)
-    load()
-  }
-
+export default function ConflictDialog({ conflicts, onOverwrite, onSkip, onDone }: Props) {
+  if (conflicts.length === 0) { onDone(); return null }
+  const current = conflicts[0]
   return (
-    <div className="flex h-full">
-      <CategoryPanel
-        categories={categories}
-        selected={selectedCat}
-        onSelect={setSelectedCat}
-        onDrop={handleDrop}
-      />
-      <div className="flex-1 p-6">
-        <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map(sk => (
-            <SkillCard
-              key={sk.ID}
-              skill={{ id: sk.ID, name: sk.Name, category: sk.Category, source: sk.Source, hasUpdate: sk.HasUpdate }}
-              onDelete={async () => { await DeleteSkill(sk.ID); load() }}
-            />
-          ))}
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-2xl p-6 w-96 border border-gray-700">
+        <h3 className="text-base font-semibold mb-2">冲突检测</h3>
+        <p className="text-sm text-gray-400 mb-6">
+          <span className="text-white font-medium">{current}</span> 已存在，如何处理？
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => onSkip(current)}
+            className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600"
+          >跳过</button>
+          <button
+            onClick={() => onOverwrite(current)}
+            className="px-4 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500"
+          >覆盖</button>
         </div>
       </div>
     </div>
@@ -2431,11 +2765,432 @@ export default function Dashboard() {
 }
 ```
 
-**Step 4: Commit**
+**Step 3: Implement SkillCard with right-click menu**
+
+```tsx
+// frontend/src/components/SkillCard.tsx
+import { useState } from 'react'
+import { Github, FolderOpen, RefreshCw } from 'lucide-react'
+import ContextMenu from './ContextMenu'
+
+interface Skill { id: string; name: string; category: string; source: 'github' | 'manual'; hasUpdate: boolean }
+interface Props {
+  skill: Skill
+  categories: string[]
+  onDelete: () => void
+  onUpdate?: () => void
+  onMoveCategory: (category: string) => void
+}
+
+export default function SkillCard({ skill, categories, onDelete, onUpdate, onMoveCategory }: Props) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  const menuItems = [
+    ...(skill.hasUpdate ? [{ label: '更新', onClick: () => onUpdate?.() }] : []),
+    ...categories.filter(c => c !== skill.category).map(c => ({
+      label: `移动到 ${c || '未分类'}`,
+      onClick: () => onMoveCategory(c),
+    })),
+    { label: '删除', onClick: onDelete, danger: true },
+  ]
+
+  return (
+    <>
+      <div
+        draggable
+        onDragStart={e => e.dataTransfer.setData('skillId', skill.id)}
+        onContextMenu={handleContextMenu}
+        className="relative bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-grab hover:border-indigo-500 transition-colors group"
+      >
+        {skill.hasUpdate && (
+          <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-red-500" />
+        )}
+        <div className="flex items-center gap-2 mb-2">
+          {skill.source === 'github'
+            ? <Github size={14} className="text-gray-400" />
+            : <FolderOpen size={14} className="text-gray-400" />}
+          <span className={`text-xs px-1.5 py-0.5 rounded ${skill.source === 'github' ? 'bg-blue-900/50 text-blue-300' : 'text-gray-400'}`}>
+            {skill.source}
+          </span>
+        </div>
+        <p className="font-medium text-sm truncate">{skill.name}</p>
+        <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {skill.hasUpdate && (
+            <button onClick={onUpdate} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+              <RefreshCw size={12} /> 更新
+            </button>
+          )}
+          <button onClick={onDelete} className="text-xs text-red-400 hover:text-red-300 ml-auto">删除</button>
+        </div>
+      </div>
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />
+      )}
+    </>
+  )
+}
+```
+
+**Step 4: Implement CategoryPanel with drag-drop and right-click rename/delete**
+
+```tsx
+// frontend/src/components/CategoryPanel.tsx
+import { useState } from 'react'
+import { Plus } from 'lucide-react'
+import ContextMenu from './ContextMenu'
+import { CreateCategory, RenameCategory, DeleteCategory } from '../../wailsjs/go/main/App'
+
+interface Props {
+  categories: string[]
+  selected: string | null
+  onSelect: (cat: string | null) => void
+  onDrop: (skillId: string, category: string) => void
+  onRefresh: () => void
+}
+
+export default function CategoryPanel({ categories, selected, onSelect, onDrop, onRefresh }: Props) {
+  const [menu, setMenu] = useState<{ x: number; y: number; cat: string } | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createName, setCreateName] = useState('')
+
+  const handleDrop = (e: React.DragEvent, cat: string) => {
+    e.preventDefault()
+    const id = e.dataTransfer.getData('skillId')
+    if (id) onDrop(id, cat)
+  }
+
+  return (
+    <div className="w-48 flex-shrink-0 border-r border-gray-800 p-3 flex flex-col gap-0.5">
+      {/* All */}
+      <div
+        onClick={() => onSelect(null)}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => handleDrop(e, '')}
+        className={`px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors ${selected === null ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'}`}
+      >全部</div>
+
+      {/* Categories */}
+      {categories.map(cat => (
+        renaming === cat
+          ? <input
+              key={cat} autoFocus value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onBlur={async () => {
+                if (newName && newName !== cat) { await RenameCategory(cat, newName); onRefresh() }
+                setRenaming(null)
+              }}
+              onKeyDown={async e => {
+                if (e.key === 'Enter') { await RenameCategory(cat, newName); onRefresh(); setRenaming(null) }
+                if (e.key === 'Escape') setRenaming(null)
+              }}
+              className="px-3 py-1.5 rounded-lg text-sm bg-gray-700 text-white outline-none w-full"
+            />
+          : <div
+              key={cat}
+              onClick={() => onSelect(cat)}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => handleDrop(e, cat)}
+              onContextMenu={e => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, cat }) }}
+              className={`px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors ${selected === cat ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'}`}
+            >{cat}</div>
+      ))}
+
+      {/* New category input */}
+      {creating
+        ? <input
+            autoFocus value={createName}
+            onChange={e => setCreateName(e.target.value)}
+            onBlur={async () => {
+              if (createName) { await CreateCategory(createName); onRefresh() }
+              setCreating(false); setCreateName('')
+            }}
+            onKeyDown={async e => {
+              if (e.key === 'Enter') { await CreateCategory(createName); onRefresh(); setCreating(false); setCreateName('') }
+              if (e.key === 'Escape') { setCreating(false); setCreateName('') }
+            }}
+            className="px-3 py-1.5 rounded-lg text-sm bg-gray-700 text-white outline-none w-full"
+          />
+        : <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 hover:text-gray-300 mt-1"
+          ><Plus size={14} /> 新建分类</button>
+      }
+
+      {/* Context menu */}
+      {menu && (
+        <ContextMenu
+          x={menu.x} y={menu.y}
+          items={[
+            { label: '重命名', onClick: () => { setRenaming(menu.cat); setNewName(menu.cat) } },
+            { label: '删除', onClick: async () => { await DeleteCategory(menu.cat); onRefresh() }, danger: true },
+          ]}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </div>
+  )
+}
+```
+
+**Step 5: Implement GitHubInstallDialog**
+
+```tsx
+// frontend/src/components/GitHubInstallDialog.tsx
+import { useState } from 'react'
+import { ScanGitHub, InstallFromGitHub, ListCategories } from '../../wailsjs/go/main/App'
+import { Github, X } from 'lucide-react'
+
+interface Props { onClose: () => void; onDone: () => void }
+
+export default function GitHubInstallDialog({ onClose, onDone }: Props) {
+  const [url, setUrl] = useState('')
+  const [candidates, setCandidates] = useState<any[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [categories, setCategories] = useState<string[]>([])
+  const [category, setCategory] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [installing, setInstalling] = useState(false)
+
+  const scan = async () => {
+    setScanning(true)
+    const [c, cats] = await Promise.all([ScanGitHub(url), ListCategories()])
+    setCandidates(c ?? [])
+    setCategories(cats ?? [])
+    setSelected(new Set((c ?? []).filter((x: any) => !x.Installed).map((x: any) => x.Name)))
+    setScanning(false)
+  }
+
+  const install = async () => {
+    setInstalling(true)
+    const toInstall = candidates.filter(c => selected.has(c.Name))
+    await InstallFromGitHub(url, toInstall, category)
+    setInstalling(false)
+    onDone()
+  }
+
+  const toggle = (name: string) => {
+    const next = new Set(selected)
+    next.has(name) ? next.delete(name) : next.add(name)
+    setSelected(next)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-2xl p-6 w-[520px] border border-gray-700">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold flex items-center gap-2"><Github size={16} /> 从 GitHub 安装</h3>
+          <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            value={url} onChange={e => setUrl(e.target.value)}
+            placeholder="https://github.com/user/repo"
+            className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
+          />
+          <button onClick={scan} disabled={scanning || !url} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50">
+            {scanning ? '扫描中...' : '扫描'}
+          </button>
+        </div>
+
+        {candidates.length > 0 && (
+          <>
+            <div className="max-h-52 overflow-y-auto space-y-1 mb-4">
+              {candidates.map(c => (
+                <label key={c.Name} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={selected.has(c.Name)} onChange={() => toggle(c.Name)} className="accent-indigo-500" />
+                  <span className="text-sm flex-1">{c.Name}</span>
+                  {c.Installed && <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">已安装</span>}
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-sm text-gray-400">安装到分类</span>
+              <select
+                value={category} onChange={e => setCategory(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm flex-1"
+              >
+                <option value="">未分类</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <button
+              onClick={install} disabled={installing || selected.size === 0}
+              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
+            >{installing ? '安装中...' : `安装 ${selected.size} 个 Skill`}</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+**Step 6: Implement Dashboard page with toolbar and window drag-drop**
+
+```tsx
+// frontend/src/pages/Dashboard.tsx
+import { useEffect, useState, useCallback } from 'react'
+import {
+  ListSkills, ListCategories, MoveSkillCategory,
+  DeleteSkill, ImportLocal, UpdateSkill, CheckUpdates
+} from '../../wailsjs/go/main/App'
+import { EventsOn } from '../../wailsjs/runtime'
+import { runtime } from '../../wailsjs/runtime'
+import CategoryPanel from '../components/CategoryPanel'
+import SkillCard from '../components/SkillCard'
+import GitHubInstallDialog from '../components/GitHubInstallDialog'
+import { Github, FolderOpen, RefreshCw, Search } from 'lucide-react'
+
+export default function Dashboard() {
+  const [skills, setSkills] = useState<any[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [selectedCat, setSelectedCat] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [showGitHub, setShowGitHub] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  const load = useCallback(async () => {
+    const [s, c] = await Promise.all([ListSkills(), ListCategories()])
+    setSkills(s ?? [])
+    setCategories(c ?? [])
+  }, [])
+
+  useEffect(() => {
+    load()
+    // Listen for update-available events from backend
+    EventsOn('update.available', load)
+  }, [load])
+
+  const filtered = skills.filter(sk => {
+    const matchCat = selectedCat === null || sk.Category === selectedCat
+    const matchSearch = !search || sk.Name.toLowerCase().includes(search.toLowerCase())
+    return matchCat && matchSearch
+  })
+
+  const handleDrop = async (skillId: string, category: string) => {
+    await MoveSkillCategory(skillId, category)
+    load()
+  }
+
+  // Window-level drag-drop: import a folder dropped anywhere on the page
+  const handleWindowDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(true)
+  }
+  const handleWindowDragLeave = () => setDragOver(false)
+  const handleWindowDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const items = Array.from(e.dataTransfer.items)
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry?.()
+      if (entry?.isDirectory) {
+        // Wails exposes the local path via the file object
+        const file = item.getAsFile()
+        if (file) {
+          // @ts-ignore — Wails provides .path on File objects
+          await ImportLocal(file.path ?? file.name, selectedCat ?? '')
+          load()
+        }
+      }
+    }
+  }
+
+  const handleImportButton = async () => {
+    const dir = await runtime.OpenDirectoryDialog({ Title: '选择 Skill 目录' })
+    if (dir) { await ImportLocal(dir, selectedCat ?? ''); load() }
+  }
+
+  return (
+    <div
+      className={`flex h-full relative ${dragOver ? 'ring-2 ring-inset ring-indigo-500' : ''}`}
+      onDragOver={handleWindowDragOver}
+      onDragLeave={handleWindowDragLeave}
+      onDrop={handleWindowDrop}
+    >
+      {dragOver && (
+        <div className="absolute inset-0 bg-indigo-500/10 flex items-center justify-center z-40 pointer-events-none">
+          <p className="text-indigo-300 text-lg font-medium">松开以导入 Skill</p>
+        </div>
+      )}
+
+      <CategoryPanel
+        categories={categories}
+        selected={selectedCat}
+        onSelect={setSelectedCat}
+        onDrop={handleDrop}
+        onRefresh={load}
+      />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-800">
+          <div className="relative flex-1 max-w-xs">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="搜索 Skills..."
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-sm outline-none focus:border-indigo-500"
+            />
+          </div>
+          <button
+            onClick={() => CheckUpdates()}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
+          ><RefreshCw size={14} /> 检查更新</button>
+          <button
+            onClick={handleImportButton}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
+          ><FolderOpen size={14} /> 手动导入</button>
+          <button
+            onClick={() => setShowGitHub(true)}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg"
+          ><Github size={14} /> 从 GitHub 安装</button>
+        </div>
+
+        {/* Skills grid */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
+            {filtered.map(sk => (
+              <SkillCard
+                key={sk.ID}
+                skill={{ id: sk.ID, name: sk.Name, category: sk.Category, source: sk.Source, hasUpdate: !!sk.LatestSHA }}
+                categories={categories}
+                onDelete={async () => { await DeleteSkill(sk.ID); load() }}
+                onUpdate={async () => { await UpdateSkill(sk.ID); load() }}
+                onMoveCategory={async cat => { await MoveSkillCategory(sk.ID, cat); load() }}
+              />
+            ))}
+          </div>
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+              <p className="text-sm">没有找到 Skills</p>
+              <p className="text-xs mt-1">从 GitHub 安装或拖拽文件夹到此处</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showGitHub && (
+        <GitHubInstallDialog onClose={() => setShowGitHub(false)} onDone={() => { setShowGitHub(false); load() }} />
+      )}
+    </div>
+  )
+}
+```
+
+**Step 7: Commit**
 
 ```bash
 git add frontend/src/
-git commit -m "feat: add Dashboard with category panel and skill cards with drag-drop"
+git commit -m "feat: add Dashboard with full toolbar, drag-drop, right-click menus, GitHub install dialog"
 ```
 
 ---
@@ -2446,17 +3201,276 @@ git commit -m "feat: add Dashboard with category panel and skill cards with drag
 - Create: `frontend/src/pages/SyncPush.tsx`
 - Create: `frontend/src/pages/SyncPull.tsx`
 
-(Implement per the design doc UI spec — tool multi-select, scope selector for push; tool select + scan + skill checklist for pull)
+**Step 1: Implement SyncPush.tsx**
 
-**Step 1: Implement SyncPush.tsx** (follows design doc layout exactly)
+```tsx
+// frontend/src/pages/SyncPush.tsx
+import { useEffect, useState } from 'react'
+import { GetEnabledTools, ListSkills, ListCategories, PushToTools, PushToToolsForce } from '../../wailsjs/go/main/App'
+import ConflictDialog from '../components/ConflictDialog'
+import { ArrowUpFromLine } from 'lucide-react'
 
-**Step 2: Implement SyncPull.tsx** (scan button → skill checklist → category select → pull)
+type Scope = 'all' | 'category' | 'manual'
+
+export default function SyncPush() {
+  const [tools, setTools] = useState<any[]>([])
+  const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
+  const [scope, setScope] = useState<Scope>('all')
+  const [categories, setCategories] = useState<string[]>([])
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [skills, setSkills] = useState<any[]>([])
+  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
+  const [conflicts, setConflicts] = useState<string[]>([])
+  const [pushing, setPushing] = useState(false)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    Promise.all([GetEnabledTools(), ListSkills(), ListCategories()]).then(([t, s, c]) => {
+      setTools(t ?? [])
+      setSkills(s ?? [])
+      setCategories(c ?? [])
+    })
+  }, [])
+
+  const getSkillIDs = () => {
+    if (scope === 'all') return skills.map(s => s.ID)
+    if (scope === 'category') return skills.filter(s => s.Category === selectedCategory).map(s => s.ID)
+    return [...selectedSkills]
+  }
+
+  const push = async () => {
+    setPushing(true)
+    setDone(false)
+    const ids = getSkillIDs()
+    const toolNames = [...selectedTools]
+    const conflicts = await PushToTools(ids, toolNames)
+    if (conflicts && conflicts.length > 0) {
+      setConflicts(conflicts)
+    } else {
+      setDone(true)
+    }
+    setPushing(false)
+  }
+
+  const toggleTool = (name: string) => {
+    const next = new Set(selectedTools)
+    next.has(name) ? next.delete(name) : next.add(name)
+    setSelectedTools(next)
+  }
+
+  const toggleSkill = (id: string) => {
+    const next = new Set(selectedSkills)
+    next.has(id) ? next.delete(id) : next.add(id)
+    setSelectedSkills(next)
+  }
+
+  return (
+    <div className="p-8 max-w-2xl">
+      <h2 className="text-lg font-semibold mb-6 flex items-center gap-2"><ArrowUpFromLine size={18} /> 推送到工具</h2>
+
+      {/* Tool selection */}
+      <section className="mb-6">
+        <p className="text-sm text-gray-400 mb-3">目标工具</p>
+        <div className="flex flex-wrap gap-2">
+          {tools.map(t => (
+            <button
+              key={t.Name}
+              onClick={() => toggleTool(t.Name)}
+              className={`px-4 py-2 rounded-lg text-sm border transition-colors ${selectedTools.has(t.Name) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'}`}
+            >{t.Name}</button>
+          ))}
+        </div>
+      </section>
+
+      {/* Scope selection */}
+      <section className="mb-6">
+        <p className="text-sm text-gray-400 mb-3">同步范围</p>
+        <div className="space-y-2">
+          {([['all', '全部 Skills'], ['category', '按分类'], ['manual', '手动选择']] as [Scope, string][]).map(([v, label]) => (
+            <label key={v} className="flex items-center gap-3 cursor-pointer">
+              <input type="radio" checked={scope === v} onChange={() => setScope(v)} className="accent-indigo-500" />
+              <span className="text-sm">{label}</span>
+            </label>
+          ))}
+        </div>
+
+        {scope === 'category' && (
+          <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}
+            className="mt-3 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm w-48">
+            <option value="">选择分类</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+
+        {scope === 'manual' && (
+          <div className="mt-3 max-h-52 overflow-y-auto space-y-1 border border-gray-700 rounded-xl p-3">
+            {skills.map(sk => (
+              <label key={sk.ID} className="flex items-center gap-3 px-2 py-1.5 hover:bg-gray-800 rounded-lg cursor-pointer">
+                <input type="checkbox" checked={selectedSkills.has(sk.ID)} onChange={() => toggleSkill(sk.ID)} className="accent-indigo-500" />
+                <span className="text-sm">{sk.Name}</span>
+                <span className="text-xs text-gray-500">{sk.Category || '未分类'}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <button
+        onClick={push}
+        disabled={pushing || selectedTools.size === 0}
+        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
+      >{pushing ? '推送中...' : '开始推送'}</button>
+
+      {done && <p className="mt-4 text-sm text-green-400">推送完成</p>}
+
+      {conflicts.length > 0 && (
+        <ConflictDialog
+          conflicts={conflicts}
+          onOverwrite={async (name) => {
+            const skill = skills.find(s => s.Name === name)
+            if (skill) await PushToToolsForce([skill.ID], [...selectedTools])
+            setConflicts(prev => prev.filter(c => c !== name))
+          }}
+          onSkip={(name) => setConflicts(prev => prev.filter(c => c !== name))}
+          onDone={() => setDone(true)}
+        />
+      )}
+    </div>
+  )
+}
+```
+
+**Step 2: Implement SyncPull.tsx**
+
+```tsx
+// frontend/src/pages/SyncPull.tsx
+import { useEffect, useState } from 'react'
+import { GetEnabledTools, ScanToolSkills, PullFromTool, PullFromToolForce, ListCategories } from '../../wailsjs/go/main/App'
+import ConflictDialog from '../components/ConflictDialog'
+import { ArrowDownToLine } from 'lucide-react'
+
+export default function SyncPull() {
+  const [tools, setTools] = useState<any[]>([])
+  const [selectedTool, setSelectedTool] = useState('')
+  const [scanned, setScanned] = useState<any[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [categories, setCategories] = useState<string[]>([])
+  const [targetCategory, setTargetCategory] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [pulling, setPulling] = useState(false)
+  const [conflicts, setConflicts] = useState<string[]>([])
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    Promise.all([GetEnabledTools(), ListCategories()]).then(([t, c]) => {
+      setTools(t ?? [])
+      setCategories(c ?? [])
+    })
+  }, [])
+
+  const scan = async () => {
+    setScanning(true)
+    setScanned([])
+    const skills = await ScanToolSkills(selectedTool)
+    setScanned(skills ?? [])
+    setSelected(new Set((skills ?? []).map((s: any) => s.Name)))
+    setScanning(false)
+  }
+
+  const pull = async () => {
+    setPulling(true)
+    const names = [...selected]
+    const conflicts = await PullFromTool(selectedTool, names, targetCategory)
+    if (conflicts && conflicts.length > 0) {
+      setConflicts(conflicts)
+    } else {
+      setDone(true)
+    }
+    setPulling(false)
+  }
+
+  const toggle = (name: string) => {
+    const next = new Set(selected)
+    next.has(name) ? next.delete(name) : next.add(name)
+    setSelected(next)
+  }
+
+  return (
+    <div className="p-8 max-w-2xl">
+      <h2 className="text-lg font-semibold mb-6 flex items-center gap-2"><ArrowDownToLine size={18} /> 从工具拉取</h2>
+
+      {/* Tool select */}
+      <section className="mb-4">
+        <p className="text-sm text-gray-400 mb-3">来源工具</p>
+        <div className="flex flex-wrap gap-2">
+          {tools.map(t => (
+            <button
+              key={t.Name}
+              onClick={() => { setSelectedTool(t.Name); setScanned([]); setDone(false) }}
+              className={`px-4 py-2 rounded-lg text-sm border transition-colors ${selectedTool === t.Name ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'}`}
+            >{t.Name}</button>
+          ))}
+        </div>
+      </section>
+
+      <button
+        onClick={scan} disabled={!selectedTool || scanning}
+        className="mb-6 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50"
+      >{scanning ? '扫描中...' : '扫描'}</button>
+
+      {scanned.length > 0 && (
+        <>
+          <section className="mb-4">
+            <p className="text-sm text-gray-400 mb-2">选择要导入的 Skills（{selected.size}/{scanned.length}）</p>
+            <div className="max-h-52 overflow-y-auto space-y-1 border border-gray-700 rounded-xl p-3">
+              {scanned.map(sk => (
+                <label key={sk.Name} className="flex items-center gap-3 px-2 py-1.5 hover:bg-gray-800 rounded-lg cursor-pointer">
+                  <input type="checkbox" checked={selected.has(sk.Name)} onChange={() => toggle(sk.Name)} className="accent-indigo-500" />
+                  <span className="text-sm">{sk.Name}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="mb-6 flex items-center gap-3">
+            <span className="text-sm text-gray-400">导入到分类</span>
+            <select value={targetCategory} onChange={e => setTargetCategory(e.target.value)}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm">
+              <option value="">Imported（默认）</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </section>
+
+          <button
+            onClick={pull} disabled={pulling || selected.size === 0}
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
+          >{pulling ? '拉取中...' : '开始拉取'}</button>
+
+          {done && <p className="mt-4 text-sm text-green-400">拉取完成</p>}
+        </>
+      )}
+
+      {conflicts.length > 0 && (
+        <ConflictDialog
+          conflicts={conflicts}
+          onOverwrite={async (name) => {
+            await PullFromToolForce(selectedTool, [name], targetCategory)
+            setConflicts(prev => prev.filter(c => c !== name))
+          }}
+          onSkip={(name) => setConflicts(prev => prev.filter(c => c !== name))}
+          onDone={() => setDone(true)}
+        />
+      )}
+    </div>
+  )
+}
+```
 
 **Step 3: Commit**
 
 ```bash
 git add frontend/src/pages/
-git commit -m "feat: add sync push and pull pages"
+git commit -m "feat: add SyncPush and SyncPull pages with conflict dialog"
 ```
 
 ---
@@ -2467,18 +3481,277 @@ git commit -m "feat: add sync push and pull pages"
 - Create: `frontend/src/pages/Backup.tsx`
 - Create: `frontend/src/pages/Settings.tsx`
 
-**Step 1: Implement Backup.tsx** (last backup time, manual trigger button, file list, restore button)
+**Step 1: Implement Backup.tsx**
 
-**Step 2: Implement Settings.tsx** (three tabs: Tools, Cloud, General)
-- Tools tab: built-in tools with enabled toggle + path override; custom tools CRUD
-- Cloud tab: provider selector → dynamic credential fields from `RequiredCredentials()`
-- General tab: storage dir, default import category
+```tsx
+// frontend/src/pages/Backup.tsx
+import { useEffect, useState } from 'react'
+import { BackupNow, ListCloudFiles, RestoreFromCloud, GetConfig } from '../../wailsjs/go/main/App'
+import { EventsOn } from '../../wailsjs/runtime'
+import { Cloud, Upload, Download, RefreshCw } from 'lucide-react'
+
+export default function Backup() {
+  const [files, setFiles] = useState<any[]>([])
+  const [status, setStatus] = useState<'idle' | 'backing-up' | 'done' | 'error'>('idle')
+  const [currentFile, setCurrentFile] = useState('')
+  const [cloudEnabled, setCloudEnabled] = useState(false)
+
+  useEffect(() => {
+    GetConfig().then(cfg => setCloudEnabled(cfg?.Cloud?.Enabled ?? false))
+    EventsOn('backup.started', () => setStatus('backing-up'))
+    EventsOn('backup.progress', (data: string) => {
+      try { setCurrentFile(JSON.parse(data).currentFile ?? '') } catch {}
+    })
+    EventsOn('backup.completed', () => { setStatus('done'); loadFiles() })
+    EventsOn('backup.failed', () => setStatus('error'))
+  }, [])
+
+  const loadFiles = async () => {
+    const f = await ListCloudFiles()
+    setFiles(f ?? [])
+  }
+
+  return (
+    <div className="p-8 max-w-2xl">
+      <h2 className="text-lg font-semibold mb-6 flex items-center gap-2"><Cloud size={18} /> 云备份</h2>
+
+      {!cloudEnabled && (
+        <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-xl p-4 mb-6 text-sm text-yellow-300">
+          云备份未启用。请前往设置 → 云存储完成配置。
+        </div>
+      )}
+
+      <div className="flex gap-3 mb-8">
+        <button
+          onClick={async () => { await BackupNow() }}
+          disabled={!cloudEnabled || status === 'backing-up'}
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
+        >
+          {status === 'backing-up' ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+          {status === 'backing-up' ? `备份中 ${currentFile}` : '立即备份'}
+        </button>
+        <button
+          onClick={async () => { await RestoreFromCloud(); loadFiles() }}
+          disabled={!cloudEnabled}
+          className="flex items-center gap-2 px-5 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50"
+        ><Download size={14} /> 从云端恢复</button>
+        <button onClick={loadFiles} className="flex items-center gap-2 px-4 py-2.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 text-sm">
+          <RefreshCw size={14} /> 刷新
+        </button>
+      </div>
+
+      {status === 'done' && <p className="mb-4 text-sm text-green-400">备份完成</p>}
+      {status === 'error' && <p className="mb-4 text-sm text-red-400">备份失败，请检查云存储配置</p>}
+
+      {files.length > 0 && (
+        <div>
+          <p className="text-sm text-gray-400 mb-3">云端文件（{files.length} 个）</p>
+          <div className="max-h-96 overflow-y-auto border border-gray-800 rounded-xl divide-y divide-gray-800">
+            {files.map((f, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="text-gray-300 font-mono text-xs">{f.Path}</span>
+                <span className="text-gray-500 text-xs">{(f.Size / 1024).toFixed(1)} KB</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+**Step 2: Implement Settings.tsx**
+
+```tsx
+// frontend/src/pages/Settings.tsx
+import { useEffect, useState } from 'react'
+import { GetConfig, SaveConfig, ListCloudProviders, AddCustomTool, RemoveCustomTool } from '../../wailsjs/go/main/App'
+import { Plus, Trash2, Settings } from 'lucide-react'
+
+type Tab = 'tools' | 'cloud' | 'general'
+
+export default function SettingsPage() {
+  const [tab, setTab] = useState<Tab>('tools')
+  const [cfg, setCfg] = useState<any>(null)
+  const [providers, setProviders] = useState<any[]>([])
+  const [saving, setSaving] = useState(false)
+  const [newTool, setNewTool] = useState({ name: '', skillsDir: '' })
+
+  useEffect(() => {
+    Promise.all([GetConfig(), ListCloudProviders()]).then(([c, p]) => {
+      setCfg(c)
+      setProviders(p ?? [])
+    })
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    await SaveConfig(cfg)
+    setSaving(false)
+  }
+
+  const updateTool = (name: string, field: string, value: any) => {
+    setCfg((prev: any) => ({
+      ...prev,
+      tools: prev.tools.map((t: any) => t.name === name ? { ...t, [field]: value } : t)
+    }))
+  }
+
+  const selectedProvider = providers.find((p: any) => p.name === cfg?.cloud?.provider)
+
+  if (!cfg) return <div className="p-8 text-gray-400">加载中...</div>
+
+  return (
+    <div className="p-8 max-w-2xl">
+      <h2 className="text-lg font-semibold mb-6 flex items-center gap-2"><Settings size={18} /> 设置</h2>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-gray-800 rounded-xl p-1 w-fit">
+        {([['tools', '工具路径'], ['cloud', '云存储'], ['general', '通用']] as [Tab, string][]).map(([v, label]) => (
+          <button key={v} onClick={() => setTab(v)}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${tab === v ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
+          >{label}</button>
+        ))}
+      </div>
+
+      {/* Tools tab */}
+      {tab === 'tools' && (
+        <div className="space-y-4">
+          {cfg.tools.map((t: any) => (
+            <div key={t.name} className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-medium text-sm">{t.name}</span>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-xs text-gray-400">启用</span>
+                  <div
+                    onClick={() => updateTool(t.name, 'enabled', !t.enabled)}
+                    className={`w-9 h-5 rounded-full transition-colors relative ${t.enabled ? 'bg-indigo-600' : 'bg-gray-600'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${t.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  </div>
+                </label>
+              </div>
+              <input
+                value={t.skillsDir}
+                onChange={e => updateTool(t.name, 'skillsDir', e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
+              />
+              {t.custom && (
+                <button
+                  onClick={async () => { await RemoveCustomTool(t.name); const c = await GetConfig(); setCfg(c) }}
+                  className="mt-2 text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                ><Trash2 size={12} /> 删除</button>
+              )}
+            </div>
+          ))}
+
+          {/* Add custom tool */}
+          <div className="bg-gray-800 rounded-xl p-4 border border-dashed border-gray-600">
+            <p className="text-sm text-gray-400 mb-3">添加自定义工具</p>
+            <div className="flex gap-2 mb-2">
+              <input value={newTool.name} onChange={e => setNewTool(p => ({ ...p, name: e.target.value }))}
+                placeholder="工具名称" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm outline-none" />
+            </div>
+            <div className="flex gap-2">
+              <input value={newTool.skillsDir} onChange={e => setNewTool(p => ({ ...p, skillsDir: e.target.value }))}
+                placeholder="/path/to/skills" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none" />
+              <button
+                onClick={async () => {
+                  if (newTool.name && newTool.skillsDir) {
+                    await AddCustomTool(newTool.name, newTool.skillsDir)
+                    const c = await GetConfig(); setCfg(c)
+                    setNewTool({ name: '', skillsDir: '' })
+                  }
+                }}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm flex items-center gap-1"
+              ><Plus size={14} /> 添加</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cloud tab */}
+      {tab === 'cloud' && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-gray-400 mb-2">云厂商</p>
+            <div className="flex gap-2">
+              {providers.map((p: any) => (
+                <button key={p.name}
+                  onClick={() => setCfg((prev: any) => ({ ...prev, cloud: { ...prev.cloud, provider: p.name } }))}
+                  className={`px-4 py-2 rounded-lg text-sm border transition-colors ${cfg.cloud?.provider === p.name ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-800 border-gray-700 hover:border-gray-500'}`}
+                >{p.name}</button>
+              ))}
+            </div>
+          </div>
+
+          {selectedProvider && (
+            <>
+              <div>
+                <p className="text-sm text-gray-400 mb-2">存储桶</p>
+                <input value={cfg.cloud?.bucketName ?? ''} onChange={e => setCfg((p: any) => ({ ...p, cloud: { ...p.cloud, bucketName: e.target.value } }))}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" />
+              </div>
+              {/* Dynamic credential fields from RequiredCredentials() */}
+              {selectedProvider.fields.map((f: any) => (
+                <div key={f.key}>
+                  <p className="text-sm text-gray-400 mb-2">{f.label}</p>
+                  <input
+                    type={f.secret ? 'password' : 'text'}
+                    placeholder={f.placeholder ?? ''}
+                    value={cfg.cloud?.credentials?.[f.key] ?? ''}
+                    onChange={e => setCfg((p: any) => ({
+                      ...p, cloud: { ...p.cloud, credentials: { ...p.cloud?.credentials, [f.key]: e.target.value } }
+                    }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
+              ))}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div
+                  onClick={() => setCfg((p: any) => ({ ...p, cloud: { ...p.cloud, enabled: !p.cloud?.enabled } }))}
+                  className={`w-9 h-5 rounded-full transition-colors relative ${cfg.cloud?.enabled ? 'bg-indigo-600' : 'bg-gray-600'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${cfg.cloud?.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+                <span className="text-sm text-gray-300">启用自动云备份</span>
+              </label>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* General tab */}
+      {tab === 'general' && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-gray-400 mb-2">本地 Skills 存储目录</p>
+            <input value={cfg.skillsStorageDir ?? ''} onChange={e => setCfg((p: any) => ({ ...p, skillsStorageDir: e.target.value }))}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-indigo-500" />
+          </div>
+          <div>
+            <p className="text-sm text-gray-400 mb-2">从工具拉取时的默认分类</p>
+            <input value={cfg.defaultCategory ?? ''} onChange={e => setCfg((p: any) => ({ ...p, defaultCategory: e.target.value }))}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" />
+          </div>
+        </div>
+      )}
+
+      <button onClick={save} disabled={saving}
+        className="mt-8 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50">
+        {saving ? '保存中...' : '保存设置'}
+      </button>
+    </div>
+  )
+}
+```
 
 **Step 3: Commit**
 
 ```bash
 git add frontend/src/pages/
-git commit -m "feat: add backup and settings pages with dynamic cloud credential form"
+git commit -m "feat: add Backup and Settings pages with dynamic cloud form and custom tool management"
 ```
 
 ---
