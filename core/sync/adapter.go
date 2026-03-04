@@ -8,8 +8,9 @@ import (
 
 type ToolAdapter interface {
 	Name() string
-	SkillsDir() string
-	Deploy(ctx context.Context, sk *skill.Skill) error
-	Remove(ctx context.Context, sk *skill.Skill) error
-	List(ctx context.Context) ([]string, error)
+	DefaultSkillsDir() string
+	// Push copies skills into targetDir, flattened (no category subdirs)
+	Push(ctx context.Context, skills []*skill.Skill, targetDir string) error
+	// Pull scans sourceDir and returns skill candidates (not yet imported)
+	Pull(ctx context.Context, sourceDir string) ([]*skill.Skill, error)
 }
