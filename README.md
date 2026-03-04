@@ -1,19 +1,84 @@
-# README
+# SkillFlow
 
-## About
+> 🌐 [中文](README_zh.md) | **English**
 
-This is the official Wails React-TS template.
+A cross-platform desktop app for managing LLM SKILLS (prompt libraries / slash commands) across multiple AI coding tools — with GitHub install, cloud backup, and cross-tool sync.
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+## What It Does
 
-## Live Development
+| Feature | Description |
+|---------|-------------|
+| **Skill Library** | Central store for all your skills with categories, search, and drag-drop organization |
+| **GitHub Install** | Browse and install skills from any GitHub repo that follows the `skills/` convention |
+| **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool |
+| **Cloud Backup** | Mirror your skill library to Aliyun OSS, Tencent COS, or Huawei OBS |
+| **Update Checker** | Detects when GitHub-sourced skills have new commits available |
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+## Supported Tools
 
-## Building
+Built-in adapters for: **Claude Code** · **OpenCode** · **Codex** · **Gemini CLI** · **OpenClaw**
 
-To build a redistributable, production mode package, use `wails build`.
+Custom tools can be added in Settings with any local directory path.
+
+## Requirements
+
+- macOS 11+ or Windows 10+
+- Go 1.23+
+- Node.js 18+ (for frontend build)
+- [Wails v2](https://wails.io) CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+
+## Development
+
+```bash
+# Clone and install frontend deps
+git clone https://github.com/shinerio/SkillFlow
+cd SkillFlow
+cd frontend && npm install && cd ..
+
+# Run in dev mode (hot-reload)
+wails dev
+
+# Run Go tests
+go test ./core/...
+
+# Build production binary
+wails build
+```
+
+Binary output: `build/bin/SkillFlow` (macOS) / `build/bin/SkillFlow.exe` (Windows)
+
+## Skill Format
+
+A valid skill directory must contain a `SKILLS.md` file at its root. Any directory satisfying this requirement can be imported locally or via GitHub.
+
+```
+my-skill/
+  SKILLS.md      ← required
+  ...            ← other files
+```
+
+## Cloud Backup
+
+Configure in **Settings → Cloud Storage**. Credentials are stored in the local config file at:
+
+- macOS: `~/Library/Application Support/SkillFlow/config.json`
+- Windows: `%APPDATA%\SkillFlow\config.json`
+
+Supported providers and their required fields:
+
+| Provider | Fields |
+|----------|--------|
+| Aliyun OSS | Access Key ID, Access Key Secret, Endpoint |
+| Tencent COS | SecretId, SecretKey, Region |
+| Huawei OBS | Access Key, Secret Key, Endpoint |
+
+## CI / Releases
+
+Builds are automated via GitHub Actions on `v*` tags, producing binaries for:
+- macOS (Intel x86_64)
+- macOS (Apple Silicon arm64)
+- Windows (x86_64)
+
+## Architecture
+
+Go core library (`core/`) with interface-based plugin architecture. Wails v2 bridges Go backend to React 18 + TypeScript + Tailwind CSS frontend via direct method bindings (no HTTP API). See [CLAUDE.md](CLAUDE.md) for developer details.
