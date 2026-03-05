@@ -50,7 +50,7 @@ func (g *GitHubInstaller) Scan(ctx context.Context, source InstallSource) ([]Ski
 		if item.Type != "dir" {
 			continue
 		}
-		if g.fileExists(ctx, owner, repo, item.Path+"/SKILLS.md") {
+		if g.fileExists(ctx, owner, repo, item.Path+"/skill.md") {
 			candidates = append(candidates, SkillCandidate{
 				Name: item.Name,
 				Path: item.Path,
@@ -197,7 +197,9 @@ func (g *GitHubInstaller) GetLatestSHA(ctx context.Context, repoURL, subPath str
 		return "", err
 	}
 	defer resp.Body.Close()
-	var commits []struct{ SHA string `json:"sha"` }
+	var commits []struct {
+		SHA string `json:"sha"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&commits); err != nil || len(commits) == 0 {
 		return "", err
 	}

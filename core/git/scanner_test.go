@@ -20,11 +20,11 @@ func TestScanSkillsEmpty(t *testing.T) {
 func TestScanSkills(t *testing.T) {
 	dir := t.TempDir()
 	skillsDir := filepath.Join(dir, "skills")
-	// create two valid skills and one invalid (no SKILLS.md)
+	// create two valid skills and one invalid (no skill.md)
 	for _, name := range []string{"alpha", "beta"} {
 		d := filepath.Join(skillsDir, name)
 		os.MkdirAll(d, 0755)
-		os.WriteFile(filepath.Join(d, "SKILLS.md"), []byte("# "+name), 0644)
+		os.WriteFile(filepath.Join(d, "skill.md"), []byte("# "+name), 0644)
 	}
 	os.MkdirAll(filepath.Join(skillsDir, "no-skills-md"), 0755)
 
@@ -56,9 +56,9 @@ func TestScanSkillsRootFallback(t *testing.T) {
 	for _, name := range []string{"gamma", "delta"} {
 		d := filepath.Join(dir, name)
 		os.MkdirAll(d, 0755)
-		os.WriteFile(filepath.Join(d, "SKILLS.md"), []byte("# "+name), 0644)
+		os.WriteFile(filepath.Join(d, "skill.md"), []byte("# "+name), 0644)
 	}
-	// A dir without SKILLS.md should be ignored.
+	// A dir without skill.mdshould be ignored.
 	os.MkdirAll(filepath.Join(dir, "docs"), 0755)
 
 	skills, err := ScanSkills(dir, "https://github.com/a/skills", "a/skills")

@@ -48,7 +48,7 @@ func TestFilesystemAdapterPullNested(t *testing.T) {
 	src := t.TempDir()
 	// skills nested under category dirs
 	writeSkill(t, filepath.Join(src, "coding", "skill-a"), "skill.md")
-	writeSkill(t, filepath.Join(src, "coding", "skill-b"), "skills.md")
+	writeSkill(t, filepath.Join(src, "coding", "skill-b"), "skill.md")
 	writeSkill(t, filepath.Join(src, "writing", "skill-c"), "Skill.md")
 	// deeply nested
 	writeSkill(t, filepath.Join(src, "a", "b", "c", "skill-d"), "skill.md")

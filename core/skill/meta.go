@@ -19,7 +19,7 @@ type SkillMeta struct {
 	DisableModelInvocation bool   `yaml:"disable-model-invocation" json:"DisableModelInvocation"`
 }
 
-// ReadMeta locates skill.md / skills.md (case-insensitive) inside skillPath,
+// ReadMeta locates skill.md / skill.md (case-insensitive) inside skillPath,
 // extracts the YAML frontmatter block (between the first pair of --- delimiters),
 // and unmarshals it. Returns an empty SkillMeta when no frontmatter is present.
 func ReadMeta(skillPath string) (*SkillMeta, error) {
@@ -34,7 +34,7 @@ func ReadMeta(skillPath string) (*SkillMeta, error) {
 			continue
 		}
 		lower := strings.ToLower(e.Name())
-		if lower == "skill.md" || lower == "skills.md" {
+		if lower == "skill.md" || lower == "skill.md" {
 			mdPath = filepath.Join(skillPath, e.Name())
 			break
 		}

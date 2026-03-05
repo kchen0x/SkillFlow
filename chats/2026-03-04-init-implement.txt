@@ -598,7 +598,7 @@ tail -5" completed (exit code 0)
   │ Foundation   │ Go module, Wails init, data models, notify hub, config   │
   │              │ service, registry                                        │
   ├──────────────┼──────────────────────────────────────────────────────────┤
-  │ Skill Mgmt   │ Validator (SKILLS.md check), storage with UUID/JSON meta │
+  │ Skill Mgmt   │ Validator (skill.md check), storage with UUID/JSON meta │
   │              │  sidecars, categories                                    │
   ├──────────────┼──────────────────────────────────────────────────────────┤
   │ Install      │ GitHub installer (SHA tracking), local installer         │

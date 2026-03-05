@@ -39,7 +39,7 @@ Date: 2026-03-05
 - 目录不存在：`git clone <url> <dir>`
 - 目录已存在：`git fetch origin && git reset --hard origin/HEAD`
 
-本地扫描 Skills：遍历目录下含 `SKILLS.md` 的子目录。
+本地扫描 Skills：遍历目录下含 `skill.md` 的子目录。
 
 ## 数据模型
 

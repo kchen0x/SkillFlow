@@ -22,7 +22,7 @@ func mkSkillDir(t *testing.T, filename string) string {
 }
 
 func TestValidatorAcceptsSkillMdVariants(t *testing.T) {
-	for _, name := range []string{"skill.md", "SKILL.MD", "Skill.md", "skills.md", "SKILLS.MD", "Skills.md"} {
+	for _, name := range []string{"skill.md", "SKILL.MD", "Skill.md", "skill.md", "SKILLS.MD", "Skills.md"} {
 		t.Run(name, func(t *testing.T) {
 			v := skill.NewValidator()
 			assert.NoError(t, v.Validate(mkSkillDir(t, name)))

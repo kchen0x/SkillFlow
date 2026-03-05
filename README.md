@@ -60,11 +60,11 @@ Binary output: `build/bin/SkillFlow` (macOS) / `build/bin/SkillFlow.exe` (Window
 
 ## Skill Format
 
-A valid skill directory must contain a `SKILLS.md` file at its root. Any directory satisfying this requirement can be imported locally or via GitHub.
+A valid skill directory must contain a `skill.md` file at its root. Any directory satisfying this requirement can be imported locally or via GitHub.
 
 ```
 my-skill/
-  SKILLS.md      ← required
+  skill.md     ← required
   ...            ← other files
 ```
 

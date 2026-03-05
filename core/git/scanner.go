@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// scanDir scans a single directory for subdirs containing SKILLS.md.
+// scanDir scans a single directory for subdirs containing skill.md.
 // subPathPrefix is prepended to the subdir name to form SubPath (e.g. "skills/").
 func scanDir(root, subPathPrefix, repoURL, repoName string) ([]StarSkill, error) {
 	entries, err := os.ReadDir(root)
@@ -22,7 +22,7 @@ func scanDir(root, subPathPrefix, repoURL, repoName string) ([]StarSkill, error)
 			continue
 		}
 		skillDir := filepath.Join(root, e.Name())
-		if _, err := os.Stat(filepath.Join(skillDir, "SKILLS.md")); err == nil {
+		if _, err := os.Stat(filepath.Join(skillDir, "skill.md")); err == nil {
 			result = append(result, StarSkill{
 				Name:     e.Name(),
 				Path:     skillDir,
@@ -35,7 +35,7 @@ func scanDir(root, subPathPrefix, repoURL, repoName string) ([]StarSkill, error)
 	return result, nil
 }
 
-// ScanSkills looks for skill directories (subdirs containing SKILLS.md) in the
+// ScanSkills looks for skill directories (subdirs containing skill.md) in the
 // given repo clone. It first checks <repoDir>/skills/; if no skills are found
 // there, it falls back to scanning <repoDir>/ directly (for repos whose root IS
 // the skills collection, e.g. github.com/anthropics/skills).

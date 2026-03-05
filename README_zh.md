@@ -60,11 +60,11 @@ make build
 
 ## Skill 格式
 
-有效的 Skill 目录须在根目录下包含 `SKILLS.md` 文件，满足此要求的目录均可通过本地导入或 GitHub 安装。
+有效的 Skill 目录须在根目录下包含 `skill.md` 文件，满足此要求的目录均可通过本地导入或 GitHub 安装。
 
 ```
 my-skill/
-  SKILLS.md      ← 必须存在
+  skill.md     ← 必须存在
   ...            ← 其他文件
 ```
 

@@ -15,7 +15,7 @@ SkillFlow 是一个面向**个人开发者**的桌面客户端工具，用于统
 ## 二、Skill 识别规范
 
 - 一个 skill 对应一个目录
-- 目录根部必须存在 `SKILLS.md` 文件
+- 目录根部必须存在 `skill.md` 文件
 - 当前版本仅检测文件存在即视为合法 skill，代码需预留扩展点支持未来更复杂的校验逻辑
 
 ---
@@ -275,7 +275,7 @@ SkillFlow 维护自己的中央 skills 存储目录作为 source of truth：
 ### 6.3 GitHub 安装流程
 
 1. 用户输入公开 GitHub 仓库 URL
-2. 调用 GitHub API 扫描 `skills/` 目录，过滤含 `SKILLS.md` 的子目录
+2. 调用 GitHub API 扫描 `skills/` 目录，过滤含 `skill.md` 的子目录
 3. 前端展示复选框列表（已安装的标注蓝色标签）
 4. 用户选择 skill + 目标分类 → 安装
 5. 遇到同名冲突 → 弹出对话框（覆盖/跳过）

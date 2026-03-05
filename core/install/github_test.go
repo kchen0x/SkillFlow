@@ -24,12 +24,12 @@ func mockGitHubServer(t *testing.T) *httptest.Server {
 		}
 		json.NewEncoder(w).Encode(items)
 	})
-	// Mock: check SKILLS.md existence for skill-a (returns file info)
-	mux.HandleFunc("/repos/user/repo/contents/skills/skill-a/SKILLS.md", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"name": "SKILLS.md", "type": "file"})
+	// Mock: check skill.mdexistence for skill-a (returns file info)
+	mux.HandleFunc("/repos/user/repo/contents/skills/skill-a/skill.md", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"name": "skill.md", "type": "file"})
 	})
-	// Mock: skill-b has no SKILLS.md (404)
-	mux.HandleFunc("/repos/user/repo/contents/skills/skill-b/SKILLS.md", func(w http.ResponseWriter, r *http.Request) {
+	// Mock: skill-b has no skill.md(404)
+	mux.HandleFunc("/repos/user/repo/contents/skills/skill-b/skill.md", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	return httptest.NewServer(mux)
@@ -45,7 +45,7 @@ func TestGitHubInstallerScan(t *testing.T) {
 		URI:  srv.URL + "/repos/user/repo",
 	})
 	require.NoError(t, err)
-	// Only skill-a has SKILLS.md, skill-b does not
+	// Only skill-a has skill.md, skill-b does not
 	assert.Len(t, candidates, 1)
 	assert.Equal(t, "skill-a", candidates[0].Name)
 }

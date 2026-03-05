@@ -669,7 +669,7 @@ func TestValidatorAcceptsDirectoryWithSKILLSmd(t *testing.T) {
     dir := t.TempDir()
     skillDir := filepath.Join(dir, "my-skill")
     require.NoError(t, os.MkdirAll(skillDir, 0755))
-    require.NoError(t, os.WriteFile(filepath.Join(skillDir, "SKILLS.md"), []byte("# skill"), 0644))
+    require.NoError(t, os.WriteFile(filepath.Join(skillDir, "skill.md"), []byte("# skill"), 0644))
 
     v := skill.NewValidator()
     err := v.Validate(skillDir)
@@ -710,7 +710,7 @@ import (
     "path/filepath"
 )
 
-var ErrNoSKILLSmd = errors.New("SKILLS.md not found in skill directory")
+var ErrNoSKILLSmd = errors.New("skill.mdnot found in skill directory")
 
 // ValidationRule is the extension point for future complex validators.
 type ValidationRule func(dir string) error
@@ -737,7 +737,7 @@ func requireSKILLSmd(dir string) error {
     if _, err := os.Stat(dir); err != nil {
         return err
     }
-    mdPath := filepath.Join(dir, "SKILLS.md")
+    mdPath := filepath.Join(dir, "skill.md")
     if _, err := os.Stat(mdPath); os.IsNotExist(err) {
         return ErrNoSKILLSmd
     }
@@ -756,7 +756,7 @@ Expected: PASS
 
 ```bash
 git add core/skill/
-git commit -m "feat: add extensible skill validator (SKILLS.md check)"
+git commit -m "feat: add extensible skill validator (skill.mdcheck)"
 ```
 
 ---
@@ -785,7 +785,7 @@ func makeTestSkillDir(t *testing.T, baseDir, name string) string {
     t.Helper()
     dir := filepath.Join(baseDir, name)
     require.NoError(t, os.MkdirAll(dir, 0755))
-    require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILLS.md"), []byte("# "+name), 0644))
+    require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# "+name), 0644))
     return dir
 }
 
@@ -811,7 +811,7 @@ func TestStorageImportSkill(t *testing.T) {
     assert.Equal(t, "coding", imported.Category)
 
     // verify directory was copied
-    _, err = os.Stat(filepath.Join(root, "coding", "my-skill", "SKILLS.md"))
+    _, err = os.Stat(filepath.Join(root, "coding", "my-skill", "skill.md"))
     assert.NoError(t, err)
 }
 
@@ -1198,12 +1198,12 @@ func mockGitHubServer(t *testing.T) *httptest.Server {
         }
         json.NewEncoder(w).Encode(items)
     })
-    // Mock: check SKILLS.md existence for skill-a (returns file info)
-    mux.HandleFunc("/repos/user/repo/contents/skills/skill-a/SKILLS.md", func(w http.ResponseWriter, r *http.Request) {
-        json.NewEncoder(w).Encode(map[string]any{"name": "SKILLS.md", "type": "file"})
+    // Mock: check skill.mdexistence for skill-a (returns file info)
+    mux.HandleFunc("/repos/user/repo/contents/skills/skill-a/skill.md", func(w http.ResponseWriter, r *http.Request) {
+        json.NewEncoder(w).Encode(map[string]any{"name": "skill.md", "type": "file"})
     })
-    // Mock: skill-b has no SKILLS.md (404)
-    mux.HandleFunc("/repos/user/repo/contents/skills/skill-b/SKILLS.md", func(w http.ResponseWriter, r *http.Request) {
+    // Mock: skill-b has no skill.md(404)
+    mux.HandleFunc("/repos/user/repo/contents/skills/skill-b/skill.md", func(w http.ResponseWriter, r *http.Request) {
         w.WriteHeader(http.StatusNotFound)
     })
     return httptest.NewServer(mux)
@@ -1219,7 +1219,7 @@ func TestGitHubInstallerScan(t *testing.T) {
         URI:  srv.URL + "/repos/user/repo",
     })
     require.NoError(t, err)
-    // Only skill-a has SKILLS.md, skill-b does not
+    // Only skill-a has skill.md, skill-b does not
     assert.Len(t, candidates, 1)
     assert.Equal(t, "skill-a", candidates[0].Name)
 }
@@ -1282,8 +1282,8 @@ func (g *GitHubInstaller) Scan(ctx context.Context, source InstallSource) ([]Ski
         if item.Type != "dir" {
             continue
         }
-        // Check SKILLS.md exists
-        if g.fileExists(ctx, owner, repo, item.Path+"/SKILLS.md") {
+        // Check skill.mdexists
+        if g.fileExists(ctx, owner, repo, item.Path+"/skill.md") {
             candidates = append(candidates, SkillCandidate{
                 Name: item.Name,
                 Path: item.Path,
@@ -1423,7 +1423,7 @@ Expected: PASS
 
 ```bash
 git add core/install/
-git commit -m "feat: add GitHub installer with SKILLS.md validation"
+git commit -m "feat: add GitHub installer with skill.mdvalidation"
 ```
 
 ---
@@ -1451,7 +1451,7 @@ import (
 
 func TestLocalInstallerScanValidSkill(t *testing.T) {
     dir := t.TempDir()
-    require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILLS.md"), []byte("# skill"), 0644))
+    require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# skill"), 0644))
 
     inst := install.NewLocalInstaller()
     candidates, err := inst.Scan(context.Background(), install.InstallSource{Type: "local", URI: dir})
@@ -1461,7 +1461,7 @@ func TestLocalInstallerScanValidSkill(t *testing.T) {
 }
 
 func TestLocalInstallerScanInvalidSkill(t *testing.T) {
-    dir := t.TempDir() // no SKILLS.md
+    dir := t.TempDir() // no skill.md
     inst := install.NewLocalInstaller()
     candidates, err := inst.Scan(context.Background(), install.InstallSource{Type: "local", URI: dir})
     require.NoError(t, err)
@@ -1577,7 +1577,7 @@ func makeSkillDir(t *testing.T, root, category, name string) *skill.Skill {
     t.Helper()
     dir := filepath.Join(root, category, name)
     require.NoError(t, os.MkdirAll(dir, 0755))
-    require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILLS.md"), []byte("# "+name), 0644))
+    require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# "+name), 0644))
     return &skill.Skill{Name: name, Path: dir, Category: category}
 }
 
@@ -1591,7 +1591,7 @@ func TestFilesystemAdapterPushFlattens(t *testing.T) {
     require.NoError(t, err)
 
     // skill should be at dst/my-skill (no category subdir)
-    _, err = os.Stat(filepath.Join(dst, "my-skill", "SKILLS.md"))
+    _, err = os.Stat(filepath.Join(dst, "my-skill", "skill.md"))
     assert.NoError(t, err)
 }
 
@@ -1601,7 +1601,7 @@ func TestFilesystemAdapterPull(t *testing.T) {
     for _, name := range []string{"skill-x", "skill-y"} {
         dir := filepath.Join(src, name)
         require.NoError(t, os.MkdirAll(dir, 0755))
-        require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILLS.md"), []byte("# "+name), 0644))
+        require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# "+name), 0644))
     }
     // Create a non-skill directory
     require.NoError(t, os.MkdirAll(filepath.Join(src, "not-a-skill"), 0755))

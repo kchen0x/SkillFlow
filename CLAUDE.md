@@ -84,7 +84,7 @@ Skills are identified by UUID. The `meta/` directory is always `filepath.Join(fi
 
 | Package | Responsibility |
 |---------|---------------|
-| `core/skill` | `Skill` model, `Storage` (CRUD + categories), `Validator` (SKILLS.md check) |
+| `core/skill` | `Skill` model, `Storage` (CRUD + categories), `Validator` (skill.mdcheck) |
 | `core/config` | `AppConfig` model, `Service` (load/save JSON), `DefaultToolsDir()` per tool |
 | `core/notify` | `Hub` (buffered channel pub/sub), `EventType` constants |
 | `core/install` | `Installer` interface, `GitHubInstaller` (scan/download/SHA), `LocalInstaller` |

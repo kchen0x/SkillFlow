@@ -355,7 +355,7 @@ git commit -m "feat: add core/git client (CheckGitInstalled, CloneOrUpdate)"
 
 **Step 1: Create scanner.go**
 
-Repos follow the convention: `<repo>/skills/<skill-name>/SKILLS.md`
+Repos follow the convention: `<repo>/skills/<skill-name>/skill.md`
 
 ```go
 package git
@@ -365,7 +365,7 @@ import (
 	"path/filepath"
 )
 
-// ScanSkills walks <repoDir>/skills/ and returns entries that contain a SKILLS.md file.
+// ScanSkills walks <repoDir>/skills/ and returns entries that contain a skill.mdfile.
 func ScanSkills(repoDir, repoURL, repoName string) ([]StarSkill, error) {
 	skillsRoot := filepath.Join(repoDir, "skills")
 	entries, err := os.ReadDir(skillsRoot)
@@ -381,7 +381,7 @@ func ScanSkills(repoDir, repoURL, repoName string) ([]StarSkill, error) {
 			continue
 		}
 		skillDir := filepath.Join(skillsRoot, e.Name())
-		if _, err := os.Stat(filepath.Join(skillDir, "SKILLS.md")); err == nil {
+		if _, err := os.Stat(filepath.Join(skillDir, "skill.md")); err == nil {
 			result = append(result, StarSkill{
 				Name:     e.Name(),
 				Path:     skillDir,
@@ -420,11 +420,11 @@ func TestScanSkillsEmpty(t *testing.T) {
 func TestScanSkills(t *testing.T) {
 	dir := t.TempDir()
 	skillsDir := filepath.Join(dir, "skills")
-	// create two valid skills and one invalid (no SKILLS.md)
+	// create two valid skills and one invalid (no skill.md)
 	for _, name := range []string{"alpha", "beta"} {
 		d := filepath.Join(skillsDir, name)
 		os.MkdirAll(d, 0755)
-		os.WriteFile(filepath.Join(d, "SKILLS.md"), []byte("# "+name), 0644)
+		os.WriteFile(filepath.Join(d, "skill.md"), []byte("# "+name), 0644)
 	}
 	os.MkdirAll(filepath.Join(skillsDir, "no-skills-md"), 0755)
 

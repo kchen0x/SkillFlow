@@ -29,7 +29,7 @@ func (v *Validator) Validate(dir string) error {
 	return nil
 }
 
-// requireSkillMd accepts any casing of "skill.md" or "skills.md".
+// requireSkillMd accepts any casing of "skill.md" or "skill.md".
 func requireSkillMd(dir string) error {
 	if _, err := os.Stat(dir); err != nil {
 		return err
@@ -43,7 +43,7 @@ func requireSkillMd(dir string) error {
 			continue
 		}
 		lower := strings.ToLower(e.Name())
-		if lower == "skill.md" || lower == "skills.md" {
+		if lower == "skill.md" || lower == "skill.md" {
 			return nil
 		}
 	}

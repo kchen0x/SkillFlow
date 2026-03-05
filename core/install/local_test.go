@@ -13,7 +13,7 @@ import (
 
 func TestLocalInstallerScanValidSkill(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILLS.md"), []byte("# skill"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# skill"), 0644))
 
 	inst := install.NewLocalInstaller()
 	candidates, err := inst.Scan(context.Background(), install.InstallSource{Type: "local", URI: dir})
@@ -23,7 +23,7 @@ func TestLocalInstallerScanValidSkill(t *testing.T) {
 }
 
 func TestLocalInstallerScanInvalidSkill(t *testing.T) {
-	dir := t.TempDir() // no SKILLS.md
+	dir := t.TempDir() // no skill.md
 	inst := install.NewLocalInstaller()
 	candidates, err := inst.Scan(context.Background(), install.InstallSource{Type: "local", URI: dir})
 	require.NoError(t, err)

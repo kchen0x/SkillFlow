@@ -14,7 +14,7 @@ func makeTestSkillDir(t *testing.T, baseDir, name string) string {
 	t.Helper()
 	dir := filepath.Join(baseDir, name)
 	require.NoError(t, os.MkdirAll(dir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "SKILLS.md"), []byte("# "+name), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# "+name), 0644))
 	return dir
 }
 
@@ -40,7 +40,7 @@ func TestStorageImportSkill(t *testing.T) {
 	assert.Equal(t, "coding", imported.Category)
 
 	// verify directory was copied
-	_, err = os.Stat(filepath.Join(root, "coding", "my-skill", "SKILLS.md"))
+	_, err = os.Stat(filepath.Join(root, "coding", "my-skill", "skill.md"))
 	assert.NoError(t, err)
 }
 

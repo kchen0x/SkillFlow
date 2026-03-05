@@ -26,7 +26,7 @@
                                                                             
   # 特性                                                                    
   ## 如何识别SKILL                                                          
-  1. 一个skill一般是一个目录，根目录下必须存在SKILLS.md文件                 
+  1. 一个skill一般是一个目录，根目录下必须存在skill.md文件
                                                                             
   ## skill目录管理                                                          
   1. 支持skills在OpenClaw中统一管理，在软件安装目录的skills目录下存放，支持 
@@ -120,7 +120,7 @@
 
   第五个问题：
 
-  SKILLS.md 文件的内容结构是什么样的？比如是否包含 skill
+  skill.md文件的内容结构是什么样的？比如是否包含 skill
   的名称、描述、版本号、作者等元数据？还是格式完全自由，SkillFlow
   只需要检测这个文件存在即可？
 
@@ -680,7 +680,7 @@
   ├── skills/                                # 本地 skills 中央存储
   │   ├── 未分类/
   │   │   └── skill-a/
-  │   │       ├── SKILLS.md
+  │   │       ├── skill.md
   │   │       └── ...
   │   ├── 写作/
   │   │   └── skill-b/
@@ -759,7 +759,7 @@
     GET /repos/{owner}/{repo}/contents/skills
           │
           ▼
-  列出所有子目录，过滤出包含 SKILLS.md 的目录
+  列出所有子目录，过滤出包含 skill.md的目录
   （即合法 skill 候选）
           │
           ▼
