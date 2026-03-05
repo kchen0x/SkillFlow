@@ -78,6 +78,10 @@ export function OpenFolderDialog() {
   return window['go']['main']['App']['OpenFolderDialog']();
 }
 
+export function OpenPath(arg1) {
+  return window['go']['main']['App']['OpenPath'](arg1);
+}
+
 export function PullFromTool(arg1, arg2, arg3) {
   return window['go']['main']['App']['PullFromTool'](arg1, arg2, arg3);
 }

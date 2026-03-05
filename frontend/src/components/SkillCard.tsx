@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import { Github, FolderOpen, RefreshCw } from 'lucide-react'
+import { Github, FolderOpen, RefreshCw, FolderOpenDot } from 'lucide-react'
 import ContextMenu from './ContextMenu'
+import { OpenPath } from '../../wailsjs/go/main/App'
 
-interface Skill { id: string; name: string; category: string; source: 'github' | 'manual'; hasUpdate: boolean }
+interface Skill { id: string; name: string; category: string; source: 'github' | 'manual'; hasUpdate: boolean; path?: string }
 interface Props {
   skill: Skill
   categories: string[]
@@ -41,6 +42,11 @@ export default function SkillCard({
 
   const handleMouseLeave = () => {
     onHoverEnd?.()
+  }
+
+  const handleOpenFolder = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (skill.path) OpenPath(skill.path)
   }
 
   const menuItems = [
@@ -83,9 +89,25 @@ export default function SkillCard({
             </div>
           </div>
         )}
-        {skill.hasUpdate && (
+
+        {/* Open folder button — top-right, visible on hover */}
+        {!selectMode && skill.path && (
+          <button
+            onClick={handleOpenFolder}
+            title="打开目录"
+            className="absolute top-2 right-2 z-10 p-1 rounded text-gray-600 opacity-0 group-hover:opacity-100 hover:text-gray-200 hover:bg-gray-700 transition-all"
+          >
+            <FolderOpenDot size={14} />
+          </button>
+        )}
+
+        {skill.hasUpdate && !selectMode && (
+          <span className="absolute top-2 right-8 w-2.5 h-2.5 rounded-full bg-red-500" />
+        )}
+        {skill.hasUpdate && selectMode && (
           <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-red-500" />
         )}
+
         <div className={`flex items-center gap-2 mb-2 ${selectMode ? 'pl-5' : ''}`}>
           {skill.source === 'github'
             ? <Github size={14} className="text-gray-400" />
@@ -94,7 +116,7 @@ export default function SkillCard({
             {skill.source}
           </span>
         </div>
-        <p className={`font-medium text-sm truncate ${selectMode ? 'pl-5' : ''}`}>{skill.name}</p>
+        <p className={`font-medium text-sm truncate ${selectMode ? 'pl-5' : 'pr-5'}`}>{skill.name}</p>
         {!selectMode && (
           <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
             {skill.hasUpdate && (

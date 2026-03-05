@@ -43,6 +43,8 @@ export function MoveSkillCategory(arg1:string,arg2:string):Promise<void>;
 
 export function OpenFolderDialog():Promise<string>;
 
+export function OpenPath(arg1:string):Promise<void>;
+
 export function PullFromTool(arg1:string,arg2:Array<string>,arg3:string):Promise<Array<string>>;
 
 export function PullFromToolForce(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
