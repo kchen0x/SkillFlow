@@ -1,7 +1,9 @@
 package git
 
 import (
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -31,7 +33,19 @@ func TestStarStorageSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].URL != want[0].URL || got[0].Name != want[0].Name {
-		t.Fatalf("mismatch: %+v", got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("mismatch:\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestStarStorageLoadCorrupt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "star_repos.json")
+	if err := os.WriteFile(path, []byte("{not valid json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	s := NewStarStorage(path)
+	_, err := s.Load()
+	if err == nil {
+		t.Fatal("expected error for corrupt JSON, got nil")
 	}
 }
