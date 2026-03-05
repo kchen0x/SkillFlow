@@ -8,7 +8,7 @@ import (
 
 func TestScanSkillsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	skills, err := ScanSkills(dir, "https://github.com/a/b", "a/b")
+	skills, err := ScanSkills(dir, "https://github.com/a/b", "a/b", "github.com/a/b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestScanSkills(t *testing.T) {
 	}
 	os.MkdirAll(filepath.Join(skillsDir, "no-skills-md"), 0755)
 
-	skills, err := ScanSkills(dir, "https://github.com/a/b", "a/b")
+	skills, err := ScanSkills(dir, "https://github.com/a/b", "a/b", "github.com/a/b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,6 +41,9 @@ func TestScanSkills(t *testing.T) {
 		}
 		if sk.SubPath != "skills/"+sk.Name {
 			t.Errorf("SubPath wrong: %s", sk.SubPath)
+		}
+		if sk.Source != "github.com/a/b" {
+			t.Errorf("Source wrong: %s", sk.Source)
 		}
 		if sk.Path == "" {
 			t.Errorf("Path empty for skill %s", sk.Name)
@@ -61,7 +64,7 @@ func TestScanSkillsRootFallback(t *testing.T) {
 	// A dir without skill.mdshould be ignored.
 	os.MkdirAll(filepath.Join(dir, "docs"), 0755)
 
-	skills, err := ScanSkills(dir, "https://github.com/a/skills", "a/skills")
+	skills, err := ScanSkills(dir, "https://github.com/a/skills", "a/skills", "github.com/a/skills")
 	if err != nil {
 		t.Fatal(err)
 	}

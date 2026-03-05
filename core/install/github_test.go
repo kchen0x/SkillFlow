@@ -49,3 +49,17 @@ func TestGitHubInstallerScan(t *testing.T) {
 	assert.Len(t, candidates, 1)
 	assert.Equal(t, "skill-a", candidates[0].Name)
 }
+
+func TestGitHubInstallerScanSSHURI(t *testing.T) {
+	srv := mockGitHubServer(t)
+	defer srv.Close()
+
+	installer := install.NewGitHubInstaller(srv.URL, nil)
+	candidates, err := installer.Scan(context.Background(), install.InstallSource{
+		Type: "github",
+		URI:  "git@github.com:user/repo.git",
+	})
+	require.NoError(t, err)
+	assert.Len(t, candidates, 1)
+	assert.Equal(t, "skill-a", candidates[0].Name)
+}

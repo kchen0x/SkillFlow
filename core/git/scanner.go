@@ -8,7 +8,7 @@ import (
 
 // scanDir scans a single directory for subdirs containing skill.md.
 // subPathPrefix is prepended to the subdir name to form SubPath (e.g. "skills/").
-func scanDir(root, subPathPrefix, repoURL, repoName string) ([]StarSkill, error) {
+func scanDir(root, subPathPrefix, repoURL, repoName, source string) ([]StarSkill, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -29,6 +29,7 @@ func scanDir(root, subPathPrefix, repoURL, repoName string) ([]StarSkill, error)
 				SubPath:  subPathPrefix + e.Name(),
 				RepoURL:  repoURL,
 				RepoName: repoName,
+				Source:   source,
 			})
 		}
 	}
@@ -38,10 +39,10 @@ func scanDir(root, subPathPrefix, repoURL, repoName string) ([]StarSkill, error)
 // ScanSkills looks for skill directories (subdirs containing skill.md) in the
 // given repo clone. It first checks <repoDir>/skills/; if no skills are found
 // there, it falls back to scanning <repoDir>/ directly (for repos whose root IS
-// the skills collection, e.g. github.com/anthropics/skills).
-func ScanSkills(repoDir, repoURL, repoName string) ([]StarSkill, error) {
+// the skills collection, e.g. host/owner/skills.
+func ScanSkills(repoDir, repoURL, repoName, source string) ([]StarSkill, error) {
 	// Try <repoDir>/skills/ first.
-	result, err := scanDir(filepath.Join(repoDir, "skills"), "skills/", repoURL, repoName)
+	result, err := scanDir(filepath.Join(repoDir, "skills"), "skills/", repoURL, repoName, source)
 	if err != nil {
 		return nil, err
 	}
@@ -50,5 +51,5 @@ func ScanSkills(repoDir, repoURL, repoName string) ([]StarSkill, error) {
 	}
 
 	// Fallback: scan repo root directly.
-	return scanDir(repoDir, "", repoURL, repoName)
+	return scanDir(repoDir, "", repoURL, repoName, source)
 }

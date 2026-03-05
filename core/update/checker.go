@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	coregit "github.com/shinerio/skillflow/core/git"
 	"github.com/shinerio/skillflow/core/skill"
 )
 
@@ -45,7 +46,9 @@ func (c *Checker) Check(ctx context.Context, sk *skill.Skill) (CheckResult, erro
 	}
 	defer resp.Body.Close()
 
-	var commits []struct{ SHA string `json:"sha"` }
+	var commits []struct {
+		SHA string `json:"sha"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&commits); err != nil || len(commits) == 0 {
 		return CheckResult{}, err
 	}
@@ -58,12 +61,15 @@ func (c *Checker) Check(ctx context.Context, sk *skill.Skill) (CheckResult, erro
 }
 
 func parseSourceURL(sourceURL, subPath string) (owner, repo, path string) {
-	sourceURL = strings.TrimSuffix(sourceURL, "/")
-	parts := strings.Split(sourceURL, "/")
-	if len(parts) < 2 {
+	name, err := coregit.ParseRepoName(sourceURL)
+	if err != nil {
 		return "", "", subPath
 	}
-	owner = parts[len(parts)-2]
-	repo = parts[len(parts)-1]
+	parts := strings.SplitN(name, "/", 2)
+	if len(parts) != 2 {
+		return "", "", subPath
+	}
+	owner = parts[0]
+	repo = parts[1]
 	return owner, repo, subPath
 }

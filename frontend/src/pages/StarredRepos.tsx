@@ -147,7 +147,7 @@ export default function StarredRepos() {
           </button>
         ) : (
           <h2 className="text-sm font-medium flex items-center gap-2">
-            <Star size={14} /> GitHub 收藏
+            <Star size={14} /> 仓库收藏
           </h2>
         )}
         <div className="flex-1" />
@@ -199,7 +199,7 @@ export default function StarredRepos() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {currentRepo ? (
-          <SkillGrid skills={repoSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} />
+          <SkillGrid skills={repoSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
         ) : view === 'folder' ? (
           <RepoGrid repos={repos}
             onEnter={url => navigate(`/starred/${encodeURIComponent(url)}`)}
@@ -215,13 +215,13 @@ export default function StarredRepos() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 w-[460px] border border-gray-700">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold flex items-center gap-2"><Star size={16} /> 添加 GitHub 仓库</h3>
+              <h3 className="font-semibold flex items-center gap-2"><Star size={16} /> 添加远程仓库</h3>
               <button onClick={() => { setShowAdd(false); setAddError('') }}><X size={16} className="text-gray-400" /></button>
             </div>
             <div className="flex gap-2 mb-3">
               <input value={addUrl} onChange={e => setAddUrl(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !adding && addUrl && handleAddRepo()}
-                placeholder="https://github.com/user/repo"
+                placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
                 className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" />
               <button onClick={handleAddRepo} disabled={adding || !addUrl}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50 min-w-[72px]">
@@ -299,11 +299,14 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
           {r.syncError ? (
             <p className="text-xs text-red-400 truncate" title={r.syncError}>{r.syncError}</p>
           ) : (
-            <p className="text-xs text-gray-500">
-              {r.lastSync && r.lastSync !== '0001-01-01T00:00:00Z'
-                ? `同步于 ${new Date(r.lastSync).toLocaleDateString()}`
-                : '未同步'}
-            </p>
+            <>
+              <p className="text-xs text-gray-500 truncate" title={r.source || r.url}>{r.source || r.url}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {r.lastSync && r.lastSync !== '0001-01-01T00:00:00Z'
+                  ? `同步于 ${new Date(r.lastSync).toLocaleDateString()}`
+                  : '未同步'}
+              </p>
+            </>
           )}
         </div>
       ))}
@@ -341,6 +344,7 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
           )}
           <p className="text-sm font-medium truncate">{sk.name}</p>
           {showRepo && <p className="text-xs text-gray-500 truncate mt-1">{sk.repoName}</p>}
+          <p className="text-xs text-gray-500 truncate mt-1" title={sk.source || sk.repoUrl}>{sk.source || sk.repoUrl}</p>
           {sk.imported && (
             <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded mt-1 inline-block">已导入</span>
           )}

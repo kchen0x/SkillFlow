@@ -18,3 +18,8 @@
 
 - ~/.gemini/skills/  (default)
 - ~/.agents/skills/
+
+## [openclaw](https://docs.openclaw.ai/tools/skills)
+
+- ~/.openclaw/skills  (default)
+- ~/.openclaw/workspace/skills

@@ -202,7 +202,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setShowGitHub(true)}
                 className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg"
-              ><Github size={14} /> 从 GitHub 安装</button>
+              ><Github size={14} /> 从远程仓库安装</button>
             </>
           )}
         </div>
@@ -229,7 +229,7 @@ export default function Dashboard() {
           {filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center h-48 text-gray-500">
               <p className="text-sm">没有找到 Skills</p>
-              <p className="text-xs mt-1">从 GitHub 安装或拖拽文件夹到此处</p>
+              <p className="text-xs mt-1">从远程仓库安装或拖拽文件夹到此处</p>
             </div>
           )}
         </div>

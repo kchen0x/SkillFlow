@@ -3,11 +3,17 @@ package git
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+type RepoRef struct {
+	Host string // e.g. github.com, gitee.com, git.example.com:2222
+	Path string // e.g. owner/repo or group/subgroup/repo
+}
 
 // CheckGitInstalled returns nil if git is in PATH, or a user-friendly error.
 func CheckGitInstalled() error {
@@ -18,23 +24,146 @@ func CheckGitInstalled() error {
 	return nil
 }
 
-// ParseRepoName extracts "owner/repo" from a GitHub URL.
-func ParseRepoName(repoURL string) (string, error) {
-	u := strings.TrimSuffix(strings.TrimSuffix(repoURL, "/"), ".git")
-	parts := strings.Split(u, "/")
-	if len(parts) < 2 {
-		return "", fmt.Errorf("无效的 GitHub URL: %s", repoURL)
+// ParseRepoRef extracts remote host + repository path from a git remote URL.
+func ParseRepoRef(repoURL string) (RepoRef, error) {
+	u := strings.TrimSpace(repoURL)
+	if u == "" {
+		return RepoRef{}, fmt.Errorf("无效的远程仓库地址: %s", repoURL)
 	}
-	return parts[len(parts)-2] + "/" + parts[len(parts)-1], nil
+
+	host, rawPath, ok := splitRemoteHostPath(u)
+	if !ok {
+		return RepoRef{}, fmt.Errorf("无效的远程仓库地址: %s", repoURL)
+	}
+
+	repoPath, ok := normalizeRepoPath(rawPath)
+	if !ok {
+		return RepoRef{}, fmt.Errorf("无效的远程仓库地址: %s", repoURL)
+	}
+
+	return RepoRef{
+		Host: strings.ToLower(host),
+		Path: repoPath,
+	}, nil
+}
+
+// ParseRepoName extracts repository path from a remote URL, e.g. "owner/repo".
+func ParseRepoName(repoURL string) (string, error) {
+	ref, err := ParseRepoRef(repoURL)
+	if err != nil {
+		return "", err
+	}
+	return ref.Path, nil
+}
+
+func RepoSource(repoURL string) (string, error) {
+	ref, err := ParseRepoRef(repoURL)
+	if err != nil {
+		return "", err
+	}
+	return strings.ToLower(ref.Host + "/" + ref.Path), nil
+}
+
+func CanonicalRepoURL(repoURL string) (string, error) {
+	ref, err := ParseRepoRef(repoURL)
+	if err != nil {
+		return "", err
+	}
+	return "https://" + ref.Host + "/" + ref.Path, nil
+}
+
+func SameRepo(repoA, repoB string) bool {
+	sourceA, errA := RepoSource(repoA)
+	sourceB, errB := RepoSource(repoB)
+	if errA != nil || errB != nil {
+		return strings.EqualFold(strings.TrimSpace(repoA), strings.TrimSpace(repoB))
+	}
+	return strings.EqualFold(sourceA, sourceB)
+}
+
+func splitRemoteHostPath(remote string) (host, path string, ok bool) {
+	// URL form: https://host/owner/repo.git, ssh://git@host/owner/repo.git
+	if strings.Contains(remote, "://") {
+		parsed, err := url.Parse(remote)
+		if err != nil {
+			return "", "", false
+		}
+		if parsed.Host == "" {
+			return "", "", false
+		}
+		host = parsed.Hostname()
+		if parsed.Port() != "" {
+			host = host + ":" + parsed.Port()
+		}
+		return host, parsed.Path, host != "" && parsed.Path != ""
+	}
+
+	// SCP-like SSH form: git@host:owner/repo.git
+	if strings.Contains(remote, "@") && strings.Contains(remote, ":") {
+		parts := strings.SplitN(remote, ":", 2)
+		if len(parts) != 2 {
+			return "", "", false
+		}
+		hostPart := parts[0]
+		if at := strings.LastIndex(hostPart, "@"); at >= 0 {
+			hostPart = hostPart[at+1:]
+		}
+		return hostPart, parts[1], hostPart != "" && parts[1] != ""
+	}
+
+	// Host/path form without scheme: gitee.com/owner/repo
+	parts := strings.SplitN(strings.Trim(remote, "/"), "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	if !strings.Contains(parts[0], ".") {
+		return "", "", false
+	}
+	return parts[0], parts[1], parts[0] != "" && parts[1] != ""
+}
+
+func normalizeRepoPath(path string) (string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 {
+		return "", false
+	}
+
+	// GitHub/Gitea-like API path: /repos/{owner}/{repo}
+	if strings.EqualFold(parts[0], "repos") {
+		if len(parts) < 3 {
+			return "", false
+		}
+		parts = parts[1:3]
+	}
+
+	// Web URL variants like /owner/repo/tree/main or /owner/repo/blob/main/...
+	if len(parts) >= 4 {
+		switch strings.ToLower(parts[2]) {
+		case "tree", "blob", "raw", "commit":
+			parts = parts[:2]
+		}
+	}
+
+	parts[len(parts)-1] = strings.TrimSuffix(parts[len(parts)-1], ".git")
+	if parts[len(parts)-1] == "" {
+		return "", false
+	}
+	return strings.Join(parts, "/"), true
 }
 
 // CacheDir returns the local clone directory for a repo URL under dataDir/cache/.
 func CacheDir(dataDir, repoURL string) (string, error) {
-	name, err := ParseRepoName(repoURL)
+	source, err := RepoSource(repoURL)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dataDir, "cache", filepath.FromSlash(name)), nil
+	parts := strings.SplitN(source, "/", 2)
+	hostPart := strings.ReplaceAll(parts[0], ":", "_")
+	repoPath := ""
+	if len(parts) == 2 {
+		repoPath = parts[1]
+	}
+	return filepath.Join(dataDir, "cache", hostPart, filepath.FromSlash(repoPath)), nil
 }
 
 // CloneOrUpdate clones repoURL into dir, or force-updates it if already present.

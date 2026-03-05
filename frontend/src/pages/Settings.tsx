@@ -22,7 +22,8 @@ export default function SettingsPage() {
   const [cfg, setCfg] = useState<any>(null)
   const [providers, setProviders] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
-  const [newTool, setNewTool] = useState({ name: '', skillsDir: '' })
+  const [newTool, setNewTool] = useState({ name: '', pushDir: '' })
+  const [newScanDirs, setNewScanDirs] = useState<Record<string, string>>({})
 
   useEffect(() => {
     Promise.all([GetConfig(), ListCloudProviders()]).then(([c, p]) => {
@@ -41,6 +42,43 @@ export default function SettingsPage() {
     setCfg((prev: any) => ({
       ...prev,
       tools: prev.tools.map((t: any) => t.name === name ? { ...t, [field]: value } : t)
+    }))
+  }
+
+  const addScanDir = (name: string) => {
+    const path = (newScanDirs[name] ?? '').trim()
+    if (!path) return
+    setCfg((prev: any) => ({
+      ...prev,
+      tools: prev.tools.map((t: any) => {
+        if (t.name !== name) return t
+        const current = t.scanDirs ?? []
+        if (current.includes(path)) return t
+        return { ...t, scanDirs: [...current, path] }
+      })
+    }))
+    setNewScanDirs((prev) => ({ ...prev, [name]: '' }))
+  }
+
+  const updateScanDir = (name: string, index: number, value: string) => {
+    setCfg((prev: any) => ({
+      ...prev,
+      tools: prev.tools.map((t: any) => {
+        if (t.name !== name) return t
+        const next = [...(t.scanDirs ?? [])]
+        next[index] = value
+        return { ...t, scanDirs: next }
+      })
+    }))
+  }
+
+  const removeScanDir = (name: string, index: number) => {
+    setCfg((prev: any) => ({
+      ...prev,
+      tools: prev.tools.map((t: any) => {
+        if (t.name !== name) return t
+        return { ...t, scanDirs: (t.scanDirs ?? []).filter((_: string, i: number) => i !== index) }
+      })
     }))
   }
 
@@ -85,11 +123,52 @@ export default function SettingsPage() {
                   <Toggle enabled={t.enabled} onToggle={() => updateTool(t.name, 'enabled', !t.enabled)} />
                 </label>
               </div>
-              <input
-                value={t.skillsDir}
-                onChange={e => updateTool(t.name, 'skillsDir', e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
-              />
+
+              <div className="mb-3">
+                <p className="text-xs text-gray-400 mb-1.5">推送路径（仅 1 个）</p>
+                <input
+                  value={t.pushDir ?? ''}
+                  onChange={e => updateTool(t.name, 'pushDir', e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-400 mb-1.5">扫描路径（可多个）</p>
+                <div className="space-y-2">
+                  {(t.scanDirs ?? []).map((dir: string, idx: number) => (
+                    <div key={`${t.name}-scan-${idx}`} className="flex gap-2">
+                      <input
+                        value={dir}
+                        onChange={e => updateScanDir(t.name, idx, e.target.value)}
+                        className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        onClick={() => removeScanDir(t.name, idx)}
+                        className="px-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300"
+                        title="删除扫描路径"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={newScanDirs[t.name] ?? ''}
+                    onChange={e => setNewScanDirs(prev => ({ ...prev, [t.name]: e.target.value }))}
+                    placeholder="/path/to/scan"
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    onClick={() => addScanDir(t.name)}
+                    className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm flex items-center gap-1"
+                  >
+                    <Plus size={14} /> 添加
+                  </button>
+                </div>
+              </div>
+
               {t.custom && (
                 <button
                   onClick={async () => { await RemoveCustomTool(t.name); const c = await GetConfig(); setCfg(c) }}
@@ -107,14 +186,14 @@ export default function SettingsPage() {
                 placeholder="工具名称" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm outline-none" />
             </div>
             <div className="flex gap-2">
-              <input value={newTool.skillsDir} onChange={e => setNewTool(p => ({ ...p, skillsDir: e.target.value }))}
-                placeholder="/path/to/skills" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none" />
+              <input value={newTool.pushDir} onChange={e => setNewTool(p => ({ ...p, pushDir: e.target.value }))}
+                placeholder="/path/to/push" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none" />
               <button
                 onClick={async () => {
-                  if (newTool.name && newTool.skillsDir) {
-                    await AddCustomTool(newTool.name, newTool.skillsDir)
+                  if (newTool.name && newTool.pushDir) {
+                    await AddCustomTool(newTool.name, newTool.pushDir)
                     const c = await GetConfig(); setCfg(c)
-                    setNewTool({ name: '', skillsDir: '' })
+                    setNewTool({ name: '', pushDir: '' })
                   }
                 }}
                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm flex items-center gap-1"
@@ -196,7 +275,7 @@ export default function SettingsPage() {
               <Globe size={14} /> 代理设置
             </p>
             <p className="text-xs text-gray-500 mb-4">
-              代理用于 GitHub 相关操作（扫描仓库、安装 Skill、检查更新）
+              代理用于远程仓库相关操作（扫描仓库、安装 Skill、检查更新）
             </p>
 
             <div className="space-y-2">

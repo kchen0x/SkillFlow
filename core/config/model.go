@@ -1,10 +1,11 @@
 package config
 
 type ToolConfig struct {
-	Name      string `json:"name"`
-	SkillsDir string `json:"skillsDir"`
-	Enabled   bool   `json:"enabled"`
-	Custom    bool   `json:"custom"`
+	Name     string   `json:"name"`
+	ScanDirs []string `json:"scanDirs"`
+	PushDir  string   `json:"pushDir"`
+	Enabled  bool     `json:"enabled"`
+	Custom   bool     `json:"custom"`
 }
 
 type CloudConfig struct {
@@ -31,10 +32,9 @@ type ProxyConfig struct {
 }
 
 type AppConfig struct {
-	SkillsStorageDir string      `json:"skillsStorageDir"`
-	DefaultCategory  string      `json:"defaultCategory"`
+	SkillsStorageDir string       `json:"skillsStorageDir"`
+	DefaultCategory  string       `json:"defaultCategory"`
 	Tools            []ToolConfig `json:"tools"`
-	Cloud            CloudConfig `json:"cloud"`
-	Proxy            ProxyConfig `json:"proxy"`
+	Cloud            CloudConfig  `json:"cloud"`
+	Proxy            ProxyConfig  `json:"proxy"`
 }
-

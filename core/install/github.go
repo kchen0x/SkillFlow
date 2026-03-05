@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	coregit "github.com/shinerio/skillflow/core/git"
 )
 
 type githubContent struct {
@@ -207,10 +209,13 @@ func (g *GitHubInstaller) GetLatestSHA(ctx context.Context, repoURL, subPath str
 }
 
 func parseGitHubURI(uri string) (owner, repo string, err error) {
-	uri = strings.TrimSuffix(uri, "/")
-	parts := strings.Split(uri, "/")
-	if len(parts) < 2 {
-		return "", "", fmt.Errorf("invalid GitHub URI: %s", uri)
+	name, err := coregit.ParseRepoName(uri)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid remote git URI: %s", uri)
 	}
-	return parts[len(parts)-2], parts[len(parts)-1], nil
+	parts := strings.SplitN(name, "/", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid remote git URI: %s", uri)
+	}
+	return parts[0], parts[1], nil
 }

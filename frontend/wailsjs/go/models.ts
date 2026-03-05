@@ -57,7 +57,8 @@ export namespace config {
 	}
 	export class ToolConfig {
 	    name: string;
-	    skillsDir: string;
+	    scanDirs: string[];
+	    pushDir: string;
 	    enabled: boolean;
 	    custom: boolean;
 	
@@ -68,7 +69,8 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
-	        this.skillsDir = source["skillsDir"];
+	        this.scanDirs = source["scanDirs"];
+	        this.pushDir = source["pushDir"];
 	        this.enabled = source["enabled"];
 	        this.custom = source["custom"];
 	    }
@@ -124,6 +126,7 @@ export namespace git {
 	    subPath: string;
 	    repoUrl: string;
 	    repoName: string;
+	    source: string;
 	    imported: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -137,12 +140,14 @@ export namespace git {
 	        this.subPath = source["subPath"];
 	        this.repoUrl = source["repoUrl"];
 	        this.repoName = source["repoName"];
+	        this.source = source["source"];
 	        this.imported = source["imported"];
 	    }
 	}
 	export class StarredRepo {
 	    url: string;
 	    name: string;
+	    source: string;
 	    localDir: string;
 	    // Go type: time
 	    lastSync: any;
@@ -156,6 +161,7 @@ export namespace git {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.url = source["url"];
 	        this.name = source["name"];
+	        this.source = source["source"];
 	        this.localDir = source["localDir"];
 	        this.lastSync = this.convertValues(source["lastSync"], null);
 	        this.syncError = source["syncError"];

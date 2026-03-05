@@ -76,9 +76,9 @@ func (a *App) proxyHTTPClient() *http.Client {
 	}
 }
 
-func (a *App) domReady(_ context.Context)          {}
-func (a *App) beforeClose(_ context.Context) bool  { return false }
-func (a *App) shutdown(_ context.Context)          {}
+func (a *App) domReady(_ context.Context)         {}
+func (a *App) beforeClose(_ context.Context) bool { return false }
+func (a *App) shutdown(_ context.Context)         {}
 
 // autoBackup triggers cloud backup after any mutating operation if cloud is enabled.
 func (a *App) autoBackup() {
@@ -231,7 +231,7 @@ func (a *App) GetSkillMeta(skillID string) (*skill.SkillMeta, error) {
 
 // --- Install ---
 
-// ScanGitHub scans a GitHub repo for valid skills, marking already-installed ones.
+// ScanGitHub scans a remote git repo for valid skills, marking already-installed ones.
 func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 	dataDir := config.AppDataDir()
 	cacheDir, err := coregit.CacheDir(dataDir, repoURL)
@@ -242,7 +242,11 @@ func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 		return nil, err
 	}
 	repoName, _ := coregit.ParseRepoName(repoURL)
-	starSkills, err := coregit.ScanSkills(cacheDir, repoURL, repoName)
+	repoSource, err := coregit.RepoSource(repoURL)
+	if err != nil {
+		return nil, err
+	}
+	starSkills, err := coregit.ScanSkills(cacheDir, repoURL, repoName, repoSource)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +266,7 @@ func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 	return candidates, nil
 }
 
-// InstallFromGitHub downloads selected skills from GitHub and imports them into storage.
+// InstallFromGitHub imports selected skills from a scanned remote git repo into storage.
 func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandidate, category string) error {
 	if category == "" {
 		cfg, _ := a.config.Load()
@@ -276,10 +280,14 @@ func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandid
 	if err != nil {
 		return err
 	}
+	canonicalRepoURL, err := coregit.CanonicalRepoURL(repoURL)
+	if err != nil {
+		return err
+	}
 	for _, c := range candidates {
 		skillDir := filepath.Join(cacheDir, filepath.FromSlash(c.Path))
 		sha, _ := coregit.GetSubPathSHA(a.ctx, cacheDir, c.Path)
-		sk, err := a.storage.Import(skillDir, category, skill.SourceGitHub, repoURL, c.Path)
+		sk, err := a.storage.Import(skillDir, category, skill.SourceGitHub, canonicalRepoURL, c.Path)
 		if err != nil {
 			return fmt.Errorf("import %s: %w", c.Name, err)
 		}
@@ -322,12 +330,12 @@ func (a *App) GetEnabledTools() ([]config.ToolConfig, error) {
 	return enabled, nil
 }
 
-// ScanToolSkills lists all skills in a tool's directory for the pull page.
+// ScanToolSkills lists all skills in a tool's configured scan directories for the pull page.
 func (a *App) ScanToolSkills(toolName string) ([]*skill.Skill, error) {
 	cfg, _ := a.config.Load()
 	for _, t := range cfg.Tools {
 		if t.Name == toolName {
-			return getAdapter(t).Pull(a.ctx, t.SkillsDir)
+			return scanToolSkills(a.ctx, getAdapter(t), t.ScanDirs)
 		}
 	}
 	return nil, nil
@@ -358,15 +366,18 @@ func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]string, erro
 			if t.Name != toolName {
 				continue
 			}
+			if t.PushDir == "" {
+				return nil, fmt.Errorf("工具 %s 未配置推送路径", toolName)
+			}
 			adapter := getAdapter(t)
 			for _, sk := range selected {
-				dst := filepath.Join(t.SkillsDir, sk.Name)
+				dst := filepath.Join(t.PushDir, sk.Name)
 				if _, err := os.Stat(dst); err == nil {
 					conflicts = append(conflicts, fmt.Sprintf("%s -> %s", sk.Name, toolName))
 					continue
 				}
 			}
-			_ = adapter.Push(a.ctx, selected, t.SkillsDir)
+			_ = adapter.Push(a.ctx, selected, t.PushDir)
 		}
 	}
 	return conflicts, nil
@@ -389,7 +400,10 @@ func (a *App) PushToToolsForce(skillIDs []string, toolNames []string) error {
 	for _, toolName := range toolNames {
 		for _, t := range cfg.Tools {
 			if t.Name == toolName {
-				_ = getAdapter(t).Push(a.ctx, selected, t.SkillsDir)
+				if t.PushDir == "" {
+					return fmt.Errorf("工具 %s 未配置推送路径", toolName)
+				}
+				_ = getAdapter(t).Push(a.ctx, selected, t.PushDir)
 			}
 		}
 	}
@@ -414,7 +428,7 @@ func (a *App) PullFromTool(toolName string, skillNames []string, category string
 		if t.Name != toolName {
 			continue
 		}
-		candidates, err := getAdapter(t).Pull(a.ctx, t.SkillsDir)
+		candidates, err := scanToolSkills(a.ctx, getAdapter(t), t.ScanDirs)
 		if err != nil {
 			return nil, err
 		}
@@ -451,7 +465,10 @@ func (a *App) PullFromToolForce(toolName string, skillNames []string, category s
 		if t.Name != toolName {
 			continue
 		}
-		candidates, _ := getAdapter(t).Pull(a.ctx, t.SkillsDir)
+		candidates, err := scanToolSkills(a.ctx, getAdapter(t), t.ScanDirs)
+		if err != nil {
+			return err
+		}
 		for _, sk := range candidates {
 			if !nameSet[sk.Name] {
 				continue
@@ -470,11 +487,39 @@ func (a *App) PullFromToolForce(toolName string, skillNames []string, category s
 	return nil
 }
 
+func scanToolSkills(ctx context.Context, adapter toolsync.ToolAdapter, scanDirs []string) ([]*skill.Skill, error) {
+	var result []*skill.Skill
+	seen := map[string]struct{}{}
+	for _, dir := range scanDirs {
+		if dir == "" {
+			continue
+		}
+		if _, err := os.Stat(dir); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		skills, err := adapter.Pull(ctx, dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, sk := range skills {
+			if _, ok := seen[sk.Name]; ok {
+				continue
+			}
+			seen[sk.Name] = struct{}{}
+			result = append(result, sk)
+		}
+	}
+	return result, nil
+}
+
 func getAdapter(t config.ToolConfig) toolsync.ToolAdapter {
 	if a, ok := registry.GetAdapter(t.Name); ok {
 		return a
 	}
-	return toolsync.NewFilesystemAdapter(t.Name, t.SkillsDir)
+	return toolsync.NewFilesystemAdapter(t.Name, t.PushDir)
 }
 
 // --- Config ---
@@ -487,16 +532,17 @@ func (a *App) SaveConfig(cfg config.AppConfig) error {
 	return a.config.Save(cfg)
 }
 
-func (a *App) AddCustomTool(name, skillsDir string) error {
+func (a *App) AddCustomTool(name, pushDir string) error {
 	cfg, err := a.config.Load()
 	if err != nil {
 		return err
 	}
 	cfg.Tools = append(cfg.Tools, config.ToolConfig{
-		Name:      name,
-		SkillsDir: skillsDir,
-		Enabled:   true,
-		Custom:    true,
+		Name:     name,
+		ScanDirs: []string{pushDir},
+		PushDir:  pushDir,
+		Enabled:  true,
+		Custom:   true,
 	})
 	return a.config.Save(cfg)
 }
@@ -664,7 +710,13 @@ func (a *App) AddStarredRepo(repoURL string) (*coregit.StarredRepo, error) {
 		return nil, err
 	}
 	for i, r := range repos {
-		if r.URL == repoURL {
+		if coregit.SameRepo(r.URL, repoURL) {
+			if repos[i].Source == "" {
+				if source, err := coregit.RepoSource(repos[i].URL); err == nil {
+					repos[i].Source = source
+					_ = a.starStorage.Save(repos)
+				}
+			}
 			return &repos[i], nil // already starred
 		}
 	}
@@ -672,8 +724,16 @@ func (a *App) AddStarredRepo(repoURL string) (*coregit.StarredRepo, error) {
 	if err != nil {
 		return nil, err
 	}
-	localDir := filepath.Join(a.cacheDir, filepath.FromSlash(name))
-	repo := coregit.StarredRepo{URL: repoURL, Name: name, LocalDir: localDir}
+	dataDir := filepath.Dir(a.cacheDir)
+	localDir, err := coregit.CacheDir(dataDir, repoURL)
+	if err != nil {
+		return nil, err
+	}
+	source, err := coregit.RepoSource(repoURL)
+	if err != nil {
+		return nil, err
+	}
+	repo := coregit.StarredRepo{URL: repoURL, Name: name, Source: source, LocalDir: localDir}
 	if cloneErr := coregit.CloneOrUpdate(a.ctx, repoURL, localDir, a.gitProxyURL()); cloneErr != nil {
 		repo.SyncError = cloneErr.Error()
 	} else {
@@ -693,7 +753,7 @@ func (a *App) RemoveStarredRepo(repoURL string) error {
 	}
 	filtered := make([]coregit.StarredRepo, 0, len(repos))
 	for _, r := range repos {
-		if r.URL != repoURL {
+		if !coregit.SameRepo(r.URL, repoURL) {
 			filtered = append(filtered, r)
 		}
 	}
@@ -704,6 +764,19 @@ func (a *App) ListStarredRepos() ([]coregit.StarredRepo, error) {
 	repos, err := a.starStorage.Load()
 	if repos == nil {
 		return []coregit.StarredRepo{}, err
+	}
+	changed := false
+	for i := range repos {
+		if repos[i].Source != "" {
+			continue
+		}
+		if source, parseErr := coregit.RepoSource(repos[i].URL); parseErr == nil {
+			repos[i].Source = source
+			changed = true
+		}
+	}
+	if changed {
+		_ = a.starStorage.Save(repos)
 	}
 	return repos, err
 }
@@ -720,7 +793,11 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 	}
 	var all []coregit.StarSkill
 	for _, r := range repos {
-		skills, _ := coregit.ScanSkills(r.LocalDir, r.URL, r.Name)
+		source := r.Source
+		if source == "" {
+			source, _ = coregit.RepoSource(r.URL)
+		}
+		skills, _ := coregit.ScanSkills(r.LocalDir, r.URL, r.Name, source)
 		for i := range skills {
 			skills[i].Imported = importedNames[skills[i].Name]
 		}
@@ -743,10 +820,14 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 		importedNames[sk.Name] = true
 	}
 	for _, r := range repos {
-		if r.URL != repoURL {
+		if !coregit.SameRepo(r.URL, repoURL) {
 			continue
 		}
-		skills, err := coregit.ScanSkills(r.LocalDir, r.URL, r.Name)
+		source := r.Source
+		if source == "" {
+			source, _ = coregit.RepoSource(r.URL)
+		}
+		skills, err := coregit.ScanSkills(r.LocalDir, r.URL, r.Name, source)
 		if err != nil {
 			return nil, err
 		}
@@ -767,7 +848,7 @@ func (a *App) UpdateStarredRepo(repoURL string) error {
 		return err
 	}
 	for i, r := range repos {
-		if r.URL != repoURL {
+		if !coregit.SameRepo(r.URL, repoURL) {
 			continue
 		}
 		syncErr := coregit.CloneOrUpdate(a.ctx, r.URL, r.LocalDir, a.gitProxyURL())
@@ -831,9 +912,16 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	}
 	repos, _ := a.starStorage.Load()
 	var repoLocalDir string
+	canonicalRepoURL := repoURL
+	if normalized, err := coregit.CanonicalRepoURL(repoURL); err == nil {
+		canonicalRepoURL = normalized
+	}
 	for _, r := range repos {
-		if r.URL == repoURL {
+		if coregit.SameRepo(r.URL, repoURL) {
 			repoLocalDir = r.LocalDir
+			if normalized, err := coregit.CanonicalRepoURL(r.URL); err == nil {
+				canonicalRepoURL = normalized
+			}
 			break
 		}
 	}
@@ -843,7 +931,7 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	for _, skillPath := range skillPaths {
 		subPath, _ := filepath.Rel(repoLocalDir, skillPath)
 		subPath = filepath.ToSlash(subPath)
-		sk, err := a.storage.Import(skillPath, category, skill.SourceGitHub, repoURL, subPath)
+		sk, err := a.storage.Import(skillPath, category, skill.SourceGitHub, canonicalRepoURL, subPath)
 		if err == skill.ErrSkillExists {
 			continue
 		}

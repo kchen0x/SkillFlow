@@ -37,6 +37,12 @@ func TestParseRepoName(t *testing.T) {
 		{"https://github.com/owner/repo", "owner/repo"},
 		{"https://github.com/owner/repo.git", "owner/repo"},
 		{"https://github.com/owner/repo/", "owner/repo"},
+		{"git@github.com:owner/repo.git", "owner/repo"},
+		{"ssh://git@github.com/owner/repo.git", "owner/repo"},
+		{"https://gitee.com/shinerio/obsidian.git", "shinerio/obsidian"},
+		{"git@gitee.com:shinerio/obsidian.git", "shinerio/obsidian"},
+		{"github.com/owner/repo", "owner/repo"},
+		{"https://github.com/owner/repo/tree/main", "owner/repo"},
 	}
 	for _, c := range cases {
 		got, err := ParseRepoName(c.url)
@@ -87,9 +93,26 @@ func TestCacheDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join("/data", "cache", "owner", "repo")
+	want := filepath.Join("/data", "cache", "github.com", "owner", "repo")
 	if dir != want {
 		t.Errorf("got %q, want %q", dir, want)
+	}
+
+	sshDir, err := CacheDir("/data", "git@github.com:owner/repo.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sshDir != want {
+		t.Errorf("got %q, want %q", sshDir, want)
+	}
+
+	giteeDir, err := CacheDir("/data", "https://gitee.com/owner/repo.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	giteeWant := filepath.Join("/data", "cache", "gitee.com", "owner", "repo")
+	if giteeDir != giteeWant {
+		t.Errorf("got %q, want %q", giteeDir, giteeWant)
 	}
 }
 
@@ -144,5 +167,30 @@ func TestGetSubPathSHA(t *testing.T) {
 	}
 	if len(sha) != 40 {
 		t.Errorf("expected 40-char SHA, got %q (len %d)", sha, len(sha))
+	}
+}
+
+func TestSameRepo(t *testing.T) {
+	if !SameRepo("git@github.com:anthropics/skills.git", "https://github.com/anthropics/skills.git") {
+		t.Fatal("expected git@ and https URLs to be treated as same repo")
+	}
+	if !SameRepo("git@gitee.com:shinerio/obsidian.git", "https://gitee.com/shinerio/obsidian.git") {
+		t.Fatal("expected gitee git@ and https URLs to be treated as same repo")
+	}
+	if SameRepo("https://github.com/a/repo", "https://gitee.com/a/repo") {
+		t.Fatal("different hosts should not be treated as same repo")
+	}
+	if SameRepo("https://github.com/a/repo", "https://github.com/b/repo") {
+		t.Fatal("different repos should not be equal")
+	}
+}
+
+func TestRepoSource(t *testing.T) {
+	src, err := RepoSource("git@gitee.com:shinerio/obsidian.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src != "gitee.com/shinerio/obsidian" {
+		t.Fatalf("unexpected source: %s", src)
 	}
 }

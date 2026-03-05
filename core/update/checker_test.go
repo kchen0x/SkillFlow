@@ -47,3 +47,23 @@ func TestCheckerNoUpdateWhenSHAMatches(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.HasUpdate)
 }
+
+func TestCheckerSupportsSSHSourceURL(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		json.NewEncoder(w).Encode([]map[string]any{{"sha": "newsha123"}})
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skill.Skill{
+		Source:        skill.SourceGitHub,
+		SourceURL:     "git@github.com:user/repo.git",
+		SourceSubPath: "skills/skill-a",
+		SourceSHA:     "oldsha",
+	}
+	_, err := checker.Check(context.Background(), sk)
+	require.NoError(t, err)
+	assert.Equal(t, "/repos/user/repo/commits", gotPath)
+}

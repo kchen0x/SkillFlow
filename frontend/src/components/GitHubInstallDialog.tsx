@@ -62,7 +62,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-2xl p-6 w-[520px] border border-gray-700">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold flex items-center gap-2"><Github size={16} /> 从 GitHub 安装</h3>
+          <h3 className="font-semibold flex items-center gap-2"><Github size={16} /> 从远程仓库安装</h3>
           <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
         </div>
 
@@ -71,7 +71,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
             value={url}
             onChange={e => setUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !scanning && url && scan()}
-            placeholder="https://github.com/user/repo"
+            placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
             className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
           />
           <button onClick={scan} disabled={scanning || !url} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50 min-w-[72px]">
