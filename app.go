@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 
 	"github.com/shinerio/skillflow/core/backup"
 	"github.com/shinerio/skillflow/core/config"
@@ -579,6 +581,20 @@ func (a *App) OpenFolderDialog() (string, error) {
 	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "选择 Skill 目录",
 	})
+}
+
+// OpenPath opens the given filesystem path in the OS default file manager.
+func (a *App) OpenPath(path string) error {
+	var cmd *exec.Cmd
+	switch goruntime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "windows":
+		cmd = exec.Command("explorer", path)
+	default:
+		cmd = exec.Command("xdg-open", path)
+	}
+	return cmd.Start()
 }
 
 // Greet is kept for Wails template compatibility.

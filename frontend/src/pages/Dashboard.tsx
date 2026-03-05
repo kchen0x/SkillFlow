@@ -213,7 +213,7 @@ export default function Dashboard() {
             {filtered.map(sk => (
               <SkillCard
                 key={sk.ID}
-                skill={{ id: sk.ID, name: sk.Name, category: sk.Category, source: sk.Source, hasUpdate: !!sk.LatestSHA }}
+                skill={{ id: sk.ID, name: sk.Name, category: sk.Category, source: sk.Source, hasUpdate: !!sk.LatestSHA, path: sk.Path }}
                 categories={categories}
                 onDelete={async () => { await DeleteSkill(sk.ID); load() }}
                 onUpdate={async () => { await UpdateSkill(sk.ID); load() }}
