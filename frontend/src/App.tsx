@@ -1,10 +1,11 @@
 import { BrowserRouter, Route, Routes, NavLink } from 'react-router-dom'
-import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings } from 'lucide-react'
+import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import SyncPush from './pages/SyncPush'
 import SyncPull from './pages/SyncPull'
 import Backup from './pages/Backup'
 import SettingsPage from './pages/Settings'
+import StarredRepos from './pages/StarredRepos'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <p className="text-xs text-gray-500 px-2 mt-3 mb-1">同步管理</p>
           <NavItem to="/sync/push" icon={<ArrowUpFromLine size={16} />} label="推送到工具" />
           <NavItem to="/sync/pull" icon={<ArrowDownToLine size={16} />} label="从工具拉取" />
+          <NavItem to="/starred" icon={<Star size={16} />} label="GitHub 收藏" />
           <div className="flex-1" />
           <NavItem to="/backup" icon={<Cloud size={16} />} label="云备份" />
           <NavItem to="/settings" icon={<Settings size={16} />} label="设置" />
@@ -27,6 +29,8 @@ export default function App() {
             <Route path="/sync/pull" element={<SyncPull />} />
             <Route path="/backup" element={<Backup />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/starred" element={<StarredRepos />} />
+            <Route path="/starred/:repoEncoded" element={<StarredRepos />} />
           </Routes>
         </main>
       </div>
