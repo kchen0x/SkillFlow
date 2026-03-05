@@ -6,6 +6,10 @@ export function AddCustomTool(arg1, arg2) {
   return window['go']['main']['App']['AddCustomTool'](arg1, arg2);
 }
 
+export function AddStarredRepo(arg1) {
+  return window['go']['main']['App']['AddStarredRepo'](arg1);
+}
+
 export function BackupNow() {
   return window['go']['main']['App']['BackupNow']();
 }
@@ -34,12 +38,12 @@ export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
 
-export function GetSkillMeta(arg1) {
-  return window['go']['main']['App']['GetSkillMeta'](arg1);
-}
-
 export function GetEnabledTools() {
   return window['go']['main']['App']['GetEnabledTools']();
+}
+
+export function GetSkillMeta(arg1) {
+  return window['go']['main']['App']['GetSkillMeta'](arg1);
 }
 
 export function Greet(arg1) {
@@ -50,8 +54,16 @@ export function ImportLocal(arg1, arg2) {
   return window['go']['main']['App']['ImportLocal'](arg1, arg2);
 }
 
+export function ImportStarSkills(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ImportStarSkills'](arg1, arg2, arg3);
+}
+
 export function InstallFromGitHub(arg1, arg2, arg3) {
   return window['go']['main']['App']['InstallFromGitHub'](arg1, arg2, arg3);
+}
+
+export function ListAllStarSkills() {
+  return window['go']['main']['App']['ListAllStarSkills']();
 }
 
 export function ListCategories() {
@@ -66,8 +78,16 @@ export function ListCloudProviders() {
   return window['go']['main']['App']['ListCloudProviders']();
 }
 
+export function ListRepoStarSkills(arg1) {
+  return window['go']['main']['App']['ListRepoStarSkills'](arg1);
+}
+
 export function ListSkills() {
   return window['go']['main']['App']['ListSkills']();
+}
+
+export function ListStarredRepos() {
+  return window['go']['main']['App']['ListStarredRepos']();
 }
 
 export function MoveSkillCategory(arg1, arg2) {
@@ -102,6 +122,10 @@ export function RemoveCustomTool(arg1) {
   return window['go']['main']['App']['RemoveCustomTool'](arg1);
 }
 
+export function RemoveStarredRepo(arg1) {
+  return window['go']['main']['App']['RemoveStarredRepo'](arg1);
+}
+
 export function RenameCategory(arg1, arg2) {
   return window['go']['main']['App']['RenameCategory'](arg1, arg2);
 }
@@ -122,6 +146,14 @@ export function ScanToolSkills(arg1) {
   return window['go']['main']['App']['ScanToolSkills'](arg1);
 }
 
+export function UpdateAllStarredRepos() {
+  return window['go']['main']['App']['UpdateAllStarredRepos']();
+}
+
 export function UpdateSkill(arg1) {
   return window['go']['main']['App']['UpdateSkill'](arg1);
+}
+
+export function UpdateStarredRepo(arg1) {
+  return window['go']['main']['App']['UpdateStarredRepo'](arg1);
 }

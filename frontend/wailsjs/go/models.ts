@@ -21,6 +21,20 @@ export namespace backup {
 
 export namespace config {
 	
+	export class ProxyConfig {
+	    mode: string;
+	    url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProxyConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.url = source["url"];
+	    }
+	}
 	export class CloudConfig {
 	    provider: string;
 	    enabled: boolean;
@@ -64,6 +78,7 @@ export namespace config {
 	    defaultCategory: string;
 	    tools: ToolConfig[];
 	    cloud: CloudConfig;
+	    proxy: ProxyConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -75,6 +90,7 @@ export namespace config {
 	        this.defaultCategory = source["defaultCategory"];
 	        this.tools = this.convertValues(source["tools"], ToolConfig);
 	        this.cloud = this.convertValues(source["cloud"], CloudConfig);
+	        this.proxy = this.convertValues(source["proxy"], ProxyConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -96,6 +112,73 @@ export namespace config {
 		}
 	}
 	
+	
+
+}
+
+export namespace git {
+	
+	export class StarSkill {
+	    name: string;
+	    path: string;
+	    subPath: string;
+	    repoUrl: string;
+	    repoName: string;
+	    imported: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new StarSkill(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.subPath = source["subPath"];
+	        this.repoUrl = source["repoUrl"];
+	        this.repoName = source["repoName"];
+	        this.imported = source["imported"];
+	    }
+	}
+	export class StarredRepo {
+	    url: string;
+	    name: string;
+	    localDir: string;
+	    // Go type: time
+	    lastSync: any;
+	    syncError?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StarredRepo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.name = source["name"];
+	        this.localDir = source["localDir"];
+	        this.lastSync = this.convertValues(source["lastSync"], null);
+	        this.syncError = source["syncError"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 
@@ -119,22 +202,6 @@ export namespace install {
 	}
 
 }
-
-
-	export class ProxyConfig {
-	    Mode: string;
-	    URL: string;
-
-	    static createFrom(source: any = {}) {
-	        return new ProxyConfig(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Mode = source["Mode"];
-	        this.URL = source["URL"];
-	    }
-	}
 
 export namespace skill {
 	
@@ -193,7 +260,6 @@ export namespace skill {
 		    return a;
 		}
 	}
-
 	export class SkillMeta {
 	    Name: string;
 	    Description: string;
@@ -201,11 +267,11 @@ export namespace skill {
 	    AllowedTools: string;
 	    Context: string;
 	    DisableModelInvocation: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SkillMeta(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
@@ -216,7 +282,6 @@ export namespace skill {
 	        this.DisableModelInvocation = source["DisableModelInvocation"];
 	    }
 	}
-
 
 }
 
