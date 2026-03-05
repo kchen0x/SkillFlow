@@ -1,4 +1,9 @@
-WAILS := $(HOME)/go/bin/wails
+# Detect OS and set appropriate path
+ifeq ($(OS),Windows_NT)
+    WAILS := $(shell where wails 2>/dev/null || echo $(USERPROFILE)/go/bin/wails.exe)
+else
+    WAILS := $(shell which wails 2>/dev/null || echo $(HOME)/go/bin/wails)
+endif
 
 .PHONY: all dev build test tidy generate install-frontend clean help
 
@@ -29,7 +34,11 @@ install-frontend:
 
 ## clean: Remove build artifacts
 clean:
+ifeq ($(OS),Windows_NT)
+	if exist build\bin rmdir /s /q build\bin
+else
 	rm -rf build/bin
+endif
 
 ## help: Show this help
 help:
