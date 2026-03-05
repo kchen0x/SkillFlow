@@ -49,6 +49,7 @@ func (a *App) startup(ctx context.Context) {
 	registerProviders()
 	go forwardEvents(ctx, a.hub)
 	go a.checkUpdatesOnStartup()
+	go a.updateStarredReposOnStartup()
 }
 
 // proxyHTTPClient builds an *http.Client configured according to the saved proxy settings.
@@ -620,6 +621,10 @@ func (a *App) UpdateSkill(skillID string) error {
 
 func (a *App) checkUpdatesOnStartup() {
 	_ = a.CheckUpdates()
+}
+
+func (a *App) updateStarredReposOnStartup() {
+	_ = a.UpdateAllStarredRepos()
 }
 
 // OpenFolderDialog wraps Wails file dialog for frontend use.
