@@ -15,6 +15,11 @@ dev:
 ## build: Build production binary
 build:
 	$(WAILS) build
+ifneq ($(OS),Windows_NT)
+	@if [ -f build/darwin/iconfile.icns ] && [ -d build/bin/SkillFlow.app ]; then \
+		cp build/darwin/iconfile.icns build/bin/SkillFlow.app/Contents/Resources/iconfile.icns; \
+	fi
+endif
 
 ## test: Run all Go tests
 test:
