@@ -1,6 +1,6 @@
 # SkillFlow — 完整功能参考手册
 
-> 🌐 **中文** | [English](feature.md)
+> 🌐 **中文** | [English](features.md)
 >
 > 本文档列举了 SkillFlow 的每一项功能、按钮、交互细节和 UX 设计。
 > **每当功能增删改时，必须同步更新本文件。**
@@ -20,7 +20,7 @@
 9. [Skill 悬浮提示](#9-skill-悬浮提示)
 10. [公共对话框](#10-公共对话框)
 11. [后端事件](#11-后端事件)
-12. [应用更新横幅](#12-应用更新横幅)
+12. [应用更新对话框](#12-应用更新对话框)
 
 ---
 
@@ -83,7 +83,7 @@
 
 - 布局：3 列，宽屏 4 列。
 - **空状态** — 显示"没有找到 Skills"及使用提示。
-- **Skill 右键菜单** — 包含“移动到其他分类”项（仅显示非当前分类）、删除，以及适用时的更新操作。
+- **Skill 右键菜单** — 包含"移动到其他分类"项（仅显示非当前分类）、删除，以及适用时的更新操作。
 - **拖拽操作** — 将 Skill 卡片拖至侧边栏分类可移动；开始拖拽后，会有一个缩小版卡片跟随鼠标移动；命中左侧分类后，原卡片会收缩成一条细线，直到结束拖拽；将文件夹从操作系统文件管理器拖入窗口可直接导入。
 - **窗口级拖拽遮罩** — 拖拽文件进入窗口时，显示半透明靛蓝色遮罩和"松开以导入 Skill"提示。
 - **悬浮提示** — 鼠标悬停卡片 300 毫秒后出现（详见 [Skill 悬浮提示](#9-skill-悬浮提示)）。
@@ -96,7 +96,7 @@
 
 ### 布局
 
-- 采用与“我的 Skills”接近的双栏布局。
+- 采用与"我的 Skills"接近的双栏布局。
 - 左侧边栏显示分类筛选：**全部** 加所有现有分类。
 - 右侧显示目标工具选择、推送模式按钮，以及当前分类范围内的 Skill 卡片网格。
 
@@ -491,44 +491,61 @@ Go 后端通过 Wails runtime 向前端推送的事件：
 
 主面板监听 `update.available` 事件，实时在对应 Skill 卡片上标记红色更新红点。
 备份页监听所有 `git.*` 事件，并在收到 `git.conflict` 时弹出冲突解决对话框。
-`App.tsx` 监听全部三个 `app.update.*` 事件，驱动更新横幅的状态机。
+`App.tsx` 监听全部三个 `app.update.*` 事件，驱动更新对话框的状态机。
 
 ---
 
-## 12. 应用更新横幅
+## 12. 应用更新对话框
 
-应用启动时检测到新版本后，顶部显示固定横幅。横幅由四态状态机驱动：
+检测到新版本时弹出的居中模态对话框，同时适用于启动时自动检测和设置页手动检测两个入口。对话框由四态状态机驱动：
 
-| 状态 | 触发条件 | 横幅内容 |
-|------|---------|---------|
-| `available` | 收到 `app.update.available` 事件 | 版本号 + 平台对应操作 |
-| `downloading` | 用户点击"立即下载"（仅 Windows） | 旋转图标 + 版本号 |
-| `ready_to_restart` | 收到 `app.update.download.done` 事件 | 完成提示 + "立即重启"按钮 |
-| `download_failed` | 收到 `app.update.download.fail` 事件 | 错误提示 + 发布页链接 |
+| 状态 | 触发条件 | 对话框内容 |
+|------|---------|----------|
+| `available` | 收到 `app.update.available` 事件 | 版本号 + 更新说明 + 平台对应操作按钮 |
+| `downloading` | 用户点击"下载并自动重启更新"（仅 Windows） | 旋转图标 + 下载进度提示 |
+| `ready_to_restart` | 收到 `app.update.download.done` 事件 | 完成提示 + "立即重启" / "稍后重启"按钮 |
+| `download_failed` | 收到 `app.update.download.fail` 事件 | 错误提示 + "前往下载页"按钮 |
 
 ### 平台行为
 
-- **Windows** — 完整自动更新：下载 → 批处理脚本替换 exe → 重启。
-- **macOS** — 仅通知："查看详情"链接在浏览器中打开 GitHub Releases 页面。
+启动检测与手动检测均使用同一模态对话框。
+
+- **Windows** — `available` 状态提供三个选项：
+  1. **下载并自动重启更新** — 后台下载新 exe，完成后提示重启。
+  2. **前往 Release 页面手动下载** — 在系统浏览器打开 GitHub Releases 页面。
+  3. **跳过此版本（下次启动不再提示）** — 记住跳过的版本；启动检测不再对该版本弹窗，手动检测不受影响，仍正常弹出。
+- **macOS** — `available` 状态提供两个选项（暂不支持自动下载）：
+  1. **前往 Release 页面手动下载** — 在系统浏览器打开 GitHub Releases 页面。
+  2. **跳过此版本（下次启动不再提示）** — 与 Windows 行为一致。
+
+### 跳过版本机制
+
+- 跳过的版本 tag 存储在 `AppConfig.SkippedUpdateVersion`（持久化到 `config.json`）。
+- 启动检测时，若 `latestVersion == skippedUpdateVersion`，则**不**发布 `app.update.available` 事件，不弹出对话框。
+- 设置页手动点击"检测更新"时，`CheckAppUpdateAndNotify` 始终发布事件，不受跳过版本影响 — 手动检测总是正常弹出对话框。
+- 点击"跳过此版本"时调用 `SetSkippedUpdateVersion(latestVersion)`。
 
 ### 手动检测按钮（设置页）
 
 设置页标题栏右上角提供 **"检测更新"** 按钮：
 
 - 按钮旁显示当前应用版本号（`vX.Y.Z`）。
-- 点击 → 调用 `CheckAppUpdate()`；检测中按钮显示旋转图标。
-- 结果内联显示："已是最新版本 (vX.Y.Z)" 或 "发现新版本 vX.Y.Z，请查看顶部横幅"。
-- 出错时显示："检测失败，请检查网络"。
+- 点击 → 调用 `CheckAppUpdateAndNotify()`；检测中按钮显示旋转图标。
+- 若发现新版本，更新对话框通过 `app.update.available` 事件自动弹出。
+- 若已是最新版本，内联显示"已是最新版本 (vX.Y.Z)"。
+- 出错时内联显示"检测失败: …"。
 
 ### 操作说明
 
 | 控件 | 操作 |
 |------|------|
-| **查看详情**（macOS，`available` 状态） | 在系统浏览器打开 `releaseUrl` |
-| **立即下载**（Windows，`available` 状态） | `DownloadAppUpdate(downloadUrl)` — 启动后台异步下载 |
+| **下载并自动重启更新**（Windows，`available` 状态） | `DownloadAppUpdate(downloadUrl)` — 启动后台异步下载 |
+| **前往 Release 页面手动下载**（`available` 状态） | `OpenURL(releaseUrl)` — 在浏览器打开发布页；关闭对话框 |
+| **跳过此版本**（`available` 状态） | `SetSkippedUpdateVersion(latestVersion)` — 持久化跳过版本；关闭对话框 |
 | **立即重启**（`ready_to_restart` 状态） | `ApplyAppUpdate()` — 写入批处理脚本并退出；脚本完成 exe 替换后重启 |
-| **前往下载页**（`download_failed` 状态） | 在系统浏览器打开 `releaseUrl` |
-| **×**（除 `downloading` 外所有状态） | 关闭横幅（本次会话内不再提示） |
+| **稍后重启**（`ready_to_restart` 状态） | 关闭对话框，不立即重启 |
+| **前往下载页**（`download_failed` 状态） | `OpenURL(releaseUrl)` — 在浏览器打开发布页；关闭对话框 |
+| **×**（除 `downloading` 外所有状态） | 关闭对话框（本次会话内不再提示） |
 
 ### 后端方法
 
@@ -536,6 +553,9 @@ Go 后端通过 Wails runtime 向前端推送的事件：
 |------|------|
 | `GetAppVersion()` | 返回当前版本字符串（CI 通过 `-ldflags` 注入；本地开发为 `"dev"`） |
 | `CheckAppUpdate()` | 查询 GitHub Releases API；返回含平台匹配下载链接的 `AppUpdateInfo` |
+| `CheckAppUpdateAndNotify()` | 调用 `CheckAppUpdate()` 并在有更新时发布 `EventAppUpdateAvailable`；始终通知，不受跳过版本影响 |
+| `GetSkippedUpdateVersion()` | 返回 config 中存储的用户跳过版本 tag |
+| `SetSkippedUpdateVersion(version)` | 将跳过版本 tag 持久化到 config；传空字符串可清除 |
 | `DownloadAppUpdate(url)` | 异步下载新 exe 到临时目录；完成后发布 `app.update.download.done` 或 `app.update.download.fail` 事件 |
 | `ApplyAppUpdate()` | 仅 Windows — 写入批处理脚本实现退出后 exe 替换，然后调用 `os.Exit(0)` |
 
@@ -549,4 +569,4 @@ wails build -ldflags "-X main.Version=${{ github.ref_name }}"
 
 ---
 
-*最后更新：2026-03-07*
+*最后更新：2026-03-06*
