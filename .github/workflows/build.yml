@@ -1,4 +1,5 @@
 name: Build
+
 on:
   push:
     tags: ['v*']
@@ -28,8 +29,37 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
       - name: Build
-        run: wails build -platform ${{ matrix.arch == 'arm64' && 'darwin/arm64' || matrix.os == 'windows-latest' && 'windows/amd64' || 'darwin/amd64' }}
-      - uses: actions/upload-artifact@v4
+        run: wails build -platform ${{ matrix.arch == 'arm64' && 'darwin/arm64' || matrix.os == 'windows-latest' && 'windows/amd64' || 'darwin/amd64' }} -ldflags "-X main.Version=${{ github.ref_name }}"
+
+      # macOS: .app is a directory bundle — must zip before upload
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        run: cd build/bin && zip -r SkillFlow-${{ matrix.name }}.zip SkillFlow.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: skillflow-${{ matrix.name }}
-          path: build/bin/
+          path: ${{ runner.os == 'Windows' && 'build/bin/SkillFlow.exe' || format('build/bin/SkillFlow-{0}.zip', matrix.name) }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Rename Windows executable
+        run: mv dist/skillflow-windows/SkillFlow.exe dist/SkillFlow-windows.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/skillflow-macos-intel/SkillFlow-macos-intel.zip
+            dist/skillflow-macos-apple-silicon/SkillFlow-macos-apple-silicon.zip
+            dist/SkillFlow-windows.exe
+          generate_release_notes: true

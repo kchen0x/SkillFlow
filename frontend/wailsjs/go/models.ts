@@ -211,6 +211,35 @@ export namespace install {
 
 }
 
+export namespace main {
+	
+	export class AppUpdateInfo {
+	    hasUpdate: boolean;
+	    currentVersion: string;
+	    latestVersion: string;
+	    releaseUrl: string;
+	    downloadUrl: string;
+	    releaseNotes: string;
+	    canAutoUpdate: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppUpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasUpdate = source["hasUpdate"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.releaseUrl = source["releaseUrl"];
+	        this.downloadUrl = source["downloadUrl"];
+	        this.releaseNotes = source["releaseNotes"];
+	        this.canAutoUpdate = source["canAutoUpdate"];
+	    }
+	}
+
+}
+
 export namespace skill {
 	
 	export class Skill {

@@ -57,6 +57,7 @@ func (a *App) startup(ctx context.Context) {
 	go forwardEvents(ctx, a.hub)
 	go a.checkUpdatesOnStartup()
 	go a.updateStarredReposOnStartup()
+	go a.checkAppUpdateOnStartup()
 	go a.gitPullOnStartup()
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 }

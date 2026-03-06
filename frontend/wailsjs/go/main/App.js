@@ -14,8 +14,16 @@ export function AddStarredRepoWithCredentials(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddStarredRepoWithCredentials'](arg1, arg2, arg3);
 }
 
+export function ApplyAppUpdate() {
+  return window['go']['main']['App']['ApplyAppUpdate']();
+}
+
 export function BackupNow() {
   return window['go']['main']['App']['BackupNow']();
+}
+
+export function CheckAppUpdate() {
+  return window['go']['main']['App']['CheckAppUpdate']();
 }
 
 export function CheckMissingPushDirs(arg1) {
@@ -40,6 +48,14 @@ export function DeleteSkill(arg1) {
 
 export function DeleteSkills(arg1) {
   return window['go']['main']['App']['DeleteSkills'](arg1);
+}
+
+export function DownloadAppUpdate(arg1) {
+  return window['go']['main']['App']['DownloadAppUpdate'](arg1);
+}
+
+export function GetAppVersion() {
+  return window['go']['main']['App']['GetAppVersion']();
 }
 
 export function GetConfig() {

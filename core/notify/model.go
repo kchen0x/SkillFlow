@@ -17,6 +17,10 @@ const (
 	EventGitSyncCompleted EventType = "git.sync.completed"
 	EventGitSyncFailed    EventType = "git.sync.failed"
 	EventGitConflict      EventType = "git.conflict" // local ↔ remote conflict requires user decision
+
+	EventAppUpdateAvailable    EventType = "app.update.available"
+	EventAppUpdateDownloadDone EventType = "app.update.download.done"
+	EventAppUpdateDownloadFail EventType = "app.update.download.fail"
 )
 
 type Event struct {

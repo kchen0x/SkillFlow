@@ -20,6 +20,7 @@
 9. [Skill 悬浮提示](#9-skill-悬浮提示)
 10. [公共对话框](#10-公共对话框)
 11. [后端事件](#11-后端事件)
+12. [应用更新横幅](#12-应用更新横幅)
 
 ---
 
@@ -470,6 +471,52 @@ Go 后端通过 Wails runtime 向前端推送的事件：
 
 主面板监听 `update.available` 事件，实时在对应 Skill 卡片上标记红色更新红点。
 备份页监听所有 `git.*` 事件，并在收到 `git.conflict` 时弹出冲突解决对话框。
+`App.tsx` 监听全部三个 `app.update.*` 事件，驱动更新横幅的状态机。
+
+---
+
+## 12. 应用更新横幅
+
+应用启动时检测到新版本后，顶部显示固定横幅。横幅由四态状态机驱动：
+
+| 状态 | 触发条件 | 横幅内容 |
+|------|---------|---------|
+| `available` | 收到 `app.update.available` 事件 | 版本号 + 平台对应操作 |
+| `downloading` | 用户点击"立即下载"（仅 Windows） | 旋转图标 + 版本号 |
+| `ready_to_restart` | 收到 `app.update.download.done` 事件 | 完成提示 + "立即重启"按钮 |
+| `download_failed` | 收到 `app.update.download.fail` 事件 | 错误提示 + 发布页链接 |
+
+### 平台行为
+
+- **Windows** — 完整自动更新：下载 → 批处理脚本替换 exe → 重启。
+- **macOS** — 仅通知："查看详情"链接在浏览器中打开 GitHub Releases 页面。
+
+### 操作说明
+
+| 控件 | 操作 |
+|------|------|
+| **查看详情**（macOS，`available` 状态） | 在系统浏览器打开 `releaseUrl` |
+| **立即下载**（Windows，`available` 状态） | `DownloadAppUpdate(downloadUrl)` — 启动后台异步下载 |
+| **立即重启**（`ready_to_restart` 状态） | `ApplyAppUpdate()` — 写入批处理脚本并退出；脚本完成 exe 替换后重启 |
+| **前往下载页**（`download_failed` 状态） | 在系统浏览器打开 `releaseUrl` |
+| **×**（除 `downloading` 外所有状态） | 关闭横幅（本次会话内不再提示） |
+
+### 后端方法
+
+| 方法 | 说明 |
+|------|------|
+| `GetAppVersion()` | 返回当前版本字符串（CI 通过 `-ldflags` 注入；本地开发为 `"dev"`） |
+| `CheckAppUpdate()` | 查询 GitHub Releases API；返回含平台匹配下载链接的 `AppUpdateInfo` |
+| `DownloadAppUpdate(url)` | 异步下载新 exe 到临时目录；完成后发布 `app.update.download.done` 或 `app.update.download.fail` 事件 |
+| `ApplyAppUpdate()` | 仅 Windows — 写入批处理脚本实现退出后 exe 替换，然后调用 `os.Exit(0)` |
+
+### 版本注入（CI）
+
+GitHub Actions 在编译时通过 ldflags 注入 tag 名：
+```
+wails build -ldflags "-X main.Version=${{ github.ref_name }}"
+```
+当 `Version == "dev"` 时（本地开发），启动时的更新检测会跳过。
 
 ---
 

@@ -14,6 +14,7 @@ A cross-platform desktop app for managing LLM SKILLS (prompt libraries / slash c
 | **Starred Repos** | Watch Git repos and browse/import their skills without adding them to your library first; folder or flat view; bulk push directly to tools |
 | **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo; all providers back up the same app-data scope (excluding `cache/` and `.git/`); Git mode auto-initializes repo/origin and supports conflict dialog with conflicted files + local/remote override |
 | **Update Checker** | Detects new commits for GitHub-sourced skills; one-click update |
+| **App Auto-Update** | Startup banner notifies when a new app release is available; Windows supports one-click download and restart; macOS links to GitHub Releases |
 | **Settings** | Per-tool enable/disable, push & scan paths (text input + folder picker), custom tools, cloud credentials, proxy configuration |
 
 For a complete description of every button, dialog, and interaction, see **[feature.md](feature.md)**.

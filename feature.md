@@ -20,6 +20,7 @@
 9. [Skill Tooltip](#9-skill-tooltip)
 10. [Shared Dialogs](#10-shared-dialogs)
 11. [Backend Events](#11-backend-events)
+12. [App Update Banner](#12-app-update-banner)
 
 ---
 
@@ -470,6 +471,52 @@ Events emitted from the Go backend to the frontend via Wails runtime:
 
 The Dashboard listens to `update.available` and marks affected skill cards with a red update dot in real time.
 The Backup page listens to all `git.*` events and surfaces the conflict resolution dialog on `git.conflict`.
+`App.tsx` listens to all three `app.update.*` events and drives the update banner state machine.
+
+---
+
+## 12. App Update Banner
+
+A fixed top banner that appears when a new app version is detected at startup. Driven by a four-state machine:
+
+| State | Trigger | Banner content |
+|-------|---------|---------------|
+| `available` | `app.update.available` event | Version label + platform-specific action |
+| `downloading` | User clicks "立即下载" (Windows only) | Spinner + version label |
+| `ready_to_restart` | `app.update.download.done` event | Completion message + "立即重启" button |
+| `download_failed` | `app.update.download.fail` event | Error message + link to release page |
+
+### Platform Behavior
+
+- **Windows** — Full auto-update flow: download → bat script replaces exe → restart.
+- **macOS** — Notification only: "查看详情" link opens the GitHub Releases page in the browser.
+
+### Controls
+
+| Control | Action |
+|---------|--------|
+| **查看详情** (macOS, `available`) | Opens `releaseUrl` in system browser |
+| **立即下载** (Windows, `available`) | `DownloadAppUpdate(downloadUrl)` — starts async download |
+| **立即重启** (`ready_to_restart`) | `ApplyAppUpdate()` — writes bat script and exits; bat replaces exe and relaunches |
+| **前往下载页** (`download_failed`) | Opens `releaseUrl` in system browser |
+| **×** (all states except `downloading`) | Dismisses banner for the current session |
+
+### Backend Methods
+
+| Method | Description |
+|--------|-------------|
+| `GetAppVersion()` | Returns current version string (injected by `-ldflags` at build time; `"dev"` in local dev) |
+| `CheckAppUpdate()` | Queries GitHub Releases API; returns `AppUpdateInfo` with platform-matched download URL |
+| `DownloadAppUpdate(url)` | Downloads new exe to temp file asynchronously; emits `app.update.download.done` or `app.update.download.fail` |
+| `ApplyAppUpdate()` | Windows only — writes bat script for post-exit exe replacement, then calls `os.Exit(0)` |
+
+### Version Injection (CI)
+
+GitHub Actions builds inject the tag name at compile time:
+```
+wails build -ldflags "-X main.Version=${{ github.ref_name }}"
+```
+The startup check is skipped when `Version == "dev"` (local development).
 
 ---
 
