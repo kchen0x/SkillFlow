@@ -55,26 +55,25 @@ jobs:
           # Mount and configure Finder window layout via AppleScript
           MOUNT_POINT="$(hdiutil attach -readwrite -noverify "$TMP_DMG" | grep '/Volumes/' | awk '{print $NF}')"
           sleep 2
-          osascript <<APPLESCRIPT
-            tell application "Finder"
-              tell disk "SkillFlow"
-                open
-                set current view of container window to icon view
-                set toolbar visible of container window to false
-                set statusbar visible of container window to false
-                set bounds of container window to {200, 150, 760, 470}
-                set theViewOptions to icon view options of container window
-                set arrangement of theViewOptions to not arranged
-                set icon size of theViewOptions to 120
-                set position of item "SkillFlow.app" of container window to {150, 150}
-                set position of item "Applications" of container window to {410, 150}
-                close
-                open
-                update without registering applications
-                delay 2
-              end tell
-            end tell
-APPLESCRIPT
+          osascript \
+            -e 'tell application "Finder"' \
+            -e '  tell disk "SkillFlow"' \
+            -e '    open' \
+            -e '    set current view of container window to icon view' \
+            -e '    set toolbar visible of container window to false' \
+            -e '    set statusbar visible of container window to false' \
+            -e '    set bounds of container window to {200, 150, 760, 470}' \
+            -e '    set theViewOptions to icon view options of container window' \
+            -e '    set arrangement of theViewOptions to not arranged' \
+            -e '    set icon size of theViewOptions to 120' \
+            -e '    set position of item "SkillFlow.app" of container window to {150, 150}' \
+            -e '    set position of item "Applications" of container window to {410, 150}' \
+            -e '    close' \
+            -e '    open' \
+            -e '    update without registering applications' \
+            -e '    delay 2' \
+            -e '  end tell' \
+            -e 'end tell'
           sync
           hdiutil detach "$MOUNT_POINT"
 
