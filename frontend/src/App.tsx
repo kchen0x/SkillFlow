@@ -39,14 +39,16 @@ export default function App() {
   const [conflictOpen, setConflictOpen] = useState(false)
   const [conflictInfo, setConflictInfo] = useState<GitConflictInfo>({ message: '', files: [] })
   const [resolving, setResolving] = useState(false)
+  const [resolveError, setResolveError] = useState('')
 
   const handleResolve = async (useLocal: boolean) => {
     setResolving(true)
+    setResolveError('')
     try {
       await ResolveGitConflict(useLocal)
       setConflictOpen(false)
-    } catch {
-      // keep dialog open so user can retry
+    } catch (e: any) {
+      setResolveError(String(e?.message ?? e ?? '操作失败，请重试'))
     } finally {
       setResolving(false)
     }
@@ -65,6 +67,7 @@ export default function App() {
     })
     EventsOn('git.conflict', (data: string) => {
       setConflictInfo(parseConflictPayload(data))
+      setResolveError('')
       setConflictOpen(true)
     })
     // Check for a conflict that happened before the UI was ready (e.g. startup pull)
@@ -119,6 +122,9 @@ export default function App() {
                 <li><span className="text-white font-medium">以本地为准</span> — 保留本地内容，强制推送到远端</li>
                 <li><span className="text-white font-medium">以远端为准</span> — 丢弃本地冲突部分，恢复为远端内容</li>
               </ul>
+              {resolveError && (
+                <p className="mb-3 text-xs text-red-400 bg-red-950/50 border border-red-800 rounded-lg px-3 py-2 break-all">{resolveError}</p>
+              )}
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => handleResolve(false)}

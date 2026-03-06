@@ -5,7 +5,9 @@ import { Cloud, Upload, Download, RefreshCw } from 'lucide-react'
 
 export default function Backup() {
   const [files, setFiles] = useState<Array<{ path: string; size: number }>>([])
-  const [status, setStatus] = useState<'idle' | 'backing-up' | 'done' | 'error'>('idle')
+  const [resultStatus, setResultStatus] = useState<'idle' | 'done' | 'error'>('idle')
+  const [pushing, setPushing] = useState(false)
+  const [pulling, setPulling] = useState(false)
   const [currentFile, setCurrentFile] = useState('')
   const [cloudEnabled, setCloudEnabled] = useState(false)
   const [isGit, setIsGit] = useState(false)
@@ -16,15 +18,13 @@ export default function Backup() {
       setIsGit(cfg?.cloud?.provider === 'git')
     })
 
-    EventsOn('backup.started', () => setStatus('backing-up'))
     EventsOn('backup.progress', (data: string) => {
       try { setCurrentFile(JSON.parse(data).currentFile ?? '') } catch {}
     })
-    EventsOn('backup.completed', () => { setStatus('done'); loadFiles() })
-    EventsOn('backup.failed', () => setStatus('error'))
-    EventsOn('git.sync.started', () => setStatus('backing-up'))
-    EventsOn('git.sync.completed', () => { setStatus('done'); loadFiles() })
-    EventsOn('git.sync.failed', () => setStatus('error'))
+    EventsOn('backup.completed', () => { setResultStatus('done'); loadFiles() })
+    EventsOn('backup.failed', () => setResultStatus('error'))
+    EventsOn('git.sync.completed', () => { setResultStatus('done'); loadFiles() })
+    EventsOn('git.sync.failed', () => setResultStatus('error'))
   }, [])
 
   const loadFiles = async () => {
@@ -53,40 +53,48 @@ export default function Backup() {
       <div className="flex gap-3 mb-8">
         <button
           onClick={async () => {
+            setPushing(true)
+            setResultStatus('idle')
             try {
-              setStatus('backing-up')
               await BackupNow()
             } catch {
-              setStatus('error')
+              setResultStatus('error')
+            } finally {
+              setPushing(false)
             }
           }}
-          disabled={!cloudEnabled || status === 'backing-up'}
+          disabled={!cloudEnabled || pushing || pulling}
           className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
         >
-          {status === 'backing-up' ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
-          {status === 'backing-up' ? `备份中 ${currentFile}` : '立即备份'}
+          {pushing ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+          {pushing ? `备份中 ${currentFile}` : '立即备份'}
         </button>
         <button
           onClick={async () => {
+            setPulling(true)
+            setResultStatus('idle')
             try {
-              setStatus('backing-up')
               await RestoreFromCloud()
               loadFiles()
-              if (!isGit) setStatus('done')
             } catch {
-              setStatus('error')
+              setResultStatus('error')
+            } finally {
+              setPulling(false)
             }
           }}
-          disabled={!cloudEnabled}
+          disabled={!cloudEnabled || pushing || pulling}
           className="flex items-center gap-2 px-5 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50"
-        ><Download size={14} /> {isGit ? '拉取远端' : '从云端恢复'}</button>
+        >
+          {pulling ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+          {pulling ? '拉取中...' : (isGit ? '拉取远端' : '从云端恢复')}
+        </button>
         <button onClick={loadFiles} className="flex items-center gap-2 px-4 py-2.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 text-sm">
           <RefreshCw size={14} /> 刷新
         </button>
       </div>
 
-      {status === 'done' && <p className="mb-4 text-sm text-green-400">{isGit ? 'Git 同步完成' : '备份完成'}</p>}
-      {status === 'error' && <p className="mb-4 text-sm text-red-400">{isGit ? 'Git 同步失败，请检查仓库配置' : '备份失败，请检查云存储配置'}</p>}
+      {resultStatus === 'done' && <p className="mb-4 text-sm text-green-400">{isGit ? 'Git 同步完成' : '备份完成'}</p>}
+      {resultStatus === 'error' && <p className="mb-4 text-sm text-red-400">{isGit ? 'Git 同步失败，请检查仓库配置' : '备份失败，请检查云存储配置'}</p>}
 
       {files.length > 0 && (
         <div>
