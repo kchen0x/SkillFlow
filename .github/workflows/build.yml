@@ -31,14 +31,56 @@ jobs:
       - name: Build
         run: wails build -platform ${{ matrix.arch == 'arm64' && 'darwin/arm64' || matrix.os == 'windows-latest' && 'windows/amd64' || 'darwin/amd64' }} -ldflags "-X main.Version=${{ github.ref_name }}"
 
-      # macOS: package .app bundle into a DMG for distribution
+      # macOS: package .app bundle into a drag-to-install DMG
       - name: Package macOS DMG
         if: runner.os == 'macOS'
         run: |
-          hdiutil create -volname "SkillFlow" \
-            -srcfolder build/bin/SkillFlow.app \
-            -ov -format UDZO \
-            build/bin/SkillFlow-${{ matrix.name }}.dmg
+          # Copy our multi-resolution icns into the built app bundle
+          cp build/darwin/iconfile.icns build/bin/SkillFlow.app/Contents/Resources/iconfile.icns
+
+          TMPDIR_DMG="$(mktemp -d)"
+          TMP_DMG="/tmp/SkillFlow-rw.dmg"
+          FINAL_DMG="build/bin/SkillFlow-${{ matrix.name }}.dmg"
+
+          # Create a staging folder: app + Applications symlink
+          cp -R build/bin/SkillFlow.app "$TMPDIR_DMG/SkillFlow.app"
+          ln -s /Applications "$TMPDIR_DMG/Applications"
+
+          # Create a writable DMG from the staging folder
+          hdiutil create -srcfolder "$TMPDIR_DMG" \
+            -volname "SkillFlow" -fs HFS+ \
+            -fsargs "-c c=64,a=16,b=16" \
+            -format UDRW -size 300m "$TMP_DMG"
+
+          # Mount and configure Finder window layout via AppleScript
+          MOUNT_POINT="$(hdiutil attach -readwrite -noverify "$TMP_DMG" | grep '/Volumes/' | awk '{print $NF}')"
+          sleep 2
+          osascript <<APPLESCRIPT
+            tell application "Finder"
+              tell disk "SkillFlow"
+                open
+                set current view of container window to icon view
+                set toolbar visible of container window to false
+                set statusbar visible of container window to false
+                set bounds of container window to {200, 150, 760, 470}
+                set theViewOptions to icon view options of container window
+                set arrangement of theViewOptions to not arranged
+                set icon size of theViewOptions to 120
+                set position of item "SkillFlow.app" of container window to {150, 150}
+                set position of item "Applications" of container window to {410, 150}
+                close
+                open
+                update without registering applications
+                delay 2
+              end tell
+            end tell
+APPLESCRIPT
+          sync
+          hdiutil detach "$MOUNT_POINT"
+
+          # Convert to compressed read-only DMG
+          hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$FINAL_DMG"
+          rm -f "$TMP_DMG"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
