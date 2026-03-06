@@ -78,9 +78,6 @@ func (a *App) startup(ctx context.Context) {
 	go a.checkAppUpdateOnStartup()
 	go a.gitPullOnStartup()
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
-	if err := setupTray(a); err != nil {
-		runtime.LogWarningf(ctx, "tray init failed: %v", err)
-	}
 }
 
 // proxyHTTPClient builds an *http.Client configured according to the saved proxy settings.
@@ -107,7 +104,11 @@ func (a *App) proxyHTTPClient() *http.Client {
 	}
 }
 
-func (a *App) domReady(_ context.Context)         {}
+func (a *App) domReady(ctx context.Context) {
+	if err := setupTray(a); err != nil {
+		runtime.LogWarningf(ctx, "tray init failed: %v", err)
+	}
+}
 func (a *App) beforeClose(_ context.Context) bool { return false }
 func (a *App) shutdown(_ context.Context) {
 	a.logInfof("application shutdown")

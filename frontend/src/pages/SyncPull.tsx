@@ -26,13 +26,13 @@ export default function SyncPull() {
     })
   }, [])
 
-  const scan = async () => {
+  const scan = async (toolName: string) => {
     setScanning(true)
     setScanned([])
     setScanError('')
     setDone(false)
     try {
-      const skills = await ScanToolSkills(selectedTool)
+      const skills = await ScanToolSkills(toolName)
       setScanned(skills ?? [])
       setSelected(new Set((skills ?? []).map((s: any) => s.Name)))
       setScannedOnce(true)
@@ -91,6 +91,7 @@ export default function SyncPull() {
                   setDone(false)
                   setScanError('')
                   setScannedOnce(false)
+                  scan(t.name)
                 }}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
                   selectedTool === t.name
@@ -105,13 +106,9 @@ export default function SyncPull() {
           </div>
         </section>
 
-        <button
-          onClick={scan}
-          disabled={!selectedTool || scanning}
-          className="mb-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50"
-        >
-          {scanning ? '扫描中...' : '扫描'}
-        </button>
+        {scanning && (
+          <p className="mb-4 text-sm text-gray-400">扫描中...</p>
+        )}
 
         {scanError && (
           <div className="mb-4 flex items-start gap-2 bg-red-950 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">

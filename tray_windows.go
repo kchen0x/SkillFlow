@@ -68,6 +68,10 @@ var (
 	procTrackPopupMenu      = user32.NewProc("TrackPopupMenu")
 	procGetModuleHandleW    = kernel32.NewProc("GetModuleHandleW")
 	procShellNotifyIconW    = shell32.NewProc("Shell_NotifyIconW")
+	procCreateMutexW        = kernel32.NewProc("CreateMutexW")
+	procFindWindowW         = user32.NewProc("FindWindowW")
+	procShowWindow          = user32.NewProc("ShowWindow")
+	procIsIconic            = user32.NewProc("IsIconic")
 	trayWndProcCallback     = syscall.NewCallback(trayWndProc)
 	windowsTrayStartOnce    sync.Once
 	windowsTrayStartErr     error

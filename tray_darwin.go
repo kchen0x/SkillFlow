@@ -24,12 +24,6 @@ static SkillFlowTrayDelegate *skillflowTrayDelegate = nil;
 	[NSApp activateIgnoringOtherApps:YES];
 }
 
-- (void)onHide:(id)sender {
-	for (NSWindow *window in [NSApp windows]) {
-		[window orderOut:nil];
-	}
-}
-
 - (void)onQuit:(id)sender {
 	[NSApp terminate:nil];
 }
@@ -43,13 +37,9 @@ static void skillflow_setup_tray(void) {
 		skillflowTrayDelegate = [[SkillFlowTrayDelegate alloc] init];
 		skillflowStatusMenu = [[NSMenu alloc] initWithTitle:@"SkillFlow"];
 
-		NSMenuItem *showItem = [[NSMenuItem alloc] initWithTitle:@"Show Window" action:@selector(onShow:) keyEquivalent:@""];
+		NSMenuItem *showItem = [[NSMenuItem alloc] initWithTitle:@"Show SkillFlow" action:@selector(onShow:) keyEquivalent:@""];
 		[showItem setTarget:skillflowTrayDelegate];
 		[skillflowStatusMenu addItem:showItem];
-
-		NSMenuItem *hideItem = [[NSMenuItem alloc] initWithTitle:@"Hide Window" action:@selector(onHide:) keyEquivalent:@""];
-		[hideItem setTarget:skillflowTrayDelegate];
-		[skillflowStatusMenu addItem:hideItem];
 
 		[skillflowStatusMenu addItem:[NSMenuItem separatorItem]];
 

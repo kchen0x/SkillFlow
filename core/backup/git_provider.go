@@ -88,6 +88,7 @@ func (p *GitProvider) authenticatedURL() string {
 func (p *GitProvider) run(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -262,8 +263,15 @@ func (p *GitProvider) ensureRepo(localDir string) error {
 	if out, err := p.run(localDir, "config", "user.name", "SkillFlow"); err != nil {
 		return fmt.Errorf("git config user.name 失败: %s", out)
 	}
-	if err := ensureIgnoredPath(localDir, "cache/"); err != nil {
-		return fmt.Errorf("写入 .gitignore 失败: %w", err)
+	for _, dir := range excludedDirs {
+		if err := ensureIgnoredPath(localDir, dir+"/"); err != nil {
+			return fmt.Errorf("写入 .gitignore 失败: %w", err)
+		}
+	}
+	for _, file := range excludedFiles {
+		if err := ensureIgnoredPath(localDir, file); err != nil {
+			return fmt.Errorf("写入 .gitignore 失败: %w", err)
+		}
 	}
 	return nil
 }
@@ -279,9 +287,11 @@ func (p *GitProvider) Sync(_ context.Context, localDir, _, _ string, onProgress 
 	if out, err := p.run(localDir, "add", "-A"); err != nil {
 		return fmt.Errorf("git add 失败: %s", out)
 	}
-	// Ensure cache/ is never tracked in git backup.
-	if out, err := p.run(localDir, "rm", "-r", "--cached", "--ignore-unmatch", "cache"); err != nil {
-		return fmt.Errorf("git rm --cached cache 失败: %s", out)
+	// Ensure excluded paths are never tracked in git backup.
+	for _, dir := range excludedDirs {
+		if out, err := p.run(localDir, "rm", "-r", "--cached", "--ignore-unmatch", dir); err != nil {
+			return fmt.Errorf("git rm --cached %s 失败: %s", dir, out)
+		}
 	}
 
 	// Nothing to commit?
@@ -319,6 +329,20 @@ func (p *GitProvider) Sync(_ context.Context, localDir, _, _ string, onProgress 
 	return nil
 }
 
+// autoCommitLocal stages and commits any local changes before a pull so that
+// untracked or modified files do not block the merge.
+func (p *GitProvider) autoCommitLocal(localDir string) {
+	p.run(localDir, "add", "-A") //nolint
+	// Remove excluded paths from index if accidentally staged.
+	for _, dir := range excludedDirs {
+		p.run(localDir, "rm", "-r", "--cached", "--ignore-unmatch", dir) //nolint
+	}
+	statusOut, _ := p.run(localDir, "status", "--porcelain")
+	if strings.TrimSpace(statusOut) != "" {
+		p.run(localDir, "commit", "-m", "SkillFlow: pre-pull auto-commit") //nolint
+	}
+}
+
 // Restore runs git pull to bring the local directory up to date with the remote.
 // Returns *GitConflictError when merge conflicts are detected.
 func (p *GitProvider) Restore(_ context.Context, _, _, localDir string) error {
@@ -326,6 +350,9 @@ func (p *GitProvider) Restore(_ context.Context, _, _, localDir string) error {
 	if err := p.ensureRepo(localDir); err != nil {
 		return err
 	}
+	// Commit any local changes before pulling to prevent
+	// "untracked working tree files would be overwritten by merge" errors.
+	p.autoCommitLocal(localDir)
 	out, err := p.run(localDir, "pull", "origin", p.branch, "--allow-unrelated-histories")
 	if err != nil {
 		if isMissingRemoteRef(out) {
