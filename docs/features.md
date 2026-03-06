@@ -1,6 +1,6 @@
 # SkillFlow — Complete Feature Reference
 
-> 🌐 [中文版](feature_zh.md) | **English**
+> 🌐 [中文版](features_zh.md) | **English**
 >
 > This document enumerates every feature, button, interaction, and UX detail in SkillFlow.
 > **Keep this file in sync whenever features are added, changed, or removed.**
@@ -20,7 +20,7 @@
 9. [Skill Tooltip](#9-skill-tooltip)
 10. [Shared Dialogs](#10-shared-dialogs)
 11. [Backend Events](#11-backend-events)
-12. [App Update Banner](#12-app-update-banner)
+12. [App Update Dialog](#12-app-update-dialog)
 
 ---
 
