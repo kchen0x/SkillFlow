@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -227,6 +228,95 @@ func (a *App) GetSkillMeta(skillID string) (*skill.SkillMeta, error) {
 		return nil, err
 	}
 	return skill.ReadMeta(sk.Path)
+}
+
+// GetSkillMetaByPath reads skill.md frontmatter from a skill directory path (no ID required).
+func (a *App) GetSkillMetaByPath(path string) (*skill.SkillMeta, error) {
+	return skill.ReadMeta(path)
+}
+
+// ReadSkillFileContent returns the full text content of skill.md inside the given skill directory.
+func (a *App) ReadSkillFileContent(path string) (string, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.ToLower(e.Name()) == "skill.md" {
+			data, err := os.ReadFile(filepath.Join(path, e.Name()))
+			if err != nil {
+				return "", err
+			}
+			return string(data), nil
+		}
+	}
+	return "", fmt.Errorf("skill.md not found in %s", path)
+}
+
+// OpenURL opens the given URL in the system default browser.
+func (a *App) OpenURL(url string) error {
+	runtime.BrowserOpenURL(a.ctx, url)
+	return nil
+}
+
+// PushStarSkillsToTools copies starred skill directories directly to the push directory of each
+// specified tool, skipping skills that already exist. Returns a list of conflict descriptions.
+func (a *App) PushStarSkillsToTools(skillPaths []string, toolNames []string) ([]string, error) {
+	cfg, _ := a.config.Load()
+	var conflicts []string
+	for _, toolName := range toolNames {
+		for _, t := range cfg.Tools {
+			if t.Name != toolName {
+				continue
+			}
+			if t.PushDir == "" {
+				return nil, fmt.Errorf("工具 %s 未配置推送路径", toolName)
+			}
+			if err := os.MkdirAll(t.PushDir, 0755); err != nil {
+				return nil, err
+			}
+			adapter := getAdapter(t)
+			for _, skillPath := range skillPaths {
+				name := filepath.Base(skillPath)
+				dst := filepath.Join(t.PushDir, name)
+				if _, err := os.Stat(dst); err == nil {
+					conflicts = append(conflicts, fmt.Sprintf("%s → %s", name, toolName))
+					continue
+				}
+				sk := []*skill.Skill{{Name: name, Path: skillPath}}
+				if err := adapter.Push(a.ctx, sk, t.PushDir); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return conflicts, nil
+}
+
+// PushStarSkillsToToolsForce copies starred skill directories to tool push directories,
+// overwriting any existing skills.
+func (a *App) PushStarSkillsToToolsForce(skillPaths []string, toolNames []string) error {
+	cfg, _ := a.config.Load()
+	for _, toolName := range toolNames {
+		for _, t := range cfg.Tools {
+			if t.Name != toolName {
+				continue
+			}
+			if t.PushDir == "" {
+				return fmt.Errorf("工具 %s 未配置推送路径", toolName)
+			}
+			var tempSkills []*skill.Skill
+			for _, skillPath := range skillPaths {
+				name := filepath.Base(skillPath)
+				_ = os.RemoveAll(filepath.Join(t.PushDir, name))
+				tempSkills = append(tempSkills, &skill.Skill{Name: name, Path: skillPath})
+			}
+			if err := getAdapter(t).Push(a.ctx, tempSkills, t.PushDir); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // --- Install ---
