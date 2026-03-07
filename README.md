@@ -19,6 +19,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | Feature | Description |
 |---------|-------------|
 | **Skill Library** | Central store with categories, real-time search, A-Z / Z-A sorting, drag-and-drop organization, batch delete, and safe empty-category deletion |
+| **Prompt Library** | Save reusable prompts as synced `prompts/<category>/<name>/system.md` cards, with required unique names, optional descriptions, categories, import/export, drag-to-category management, one-click copy, and `and` / `or` keyword search |
 | **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones with one click; subsequent scans auto-pull updates |
 | **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; searchable, sortable skill pickers and conflict handling per skill |
 | **Starred Repos** | Watch Git repos and recursively browse/import nested repo skills without adding them to your library first, with search and alphabetical sorting in skill grids |
@@ -56,6 +57,7 @@ Configure in **Settings → Cloud Storage**.
 - Sync-safe settings and metadata live under the app data directory and use relative paths for cross-platform restore.
 - Local-only filesystem paths (such as `SkillsStorageDir` and tool scan/push directories) live in `config_local.json` and are excluded from backup/sync.
 - Sensitive cloud credentials (such as access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as bucket, endpoint, repo URL, and branch.
+- Reusable prompts are synced alongside skills under `prompts/<category>/<name>/system.md`, so Git backup and object storage keep the same prompt library on every device.
 - Object storage providers support a custom parent `remotePath`; the final backup prefix is always rendered and stored as `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
 - Each cloud provider keeps its own saved bucket/path/credential profile, so switching providers in Settings does not overwrite another provider's values.
 - Aliyun OSS, Tencent COS, and Huawei OBS share the same bucket + endpoint configuration model. For Tencent COS, the bucket always comes from the dedicated bucket field, while the endpoint field can store either a plain endpoint host or a full bucket host/URL and is preserved as entered.

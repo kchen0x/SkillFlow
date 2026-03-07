@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Route, Routes, NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench, Palette, Languages } from 'lucide-react'
+import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench, Palette, Languages, FileText } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import SyncPush from './pages/SyncPush'
 import SyncPull from './pages/SyncPull'
@@ -9,6 +9,7 @@ import Backup from './pages/Backup'
 import SettingsPage from './pages/Settings'
 import StarredRepos from './pages/StarredRepos'
 import ToolSkills from './pages/ToolSkills'
+import Prompts from './pages/Prompts'
 import wordmarkIcon from './assets/branding/skillflow-wordmark-icon.png'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { DownloadAppUpdate, ApplyAppUpdate, GetGitConflictPending, ResolveGitConflict, OpenURL, SetSkippedUpdateVersion } from '../wailsjs/go/main/App'
@@ -246,6 +247,7 @@ function AppContent() {
           </div>
           <NavItem to="/" icon={<Package size={16} />} label={t('nav.mySkills')} />
           <NavItem to="/tools" icon={<Wrench size={16} />} label={t('nav.myTools')} end={false} />
+          <NavItem to="/prompts" icon={<FileText size={16} />} label={t('nav.myPrompts')} />
           <p className="text-xs px-2 mt-3 mb-1" style={{ color: 'var(--text-muted)' }}>{t('nav.syncSection')}</p>
           <NavItem to="/sync/push" icon={<ArrowUpFromLine size={16} />} label={t('nav.pushToTool')} />
           <NavItem to="/sync/pull" icon={<ArrowDownToLine size={16} />} label={t('nav.pullFromTool')} />
@@ -303,6 +305,7 @@ function AnimatedRoutes() {
           <Route path="/starred" element={<StarredRepos />} />
           <Route path="/starred/:repoEncoded" element={<StarredRepos />} />
           <Route path="/tools" element={<ToolSkills />} />
+          <Route path="/prompts" element={<Prompts />} />
         </Routes>
       </motion.div>
     </AnimatePresence>

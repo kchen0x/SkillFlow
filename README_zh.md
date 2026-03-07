@@ -19,6 +19,7 @@
 | 功能 | 说明 |
 |------|------|
 | **Skill 库** | 集中存储所有 Skills，支持分类管理、实时搜索、首字母正序 / 逆序排序、拖拽整理、批量删除，以及仅允许删除空分类的安全删除逻辑 |
+| **提示词库** | 将可复用的 prompt 保存为同步的 `prompts/<category>/<name>/system.md` 卡片，支持必填唯一名称、可选描述、分类、导入导出、拖拽移动分类、一键复制，以及 `and` / `or` 关键字搜索 |
 | **GitHub 安装** | 克隆任意仓库，递归发现仓库内嵌套的 Skill 候选项，并一键选择安装；后续扫描自动拉取更新 |
 | **跨工具同步** | 推送或拉取 Skills 到/从 Claude Code、OpenCode、Codex、Gemini CLI、OpenClaw 及自定义工具；支持搜索 / 排序筛选候选 Skill，并逐条处理冲突 |
 | **仓库收藏** | 关注 Git 仓库，无需导入即可递归浏览和使用仓库内嵌套的 Skills；平铺与仓库详情视图支持搜索和字母排序 |
@@ -56,6 +57,7 @@ my-skill/
 - 可同步的设置和元数据保存在应用数据目录中，并使用相对路径保证跨平台恢复正确。
 - 仅本机使用的文件系统路径（如 `SkillsStorageDir`、工具扫描/推送目录）保存在 `config_local.json` 中，不参与备份/同步。
 - 敏感云凭据（如 Access Key ID、Secret Key、访问令牌）只保存在 `config_local.json` 中按服务商分组的本地配置里；可同步的 `config.json` 仅保留存储桶、Endpoint、仓库地址、分支等非敏感云配置。
+- 可复用提示词会与 Skills 一起保存在 `prompts/<category>/<name>/system.md` 下，因此 Git 备份和对象存储都会同步同一份提示词库。
 - 对象存储服务商支持自定义父级 `remotePath`；最终备份前缀始终会渲染并保存为 `<存储桶>/<remotePath>/skillflow/`（若父级路径为空，则为 `<存储桶>/skillflow/`）。
 - 每个云服务商都会保留各自独立的存储桶 / 路径 / 凭据配置，因此在设置中切换服务商时不会覆盖其他服务商的值。
 - 阿里云 OSS、腾讯云 COS、华为云 OBS 使用相同的存储桶 + Endpoint 配置模型。对于腾讯云 COS，存储桶始终来自单独的存储桶输入框，而 Endpoint 字段既可填写纯 Endpoint host，也可填写完整桶域名/URL，并会按用户输入形式保留。

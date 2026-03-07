@@ -42,8 +42,24 @@ export function CreateCategory(arg1) {
   return window['go']['main']['App']['CreateCategory'](arg1);
 }
 
+export function CreatePrompt(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CreatePrompt'](arg1, arg2, arg3, arg4);
+}
+
+export function CreatePromptCategory(arg1) {
+  return window['go']['main']['App']['CreatePromptCategory'](arg1);
+}
+
 export function DeleteCategory(arg1) {
   return window['go']['main']['App']['DeleteCategory'](arg1);
+}
+
+export function DeletePrompt(arg1) {
+  return window['go']['main']['App']['DeletePrompt'](arg1);
+}
+
+export function DeletePromptCategory(arg1) {
+  return window['go']['main']['App']['DeletePromptCategory'](arg1);
 }
 
 export function DeleteSkill(arg1) {
@@ -60,6 +76,10 @@ export function DeleteToolSkill(arg1, arg2) {
 
 export function DownloadAppUpdate(arg1) {
   return window['go']['main']['App']['DownloadAppUpdate'](arg1);
+}
+
+export function ExportPrompts() {
+  return window['go']['main']['App']['ExportPrompts']();
 }
 
 export function GetAppVersion() {
@@ -102,6 +122,10 @@ export function ImportLocal(arg1, arg2) {
   return window['go']['main']['App']['ImportLocal'](arg1, arg2);
 }
 
+export function ImportPrompts() {
+  return window['go']['main']['App']['ImportPrompts']();
+}
+
 export function ImportStarSkills(arg1, arg2, arg3) {
   return window['go']['main']['App']['ImportStarSkills'](arg1, arg2, arg3);
 }
@@ -126,6 +150,14 @@ export function ListCloudProviders() {
   return window['go']['main']['App']['ListCloudProviders']();
 }
 
+export function ListPromptCategories() {
+  return window['go']['main']['App']['ListPromptCategories']();
+}
+
+export function ListPrompts() {
+  return window['go']['main']['App']['ListPrompts']();
+}
+
 export function ListRepoStarSkills(arg1) {
   return window['go']['main']['App']['ListRepoStarSkills'](arg1);
 }
@@ -140,6 +172,10 @@ export function ListStarredRepos() {
 
 export function ListToolSkills(arg1) {
   return window['go']['main']['App']['ListToolSkills'](arg1);
+}
+
+export function MovePromptCategory(arg1, arg2) {
+  return window['go']['main']['App']['MovePromptCategory'](arg1, arg2);
 }
 
 export function MoveSkillCategory(arg1, arg2) {
@@ -160,6 +196,10 @@ export function OpenPath(arg1) {
 
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
+}
+
+export function PromptRootDir() {
+  return window['go']['main']['App']['PromptRootDir']();
 }
 
 export function PullFromTool(arg1, arg2, arg3) {
@@ -202,6 +242,10 @@ export function RenameCategory(arg1, arg2) {
   return window['go']['main']['App']['RenameCategory'](arg1, arg2);
 }
 
+export function RenamePromptCategory(arg1, arg2) {
+  return window['go']['main']['App']['RenamePromptCategory'](arg1, arg2);
+}
+
 export function ResolveGitConflict(arg1) {
   return window['go']['main']['App']['ResolveGitConflict'](arg1);
 }
@@ -228,6 +272,10 @@ export function SetSkippedUpdateVersion(arg1) {
 
 export function UpdateAllStarredRepos() {
   return window['go']['main']['App']['UpdateAllStarredRepos']();
+}
+
+export function UpdatePrompt(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['UpdatePrompt'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function UpdateSkill(arg1) {

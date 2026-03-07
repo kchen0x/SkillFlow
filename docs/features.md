@@ -22,6 +22,7 @@
 11. [Backend Events](#11-backend-events)
 12. [App Update Dialog](#12-app-update-dialog)
 13. [My Tools](#13-my-tools)
+14. [My Prompts](#14-my-prompts)
 
 ---
 
@@ -33,6 +34,7 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 |-------|------|-------|
 | `/` | Package | My Skills |
 | `/tools` | Wrench | My Tools |
+| `/prompts` | FileText | My Prompts |
 | `/sync/push` | ArrowUpFromLine | Push to Tools |
 | `/sync/pull` | ArrowDownToLine | Pull from Tools |
 | `/starred` | Star | Starred Repos |
@@ -357,7 +359,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - Git: files tracked by `git ls-files`, each showing relative path + size.
 - Object storage listings are paginated internally, so the UI shows the complete remote file set instead of only the first page.
 - Scrollable, max-height container.
-- **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `config.json`, etc.); `cache/` and `.git/` are excluded.
+- **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `prompts/`, `config.json`, etc.); `cache/` and `.git/` are excluded.
 - **Custom object-storage prefix** — object storage providers let the user choose a parent `remotePath`; SkillFlow always writes under `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
 - **Provider-specific cloud profiles** — each cloud provider keeps its own bucket/path/credential set; switching providers in Settings restores that provider's saved values instead of overwriting another provider's form state.
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json` and `star_repos.json`) are stored as forward-slash relative paths under the synchronized root, so restores continue to work across macOS and Windows.
@@ -370,6 +372,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 Triggered automatically after any of these mutations (when cloud is enabled):
 
 - Delete skill / bulk delete
+- Create / update / delete prompt
 - Manual import
 - Install from GitHub
 - Pull from tool
@@ -721,4 +724,48 @@ Browse the skills currently present inside each enabled tool.
 
 ---
 
-*Last updated: 2026-03-07*
+## 14. My Prompts
+
+Store reusable system prompts inside the synced `prompts/` directory.
+
+### Navigation & Storage
+
+- Sidebar adds **My Prompts** directly below **My Tools**.
+- Each prompt is stored as `prompts/<category>/<name>/system.md` under the backup root, so both object-storage providers and the Git provider sync the same prompt files automatically.
+- Prompt names are required, globally unique in the library, and used as the folder key.
+
+### Layout
+
+- The page mirrors **My Skills** with a left category sidebar and a right content pane.
+- Categories support **Default** as the built-in fallback group.
+- Prompt cards are filtered by selected category, keyword search, and A-Z / Z-A sorting.
+- Search supports logical `and` / `or` syntax, for example `review and golang` or `summary or changelog`.
+
+### Category Management
+
+- Categories can be created from the sidebar.
+- Non-default categories support rename and delete from the context menu.
+- Prompt cards can be dragged onto categories to move them, matching the category-drop behavior from **My Skills**.
+
+### Prompt Cards
+
+- Cards reuse the same visual language as Skill cards (`card-base`, hover glow, compact actions).
+- Each card shows **name**, optional **description**, and the opening content excerpt by default.
+- When the content is longer than the preview window, the card displays **Click to view more**.
+- Top-right action button copies the full prompt content to the clipboard in one click.
+- Bottom-right **Delete** action opens a confirmation dialog before removing both the card and the underlying prompt folder.
+
+### Prompt Editor
+
+- Clicking **Add Prompt** opens a built-in editor with fields for **name** (required), **description** (optional), **category**, and full `system.md` content.
+- Clicking an existing prompt card opens the same editor pre-filled for editing and rename operations.
+- Saving writes the prompt back to `prompts/<category>/<name>/system.md`.
+
+### Import / Export
+
+- Toolbar **Import** reads a JSON prompt library file and creates or updates prompts by name.
+- Toolbar **Export** writes the full prompt library to a JSON file selected by the user.
+
+---
+
+*Last updated: 2026-03-08*
