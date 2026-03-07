@@ -74,7 +74,7 @@ Skills are identified by UUID. The `meta/` directory is always `filepath.Join(fi
 type Skill struct {
     ID            string     // UUID
     Name          string     // skill name (dir name)
-    Path          string     // absolute path to skill directory
+    Path          string     // absolute runtime path; persisted in meta/*.json as a relative path within the synced root
     Category      string     // user-defined category
     Source        SourceType // "github" | "manual"
     SourceURL     string     // GitHub repo URL for GitHub sources
@@ -134,7 +134,7 @@ type StarredRepo struct {
     URL       string    // user-provided git repo URL
     Name      string    // parsed "owner/repo"
     Source    string    // canonical key "<host>/<path>"
-    LocalDir  string    // cache directory on disk
+    LocalDir  string    // absolute runtime cache dir; persisted in star_repos.json as a relative path under AppDataDir()
     LastSync  time.Time
     SyncError string
 }
@@ -287,7 +287,7 @@ Handles starred repo workflows:
 - `ScanSkills(localDir, repoURL, repoName, source)` — find skill dirs in cloned repo
 - `GetSubPathSHA(ctx, repoDir, subPath)` — get latest commit SHA for a path
 - `ParseRepoRef()`, `ParseRepoName()`, `RepoSource()` — URL parsing utilities
-- `StarStorage` — JSON persistence for `[]StarredRepo` at `~/.skillflow/star_repos.json`
+- `StarStorage` — JSON persistence for `[]StarredRepo` at `<AppDataDir>/star_repos.json`
 
 ---
 

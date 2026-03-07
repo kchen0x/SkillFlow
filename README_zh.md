@@ -18,15 +18,15 @@
 
 | 功能 | 说明 |
 |------|------|
-| **Skill 库** | 集中存储所有 Skills，支持分类管理、实时搜索、拖拽整理和批量删除 |
+| **Skill 库** | 集中存储所有 Skills，支持分类管理、实时搜索、拖拽整理、批量删除，以及仅允许删除空分类的安全删除逻辑 |
 | **GitHub 安装** | 克隆任意仓库，浏览 Skill 候选项，一键选择安装；后续扫描自动拉取更新 |
 | **跨工具同步** | 推送或拉取 Skills 到/从 Claude Code、OpenCode、Codex、Gemini CLI、OpenClaw 及自定义工具；逐条冲突处理 |
 | **仓库收藏** | 关注 Git 仓库，无需导入即可浏览和使用其中的 Skills |
 | **云端备份** | 将 Skill 库镜像至阿里云 OSS、腾讯云 COS、华为云 OBS 或任意 Git 仓库 |
 | **更新检测** | 自动检测 GitHub 来源 Skills 的新提交；一键更新 |
 | **应用自动更新** | 弹出模态对话框提示新版本；Windows 支持一键下载并重启；macOS 链接至 GitHub Releases 页面；用户可跳过当前版本以抑制后续启动弹窗 |
-| **托盘驻留** | 点击窗口关闭按钮仅隐藏窗口；macOS 驻留顶部状态栏，Windows 驻留系统托管区 |
-| **设置** | 按工具独立配置启用状态、推送/扫描路径、自定义工具、云服务凭据、代理设置 |
+| **托盘驻留** | 点击窗口关闭按钮后应用继续在后台运行；macOS 会隐藏 Dock 图标并仅保留顶部状态栏黑白图标入口，Windows 驻留系统托管区 |
+| **设置** | 按工具独立配置启用状态、推送/扫描路径、自定义工具、代理设置，以及不会参与同步的本地路径配置；目录选择器会优先回到当前路径 |
 
 每个按钮、对话框和交互的完整说明，请查阅 **[docs/features_zh.md](docs/features_zh.md)**。
 
@@ -48,10 +48,13 @@ my-skill/
 
 ## 云端备份配置
 
-在**设置 → 云存储**中配置，凭据保存在本地配置文件中：
+在**设置 → 云存储**中配置：
 
-- macOS：`~/Library/Application Support/SkillFlow/config.json`
-- Windows：`%APPDATA%\SkillFlow\config.json`
+- 可同步的设置和元数据保存在应用数据目录中，并使用相对路径保证跨平台恢复正确。
+- 仅本机使用的文件系统路径（如 `SkillsStorageDir`、工具扫描/推送目录）保存在 `config_local.json` 中，不参与备份/同步。
+- 应用数据目录：
+  - macOS：`~/Library/Application Support/SkillFlow/`
+  - Windows：`%USERPROFILE%\.skillflow\`
 
 各云服务商所需配置字段：
 

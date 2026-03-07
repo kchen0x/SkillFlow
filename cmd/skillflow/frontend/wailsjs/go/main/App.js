@@ -138,8 +138,8 @@ export function MoveSkillCategory(arg1, arg2) {
   return window['go']['main']['App']['MoveSkillCategory'](arg1, arg2);
 }
 
-export function OpenFolderDialog() {
-  return window['go']['main']['App']['OpenFolderDialog']();
+export function OpenFolderDialog(arg1) {
+  return window['go']['main']['App']['OpenFolderDialog'](arg1);
 }
 
 export function OpenLogDir() {

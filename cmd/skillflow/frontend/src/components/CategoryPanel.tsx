@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { AlertCircle, Plus } from 'lucide-react'
 import ContextMenu from './ContextMenu'
 import { CreateCategory, RenameCategory, DeleteCategory } from '../../wailsjs/go/main/App'
 
 interface Props {
   categories: string[]
+  skillCounts: Record<string, number>
   selected: string | null
   draggingSkillId: string | null
   onSelect: (cat: string | null) => void
@@ -16,7 +17,7 @@ interface Props {
 const defaultCategoryName = 'Default'
 
 export default function CategoryPanel({
-  categories, selected, draggingSkillId, onSelect, onCategoryDragStateChange, onDrop, onRefresh,
+  categories, skillCounts, selected, draggingSkillId, onSelect, onCategoryDragStateChange, onDrop, onRefresh,
 }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number; cat: string } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -24,8 +25,30 @@ export default function CategoryPanel({
   const [creating, setCreating] = useState(false)
   const [createName, setCreateName] = useState('')
   const [dragTarget, setDragTarget] = useState<string | null>(null)
+  const [deleteBlocked, setDeleteBlocked] = useState<{ cat: string; count: number } | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const acceptsSkillDrop = draggingSkillId !== null
+
+  const handleDeleteCategory = async (cat: string) => {
+    const count = skillCounts[cat] ?? 0
+    if (count > 0) {
+      setDeleteBlocked({ cat, count })
+      return
+    }
+    try {
+      await DeleteCategory(cat)
+      if (selected === cat) onSelect(null)
+      onRefresh()
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? '删除分类失败')
+      if (msg.includes('先清空')) {
+        setDeleteBlocked({ cat, count })
+        return
+      }
+      setDeleteError(msg)
+    }
+  }
 
   const handleDrop = (e: React.DragEvent, cat: string) => {
     e.preventDefault()
@@ -133,10 +156,44 @@ export default function CategoryPanel({
           x={menu.x} y={menu.y}
           items={[
             { label: '重命名', onClick: () => { setRenaming(menu.cat); setNewName(menu.cat) } },
-            { label: '删除', onClick: async () => { await DeleteCategory(menu.cat); onRefresh() }, danger: true },
+            { label: '删除', onClick: async () => { await handleDeleteCategory(menu.cat) }, danger: true },
           ]}
           onClose={() => setMenu(null)}
         />
+      )}
+
+      {deleteBlocked && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-2xl p-6 w-[420px] border border-gray-700">
+            <h3 className="font-semibold mb-2 flex items-center gap-2 text-amber-400">
+              <AlertCircle size={16} /> 无法删除分类
+            </h3>
+            <p className="text-sm text-gray-300 mb-4">
+              分类「<span className="text-white font-medium">{deleteBlocked.cat}</span>」下
+              {deleteBlocked.count > 0 ? `还有 ${deleteBlocked.count} 个 Skill，` : '还有 Skill，'}
+              请先清空该分类后再删除。
+            </p>
+            <button
+              onClick={() => setDeleteBlocked(null)}
+              className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
+            >我知道了</button>
+          </div>
+        </div>
+      )}
+
+      {deleteError && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-2xl p-6 w-[420px] border border-gray-700">
+            <h3 className="font-semibold mb-2 flex items-center gap-2 text-red-400">
+              <AlertCircle size={16} /> 删除失败
+            </h3>
+            <p className="text-sm text-gray-300 mb-4">{deleteError}</p>
+            <button
+              onClick={() => setDeleteError(null)}
+              className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
+            >关闭</button>
+          </div>
+        </div>
       )}
     </div>
   )

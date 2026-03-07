@@ -6,23 +6,30 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shinerio/skillflow/core/pathutil"
 )
 
 var ErrSkillExists = errors.New("skill already exists in target location")
 var ErrSkillNotFound = errors.New("skill not found")
+var ErrCategoryNotEmpty = errors.New("category not empty")
 
 type Storage struct {
-	root    string
-	metaDir string
+	root     string
+	metaDir  string
+	syncRoot string
 }
 
 func NewStorage(root string) *Storage {
+	cleanRoot := filepath.Clean(root)
+	syncRoot := filepath.Dir(cleanRoot)
 	return &Storage{
-		root:    root,
-		metaDir: filepath.Join(filepath.Dir(root), "meta"),
+		root:     cleanRoot,
+		metaDir:  filepath.Join(syncRoot, "meta"),
+		syncRoot: syncRoot,
 	}
 }
 
@@ -102,6 +109,9 @@ func (s *Storage) ListAll() ([]*Skill, error) {
 		}
 		var sk Skill
 		if err := json.Unmarshal(data, &sk); err == nil {
+			if s.resolveLoadedSkillPath(&sk) {
+				_ = s.saveMeta(&sk)
+			}
 			skills = append(skills, &sk)
 		}
 	}
@@ -172,9 +182,7 @@ func (s *Storage) DeleteCategory(name string) error {
 	}
 	for _, sk := range skills {
 		if sk.Category == name {
-			if err := s.MoveCategory(sk.ID, ""); err != nil {
-				return err
-			}
+			return ErrCategoryNotEmpty
 		}
 	}
 	return os.Remove(filepath.Join(s.root, name))
@@ -196,11 +204,30 @@ func (s *Storage) saveMeta(sk *Skill) error {
 	if err := os.MkdirAll(s.metaDir, 0755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(sk, "", "  ")
+	snapshot := *sk
+	snapshot.Path = pathutil.StorePath(s.syncRoot, sk.Path, s.skillPath(sk.Category, sk.Name))
+	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(s.metaDir, sk.ID+".json"), data, 0644)
+}
+
+func (s *Storage) resolveLoadedSkillPath(sk *Skill) bool {
+	expected := s.skillPath(sk.Category, sk.Name)
+	resolved, needsMigration := pathutil.ResolveStoredPath(s.syncRoot, sk.Path, expected)
+	sk.Path = resolved
+	return needsMigration
+}
+
+func (s *Storage) skillPath(category, name string) string {
+	if strings.TrimSpace(name) == "" {
+		return ""
+	}
+	if strings.TrimSpace(category) == "" {
+		return filepath.Join(s.root, name)
+	}
+	return filepath.Join(s.root, category, name)
 }
 
 func copyDir(src, dst string) error {

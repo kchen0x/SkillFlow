@@ -115,8 +115,8 @@ export default function SettingsPage() {
     setCfg((prev: any) => ({ ...prev, proxy: { ...prev.proxy, URL: url } }))
   }
 
-  const pickDir = async (onPick: (path: string) => void) => {
-    const dir = await OpenFolderDialog()
+  const pickDir = async (onPick: (path: string) => void, currentPath = '') => {
+    const dir = await OpenFolderDialog(currentPath)
     if (dir) onPick(dir)
   }
 
@@ -182,7 +182,7 @@ export default function SettingsPage() {
                     onChange={e => updateTool(t.name, 'pushDir', e.target.value)}
                     className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
                   />
-                  <button onClick={() => pickDir(dir => updateTool(t.name, 'pushDir', dir))}
+                  <button onClick={() => pickDir(dir => updateTool(t.name, 'pushDir', dir), t.pushDir ?? '')}
                     className="px-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300" title="选择目录">
                     <FolderOpen size={14} />
                   </button>
@@ -199,7 +199,7 @@ export default function SettingsPage() {
                         onChange={e => updateScanDir(t.name, idx, e.target.value)}
                         className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
                       />
-                      <button onClick={() => pickDir(d => updateScanDir(t.name, idx, d))}
+                      <button onClick={() => pickDir(d => updateScanDir(t.name, idx, d), dir ?? '')}
                         className="px-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300" title="选择目录">
                         <FolderOpen size={14} />
                       </button>
@@ -220,7 +220,7 @@ export default function SettingsPage() {
                     placeholder="/path/to/scan"
                     className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-indigo-500"
                   />
-                  <button onClick={() => pickDir(d => setNewScanDirs(prev => ({ ...prev, [t.name]: d })))}
+                  <button onClick={() => pickDir(d => setNewScanDirs(prev => ({ ...prev, [t.name]: d })), newScanDirs[t.name] ?? '')}
                     className="px-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300" title="选择目录">
                     <FolderOpen size={14} />
                   </button>
@@ -252,7 +252,7 @@ export default function SettingsPage() {
             <div className="flex gap-2">
               <input value={newTool.pushDir} onChange={e => setNewTool(p => ({ ...p, pushDir: e.target.value }))}
                 placeholder="/path/to/push" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono outline-none" />
-              <button onClick={() => pickDir(d => setNewTool(p => ({ ...p, pushDir: d })))}
+              <button onClick={() => pickDir(d => setNewTool(p => ({ ...p, pushDir: d })), newTool.pushDir)}
                 className="px-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300" title="选择目录">
                 <FolderOpen size={14} />
               </button>
@@ -378,7 +378,7 @@ export default function SettingsPage() {
             <div className="flex gap-2">
               <input value={cfg.skillsStorageDir ?? ''} onChange={e => setCfg((p: any) => ({ ...p, skillsStorageDir: e.target.value }))}
                 className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-indigo-500" />
-              <button onClick={() => pickDir(d => setCfg((p: any) => ({ ...p, skillsStorageDir: d })))}
+              <button onClick={() => pickDir(d => setCfg((p: any) => ({ ...p, skillsStorageDir: d })), cfg.skillsStorageDir ?? '')}
                 className="px-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300" title="选择目录">
                 <FolderOpen size={16} />
               </button>

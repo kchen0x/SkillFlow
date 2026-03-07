@@ -74,7 +74,7 @@ Skill 以 UUID 标识。`meta/` 目录始终为 `filepath.Join(filepath.Dir(root
 type Skill struct {
     ID            string     // UUID
     Name          string     // skill 名称（目录名）
-    Path          string     // skill 目录的绝对路径
+    Path          string     // 运行时绝对路径；在 meta/*.json 中以同步根目录下的相对路径持久化
     Category      string     // 用户定义的分类
     Source        SourceType // "github" | "manual"
     SourceURL     string     // GitHub 源的仓库 URL
@@ -134,7 +134,7 @@ type StarredRepo struct {
     URL       string    // 用户提供的 git 仓库 URL
     Name      string    // 解析后的 "owner/repo"
     Source    string    // 规范化键值 "<host>/<path>"
-    LocalDir  string    // 磁盘上的缓存目录
+    LocalDir  string    // 运行时绝对缓存目录；在 star_repos.json 中以 AppDataDir() 下的相对路径持久化
     LastSync  time.Time
     SyncError string
 }
@@ -287,7 +287,7 @@ type CloudProvider interface {
 - `ScanSkills(localDir, repoURL, repoName, source)` — 在克隆的仓库中查找 Skill 目录
 - `GetSubPathSHA(ctx, repoDir, subPath)` — 获取某路径的最新 commit SHA
 - `ParseRepoRef()`、`ParseRepoName()`、`RepoSource()` — URL 解析工具函数
-- `StarStorage` — `[]StarredRepo` 的 JSON 持久化，存储于 `~/.skillflow/star_repos.json`
+- `StarStorage` — `[]StarredRepo` 的 JSON 持久化，存储于 `<AppDataDir>/star_repos.json`
 
 ---
 

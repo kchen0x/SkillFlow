@@ -35,6 +35,7 @@ type App struct {
 	config      *config.Service
 	starStorage *coregit.StarStorage
 	cacheDir    string
+	startupOnce sync.Once
 
 	// Git sync state
 	gitConflictMu      sync.Mutex
@@ -73,10 +74,7 @@ func (a *App) startup(ctx context.Context) {
 	registerAdapters()
 	registerProviders()
 	go forwardEvents(ctx, a.hub)
-	go a.checkUpdatesOnStartup()
-	go a.updateStarredReposOnStartup()
-	go a.checkAppUpdateOnStartup()
-	go a.gitPullOnStartup()
+	a.logDebugf("startup background tasks deferred until ui ready")
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 }
 
@@ -108,21 +106,52 @@ func (a *App) domReady(ctx context.Context) {
 	if err := setupTray(a); err != nil {
 		runtime.LogWarningf(ctx, "tray init failed: %v", err)
 	}
+	a.startBackgroundStartupTasks()
 }
-func (a *App) beforeClose(_ context.Context) bool { return false }
+
+func (a *App) startBackgroundStartupTasks() {
+	a.startupOnce.Do(func() {
+		a.logDebugf("startup background tasks scheduled, delay=750ms")
+		time.AfterFunc(750*time.Millisecond, func() {
+			a.logDebugf("startup background tasks started")
+			go a.checkUpdatesOnStartup()
+			go a.updateStarredReposOnStartup()
+			go a.checkAppUpdateOnStartup()
+			go a.gitPullOnStartup()
+		})
+	})
+}
+
+func (a *App) beforeClose(_ context.Context) bool {
+	a.logInfof("application quit started")
+	return false
+}
+
 func (a *App) shutdown(_ context.Context) {
-	a.logInfof("application shutdown")
+	a.logInfof("application shutdown completed")
 	teardownTray()
 }
 
 func (a *App) showMainWindow() {
-	runtime.Show(a.ctx)
-	runtime.WindowShow(a.ctx)
-	runtime.WindowUnminimise(a.ctx)
+	a.logInfof("main window show started")
+	if err := showMainWindowNative(a.ctx); err != nil {
+		a.logErrorf("main window show failed: %v", err)
+		return
+	}
+	a.logInfof("main window show completed")
 }
 
 func (a *App) hideMainWindow() {
-	runtime.WindowHide(a.ctx)
+	if goruntime.GOOS != "darwin" {
+		a.logInfof("main window hide started")
+	}
+	if err := hideMainWindowNative(a.ctx); err != nil {
+		a.logErrorf("main window hide failed: %v", err)
+		return
+	}
+	if goruntime.GOOS != "darwin" {
+		a.logInfof("main window hide completed")
+	}
 }
 
 func (a *App) quitApp() {
@@ -413,22 +442,23 @@ func (a *App) RenameCategory(oldName, newName string) error {
 
 func (a *App) DeleteCategory(name string) error {
 	name = strings.TrimSpace(name)
+	a.logInfof("delete category started: category=%s", name)
 	if normalizeCategoryName(name) == defaultCategoryName {
-		return fmt.Errorf("默认分类不可删除")
-	}
-	cfg, _ := a.config.Load()
-	skills, err := a.storage.ListAll()
-	if err != nil {
+		err := fmt.Errorf("默认分类不可删除")
+		a.logErrorf("delete category failed: category=%s, err=%v", name, err)
 		return err
 	}
-	for _, sk := range skills {
-		if sk.Category == name {
-			if err := a.storage.MoveCategory(sk.ID, defaultCategoryName); err != nil {
-				return err
-			}
+	if err := a.storage.DeleteCategory(name); err != nil {
+		if errors.Is(err, skill.ErrCategoryNotEmpty) {
+			wrapped := fmt.Errorf("分类下仍有 Skill，请先清空后再删除")
+			a.logErrorf("delete category failed: category=%s, err=%v", name, wrapped)
+			return wrapped
 		}
+		a.logErrorf("delete category failed: category=%s, err=%v", name, err)
+		return err
 	}
-	return os.Remove(filepath.Join(cfg.SkillsStorageDir, name))
+	a.logInfof("delete category completed: category=%s", name)
+	return nil
 }
 
 func (a *App) MoveSkillCategory(skillID, category string) error {
@@ -1076,28 +1106,36 @@ func (a *App) updateStarredReposOnStartup() {
 }
 
 // OpenFolderDialog wraps Wails file dialog for frontend use.
-func (a *App) OpenFolderDialog() (string, error) {
-	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "选择 Skill 目录",
-	})
+func (a *App) OpenFolderDialog(defaultDir string) (string, error) {
+	options := runtime.OpenDialogOptions{Title: "选择 Skill 目录"}
+	if dir := nearestExistingDirectory(defaultDir); dir != "" {
+		options.DefaultDirectory = dir
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, options)
 }
 
 // OpenPath opens the given filesystem path in the OS default file manager.
 func (a *App) OpenPath(path string) error {
-	a.logDebugf("open path requested: %s", path)
+	target, err := resolveOpenPathTarget(path)
+	if err != nil {
+		a.logErrorf("open path failed: path=%s, err=%v", path, err)
+		return err
+	}
+	a.logInfof("open path started: requested=%s target=%s", path, target)
 	var cmd *exec.Cmd
 	switch goruntime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", path)
+		cmd = exec.Command("open", "--", target)
 	case "windows":
-		cmd = exec.Command("explorer", path)
+		cmd = exec.Command("explorer.exe", filepath.Clean(target))
 	default:
-		cmd = exec.Command("xdg-open", path)
+		cmd = exec.Command("xdg-open", target)
 	}
 	if err := cmd.Start(); err != nil {
-		a.logErrorf("open path failed: %v", err)
+		a.logErrorf("open path failed: requested=%s target=%s err=%v", path, target, err)
 		return err
 	}
+	a.logInfof("open path completed: requested=%s target=%s", path, target)
 	return nil
 }
 

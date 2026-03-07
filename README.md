@@ -18,15 +18,15 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 
 | Feature | Description |
 |---------|-------------|
-| **Skill Library** | Central store with categories, real-time search, drag-and-drop organization, and batch delete |
+| **Skill Library** | Central store with categories, real-time search, drag-and-drop organization, batch delete, and safe empty-category deletion |
 | **GitHub Install** | Clone any repo, browse skill candidates, select and install with one click; auto-pulls on subsequent scans |
 | **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; conflict handling per skill |
 | **Starred Repos** | Watch Git repos and browse/import their skills without adding them to your library first |
 | **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo |
 | **Update Checker** | Detects new commits for GitHub-sourced skills; one-click update |
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
-| **Background Tray** | Clicking the window close button hides the window; macOS menu-bar item, Windows notification-area tray icon |
-| **Settings** | Per-tool enable/disable, push & scan paths, custom tools, cloud credentials, proxy configuration |
+| **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
+| **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, and local-only path settings kept out of sync; folder pickers reopen at the current location |
 
 For a complete description of every button, dialog, and interaction, see **[docs/features.md](docs/features.md)**.
 
@@ -48,10 +48,13 @@ my-skill/
 
 ## Cloud Backup
 
-Configure in **Settings → Cloud Storage**. Credentials are stored in the local config file at:
+Configure in **Settings → Cloud Storage**.
 
-- macOS: `~/Library/Application Support/SkillFlow/config.json`
-- Windows: `%APPDATA%\SkillFlow\config.json`
+- Sync-safe settings and metadata live under the app data directory and use relative paths for cross-platform restore.
+- Local-only filesystem paths (such as `SkillsStorageDir` and tool scan/push directories) live in `config_local.json` and are excluded from backup/sync.
+- App data directory:
+  - macOS: `~/Library/Application Support/SkillFlow/`
+  - Windows: `%USERPROFILE%\.skillflow\`
 
 Supported providers and required fields:
 

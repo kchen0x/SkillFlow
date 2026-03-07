@@ -45,6 +45,12 @@ export default function Dashboard() {
     return matchCat && matchSearch
   })
 
+  const skillCounts = skills.reduce((acc, sk) => {
+    const category = sk.Category || 'Default'
+    acc[category] = (acc[category] ?? 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
   const handleDrop = async (skillId: string, category: string) => {
     await MoveSkillCategory(skillId, category)
     setDraggingSkillID(null)
@@ -82,7 +88,7 @@ export default function Dashboard() {
   }
 
   const handleImportButton = async () => {
-    const dir = await OpenFolderDialog()
+    const dir = await OpenFolderDialog('')
     if (dir) { await ImportLocal(dir, selectedCat ?? ''); load() }
   }
 
@@ -155,6 +161,7 @@ export default function Dashboard() {
 
       <CategoryPanel
         categories={categories}
+        skillCounts={skillCounts}
         selected={selectedCat}
         draggingSkillId={draggingSkillID}
         onSelect={setSelectedCat}

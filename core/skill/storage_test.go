@@ -1,8 +1,10 @@
 package skill_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/shinerio/skillflow/core/skill"
@@ -18,6 +20,31 @@ func makeTestSkillDir(t *testing.T, baseDir, name string) string {
 	return dir
 }
 
+func writeStoredMeta(t *testing.T, root string, sk skill.Skill) {
+	t.Helper()
+	metaDir := filepath.Join(filepath.Dir(root), "meta")
+	require.NoError(t, os.MkdirAll(metaDir, 0755))
+	data, err := json.MarshalIndent(sk, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(metaDir, sk.ID+".json"), data, 0644))
+}
+
+func readStoredPath(t *testing.T, root, id string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(root), "meta", id+".json"))
+	require.NoError(t, err)
+	var stored skill.Skill
+	require.NoError(t, json.Unmarshal(data, &stored))
+	return stored.Path
+}
+
+func foreignAbsolutePath() string {
+	if runtime.GOOS == "windows" {
+		return "/Users/demo/.skillflow/skills/coding/portable-skill"
+	}
+	return `C:\Users\demo\.skillflow\skills\coding\portable-skill`
+}
+
 func TestStorageListCategories(t *testing.T) {
 	root := t.TempDir()
 	svc := skill.NewStorage(root)
@@ -29,7 +56,8 @@ func TestStorageListCategories(t *testing.T) {
 }
 
 func TestStorageImportSkill(t *testing.T) {
-	root := t.TempDir()
+	root := filepath.Join(t.TempDir(), "skills")
+	require.NoError(t, os.MkdirAll(root, 0755))
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "my-skill")
 	svc := skill.NewStorage(root)
@@ -42,6 +70,7 @@ func TestStorageImportSkill(t *testing.T) {
 	// verify directory was copied
 	_, err = os.Stat(filepath.Join(root, "coding", "my-skill", "skill.md"))
 	assert.NoError(t, err)
+	assert.Equal(t, "skills/coding/my-skill", readStoredPath(t, root, imported.ID))
 }
 
 func TestStorageConflictDetected(t *testing.T) {
@@ -89,4 +118,75 @@ func TestStorageMoveCategory(t *testing.T) {
 	updated, err := svc.Get(s.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "cat-b", updated.Category)
+}
+
+func TestStorageDeleteEmptyCategory(t *testing.T) {
+	root := t.TempDir()
+	svc := skill.NewStorage(root)
+	require.NoError(t, svc.CreateCategory("empty-cat"))
+
+	require.NoError(t, svc.DeleteCategory("empty-cat"))
+	_, err := os.Stat(filepath.Join(root, "empty-cat"))
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestStorageDeleteCategoryRejectsWhenNotEmpty(t *testing.T) {
+	root := t.TempDir()
+	src := t.TempDir()
+	skillDir := makeTestSkillDir(t, src, "busy-skill")
+	svc := skill.NewStorage(root)
+	require.NoError(t, svc.CreateCategory("busy-cat"))
+	_, err := svc.Import(skillDir, "busy-cat", skill.SourceManual, "", "")
+	require.NoError(t, err)
+
+	err = svc.DeleteCategory("busy-cat")
+	assert.ErrorIs(t, err, skill.ErrCategoryNotEmpty)
+	_, statErr := os.Stat(filepath.Join(root, "busy-cat"))
+	assert.NoError(t, statErr)
+}
+
+func TestStorageListAllMigratesAbsoluteMetaPath(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "skills")
+	actual := filepath.Join(root, "coding", "portable-skill")
+	require.NoError(t, os.MkdirAll(actual, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(actual, "skill.md"), []byte("# portable-skill"), 0644))
+
+	stored := skill.Skill{
+		ID:       "skill-absolute",
+		Name:     "portable-skill",
+		Category: "coding",
+		Path:     actual,
+	}
+	writeStoredMeta(t, root, stored)
+
+	svc := skill.NewStorage(root)
+	items, err := svc.ListAll()
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, actual, items[0].Path)
+	assert.Equal(t, "skills/coding/portable-skill", readStoredPath(t, root, stored.ID))
+}
+
+func TestStorageListAllRecoversFromForeignAbsoluteMetaPath(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "skills")
+	actual := filepath.Join(root, "coding", "portable-skill")
+	require.NoError(t, os.MkdirAll(actual, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(actual, "skill.md"), []byte("# portable-skill"), 0644))
+
+	stored := skill.Skill{
+		ID:       "skill-foreign",
+		Name:     "portable-skill",
+		Category: "coding",
+		Path:     foreignAbsolutePath(),
+	}
+	writeStoredMeta(t, root, stored)
+
+	svc := skill.NewStorage(root)
+	items, err := svc.ListAll()
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, actual, items[0].Path)
+	assert.Equal(t, "skills/coding/portable-skill", readStoredPath(t, root, stored.ID))
 }

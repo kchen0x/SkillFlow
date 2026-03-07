@@ -6,15 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/shinerio/skillflow/core/pathutil"
 )
 
 type StarStorage struct {
-	path string
-	mu   sync.Mutex
+	path    string
+	dataDir string
+	mu      sync.Mutex
 }
 
 func NewStarStorage(path string) *StarStorage {
-	return &StarStorage{path: path}
+	cleanPath := filepath.Clean(path)
+	return &StarStorage{path: cleanPath, dataDir: filepath.Dir(cleanPath)}
 }
 
 func (s *StarStorage) Load() ([]StarredRepo, error) {
@@ -28,16 +32,38 @@ func (s *StarStorage) Load() ([]StarredRepo, error) {
 		return nil, err
 	}
 	var repos []StarredRepo
-	return repos, json.Unmarshal(data, &repos)
+	if err := json.Unmarshal(data, &repos); err != nil {
+		return repos, err
+	}
+	changed := false
+	for i := range repos {
+		if s.resolveLocalDir(&repos[i]) {
+			changed = true
+		}
+	}
+	if changed {
+		if err := s.saveLocked(repos); err != nil {
+			return nil, err
+		}
+	}
+	return repos, nil
 }
 
 func (s *StarStorage) Save(repos []StarredRepo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveLocked(repos)
+}
+
+func (s *StarStorage) saveLocked(repos []StarredRepo) error {
 	if repos == nil {
 		repos = []StarredRepo{}
 	}
-	data, err := json.MarshalIndent(repos, "", "  ")
+	snapshot := make([]StarredRepo, len(repos))
+	for i := range repos {
+		snapshot[i] = s.serializedRepo(repos[i])
+	}
+	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -61,4 +87,24 @@ func (s *StarStorage) Save(repos []StarredRepo) error {
 		return err
 	}
 	return os.Rename(tmpName, s.path)
+}
+
+func (s *StarStorage) serializedRepo(repo StarredRepo) StarredRepo {
+	snapshot := repo
+	snapshot.LocalDir = pathutil.StorePath(s.dataDir, repo.LocalDir, s.derivedLocalDir(repo.URL))
+	return snapshot
+}
+
+func (s *StarStorage) resolveLocalDir(repo *StarredRepo) bool {
+	resolved, needsMigration := pathutil.ResolveStoredPath(s.dataDir, repo.LocalDir, s.derivedLocalDir(repo.URL))
+	repo.LocalDir = resolved
+	return needsMigration
+}
+
+func (s *StarStorage) derivedLocalDir(repoURL string) string {
+	dir, err := CacheDir(s.dataDir, repoURL)
+	if err != nil {
+		return ""
+	}
+	return dir
 }

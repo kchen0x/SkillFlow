@@ -75,7 +75,7 @@ export function ListStarredRepos():Promise<Array<git.StarredRepo>>;
 
 export function MoveSkillCategory(arg1:string,arg2:string):Promise<void>;
 
-export function OpenFolderDialog():Promise<string>;
+export function OpenFolderDialog(arg1:string):Promise<string>;
 
 export function OpenLogDir():Promise<void>;
 

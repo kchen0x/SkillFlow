@@ -1,0 +1,40 @@
+Session date: 2026-03-07
+Project: SkillFlow
+
+Conversation summary
+- User reported that on macOS, closing the app did not leave a visible top menu-bar icon and the app could not be restored or fully exited from the menu bar.
+- Investigated the existing Wails `HideWindowOnClose` behavior, macOS tray/native status-item integration, and window lifecycle handling.
+- Identified that Dock hiding and menu-bar presence were controlled by different layers, and that the original tray initialization/show flow was not robust enough on macOS.
+- Iterated on the implementation to make the status item visible, keep the app alive after closing the main window, restore the window safely from the menu bar, and reduce startup stutter.
+- Standardized the final macOS approach so Cocoa only manages the menu-bar icon and activation policy while window show/hide goes through the Wails runtime path.
+- Reworked the menu-bar icon from plain text to a monochrome brand-like glyph and then tuned it again for a more standard square menu-bar footprint.
+- Reviewed the extra debugging logs added during troubleshooting and kept only the lifecycle logs that are useful in production at `info`, while moving detailed diagnostics to `debug`.
+
+Summary of all current uncommitted changes
+- macOS tray and window lifecycle
+  - Added native macOS menu-bar status item support with a monochrome template icon, Dock hide-on-close behavior, and menu actions for Show / Hide / Quit.
+  - Moved macOS restore behavior to the standard Wails `runtime.Show` + `WindowShow` + `WindowUnminimise` path to avoid crashes when reopening from the menu bar.
+  - Deferred startup background tasks until the UI is ready to reduce visible startup lag.
+  - Added platform-specific helper files for tray callbacks, tray error/log bridging, and window show/hide behavior.
+- Portable path persistence and migration
+  - Added `core/pathutil/` to normalize serialized paths, detect portable absolute paths, and convert synced paths to forward-slash relative paths.
+  - Updated skill metadata persistence so `meta/*.json` stores sync-safe relative paths and auto-migrates older absolute paths on load.
+  - Updated starred repo storage so `star_repos.json` stores relative cache paths and auto-migrates existing absolute paths.
+  - Added tests covering portable path serialization and migration behavior.
+- Safer category deletion and path opening UX
+  - Changed backend category deletion to reject non-empty categories with a clear typed error instead of silently moving skills.
+  - Added frontend deletion blocking dialogs and category skill counts so users must empty a category before deleting it.
+  - Extended `OpenFolderDialog` to accept a default directory and updated Settings/Dashboard folder pickers to reopen at the current path.
+  - Hardened `OpenPath` so it falls back to the nearest existing parent directory when the requested target does not exist.
+- Docs and repo guidance updates
+  - Updated README, architecture docs, and feature docs in English and Chinese for macOS tray behavior, local-only path config, portable synced paths, folder picker behavior, and safe empty-category deletion.
+  - Updated `AGENTS.md` with a mandatory path-persistence rule for sync-safe relative storage.
+
+Files involved
+- Backend/runtime: `cmd/skillflow/app.go`, `cmd/skillflow/app_path.go`, `cmd/skillflow/tray_darwin.go`, `cmd/skillflow/tray_darwin_callbacks.go`, `cmd/skillflow/tray_darwin_error.go`, `cmd/skillflow/tray_darwin_log.go`, `cmd/skillflow/window_darwin.go`, `cmd/skillflow/window_other.go`
+- Frontend: `cmd/skillflow/frontend/src/components/CategoryPanel.tsx`, `cmd/skillflow/frontend/src/pages/Dashboard.tsx`, `cmd/skillflow/frontend/src/pages/Settings.tsx`, `cmd/skillflow/frontend/wailsjs/go/main/App.js`, `cmd/skillflow/frontend/wailsjs/go/main/App.d.ts`
+- Core/data layer: `core/pathutil/*`, `core/skill/storage.go`, `core/skill/storage_test.go`, `core/git/storage.go`, `core/git/storage_test.go`
+- Docs/config guidance: `README.md`, `README_zh.md`, `docs/features.md`, `docs/features_zh.md`, `docs/architecture.md`, `docs/architecture_zh.md`, `AGENTS.md`
+
+Suggested commit theme
+- feat: improve macOS tray mode and portable path persistence

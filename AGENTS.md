@@ -92,6 +92,16 @@ All other documentation lives under `docs/`:
 - Do **not** leave the docs stale. Never commit a feature change without the corresponding doc update in the same commit.
 - `docs/features.md` / `docs/features_zh.md` are the source of truth for UX details. README files only carry high-level summaries with links to the feature files.
 
+## Path Persistence Rule — MANDATORY
+
+Any repo-tracked file that can be backed up or synced across devices must avoid machine-specific absolute paths.
+
+- Synced files such as `config.json`, `meta/*.json`, `star_repos.json`, and future backup/sync data files must store local filesystem paths as **forward-slash relative paths** whenever the target is inside the synchronized root.
+- The synchronized root is normally `config.AppDataDir()`. When `SkillsStorageDir` is moved outside that directory, treat the shared parent of `skills/` and `meta/` as the synchronized root for persisted skill metadata.
+- Any path that points **outside** the synchronized root is platform-specific and must live only in `config_local.json`.
+- `config_local.json` is local-only and must remain excluded from cloud backup and git sync.
+- Runtime APIs may expand persisted relative paths back to absolute paths before returning them to frontend/backend callers, but the on-disk synced representation must stay relative.
+
 ## Logging Rule — MANDATORY
 
 All backend code changes must follow consistent logging standards for troubleshooting.

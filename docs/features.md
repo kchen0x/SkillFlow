@@ -41,7 +41,7 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 - Inactive routes: gray text with hover highlight.
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
 - Window close button behavior: clicking the top-left close button hides the main window and keeps the app running in background.
-- macOS tray behavior: app remains in the menu-bar status area (`SF` item); use native single-click to open a menu with `Show Window`, `Hide Window`, and `Quit SkillFlow`.
+- macOS tray behavior: the app creates a monochrome status icon in the menu-bar status area on startup; after the main window is hidden, the Dock icon is removed and only the menu-bar icon remains. Use native single-click to open a menu with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`.
 - Windows tray behavior: app remains in the system notification area with the app's own icon; click the tray icon to open a menu with `Show SkillFlow` and `Exit`.
 
 ---
@@ -76,7 +76,7 @@ Central library for managing your skill collection.
 - **Drop highlight** — the target category is highlighted more prominently while dragging a skill card over it.
 - **Right-click context menu** on each category:
   - **Rename** — shows inline text input; confirm with Enter, cancel with Escape; calls `RenameCategory()`. (Not available for `Default`.)
-  - **Delete** — calls `DeleteCategory()`; skills are moved to the default category. (Not available for `Default`.)
+  - **Delete** — deletes the category immediately when it is empty; if it still contains skills, shows a blocking dialog telling the user to clear the category first. (`Default` remains undeletable.)
 - **New Category** (Plus icon at bottom) — shows inline text input; confirm with Enter or blur, cancel with Escape; calls `CreateCategory()`.
 
 ### Skill Grid
@@ -286,6 +286,8 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - Object storage listings are paginated internally, so the UI shows the complete remote file set instead of only the first page.
 - Scrollable, max-height container.
 - **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `config.json`, etc.); `cache/` and `.git/` are excluded.
+- **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json` and `star_repos.json`) are stored as forward-slash relative paths under the synchronized root, so restores continue to work across macOS and Windows.
+- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as external `SkillsStorageDir` values and tool `ScanDirs` / `PushDir`; it is excluded from backup and git sync.
 - **Git backup compatibility** — when Git backup uses a parent directory as the working tree, SkillFlow automatically moves any legacy nested `skills/.git` metadata aside so actual skill files remain trackable.
 
 ### Auto-Backup
@@ -333,14 +335,14 @@ For each built-in or custom tool:
 | Control | Description |
 |---------|-------------|
 | **Enable toggle** | Enables or disables the tool across the app |
-| **Push directory** | Single directory where skills are copied on push; supports both manual text entry and folder-picker button (FolderOpen icon) |
-| **Scan directories** | Multiple directories searched when pulling; each row has a folder-picker button and a delete button; new directories added with an input + folder-picker + "Add" button |
+| **Push directory** | Single directory where skills are copied on push; supports both manual text entry and folder-picker button (FolderOpen icon), which opens at the current path or nearest existing parent |
+| **Scan directories** | Multiple directories searched when pulling; each row has a folder-picker button and a delete button; new directories added with an input + folder-picker + "Add" button, with the picker reopening at the current path or nearest existing parent |
 | **Delete tool** (custom tools only) | Removes the custom tool entry |
 
 **Add Custom Tool** section (dashed border):
 
 - Tool name input.
-- Push directory input with folder-picker button.
+- Push directory input with folder-picker button that reopens at the current path or nearest existing parent.
 - **"Add"** button — `AddCustomTool(name, pushDir)`.
 
 ### Cloud Tab
@@ -357,10 +359,10 @@ For each built-in or custom tool:
 
 | Control | Description |
 |---------|-------------|
-| **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button |
+| **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button that opens at the current path or nearest existing parent |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
 | **Log level buttons** | Toggle runtime log level between `debug`, `info`, and `error` (default: `error`); takes effect after saving settings |
-| **Open log directory** | One-click open the local log folder in system file manager |
+| **Open log directory** | One-click open the local log folder in system file manager; missing targets fall back to the nearest existing parent directory |
 
 Log files are stored under the app log directory, with rolling limits:
 - At most **2 files** are kept: `skillflow.log` and `skillflow.log.1`.
