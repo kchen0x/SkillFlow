@@ -281,7 +281,7 @@ export default function SettingsPage() {
   const updateTool = (name: string, field: string, value: any) => {
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((t: any) => t.name === name ? { ...t, [field]: value } : t)
+      tools: prev.tools.map((tool: any) => tool.name === name ? { ...tool, [field]: value } : tool)
     }))
   }
 
@@ -290,11 +290,11 @@ export default function SettingsPage() {
     if (!path) return
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((t: any) => {
-        if (t.name !== name) return t
-        const current = t.scanDirs ?? []
-        if (current.includes(path)) return t
-        return { ...t, scanDirs: [...current, path] }
+      tools: prev.tools.map((tool: any) => {
+        if (tool.name !== name) return tool
+        const current = tool.scanDirs ?? []
+        if (current.includes(path)) return tool
+        return { ...tool, scanDirs: [...current, path] }
       })
     }))
     setNewScanDirs((prev) => ({ ...prev, [name]: '' }))
@@ -303,11 +303,11 @@ export default function SettingsPage() {
   const updateScanDir = (name: string, index: number, value: string) => {
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((t: any) => {
-        if (t.name !== name) return t
-        const next = [...(t.scanDirs ?? [])]
+      tools: prev.tools.map((tool: any) => {
+        if (tool.name !== name) return tool
+        const next = [...(tool.scanDirs ?? [])]
         next[index] = value
-        return { ...t, scanDirs: next }
+        return { ...tool, scanDirs: next }
       })
     }))
   }
@@ -315,9 +315,9 @@ export default function SettingsPage() {
   const removeScanDir = (name: string, index: number) => {
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((t: any) => {
-        if (t.name !== name) return t
-        return { ...t, scanDirs: (t.scanDirs ?? []).filter((_: string, i: number) => i !== index) }
+      tools: prev.tools.map((tool: any) => {
+        if (tool.name !== name) return tool
+        return { ...tool, scanDirs: (tool.scanDirs ?? []).filter((_: string, i: number) => i !== index) }
       })
     }))
   }
@@ -731,7 +731,7 @@ export default function SettingsPage() {
               className="rounded-lg px-3 py-2 text-sm"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-base)', color: 'var(--text-secondary)' }}
             >
-              Default
+              {t('settings.defaultCategoryValue')}
             </div>
             <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.defaultCategoryHint')}</p>
           </div>

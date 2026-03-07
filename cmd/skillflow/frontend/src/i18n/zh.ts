@@ -198,6 +198,7 @@ export const zh = {
   'settings.logDirHint': '日志文件最多 2 个，单文件最大 1MB，超限自动滚动覆盖旧日志。',
   'settings.skillsDir': '本地 Skills 存储目录',
   'settings.defaultCategory': '从工具拉取时的默认分类',
+  'settings.defaultCategoryValue': 'Default',
   'settings.defaultCategoryHint': '固定系统分类，用于未分类导入兜底，不可重命名或删除。',
   'settings.proxy': '代理设置',
   'settings.proxyHint': '代理用于远程仓库相关操作（扫描仓库、安装 Skill、检查更新）',

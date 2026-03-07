@@ -198,6 +198,7 @@ export const en = {
   'settings.logDirHint': 'Max 2 log files, 1MB each, auto-rotated when size limit is reached.',
   'settings.skillsDir': 'Local Skills Storage Directory',
   'settings.defaultCategory': 'Default Category for Pull',
+  'settings.defaultCategoryValue': 'Default',
   'settings.defaultCategoryHint': 'Fixed system category for uncategorized imports. Cannot be renamed or deleted.',
   'settings.proxy': 'Proxy Settings',
   'settings.proxyHint': 'Proxy is used for remote repo operations (scan, install, update check)',
