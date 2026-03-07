@@ -48,6 +48,8 @@ jobs:
         if: runner.os == 'macOS'
         working-directory: cmd/skillflow
         run: |
+          set -euo pipefail
+
           # Copy our multi-resolution icns into the built app bundle
           cp build/darwin/iconfile.icns build/bin/SkillFlow.app/Contents/Resources/iconfile.icns
 
@@ -62,19 +64,48 @@ jobs:
           fi
           echo "$APP_CDHASH" > build/bin/SkillFlow-${{ matrix.name }}.app.cdhash
 
-          TMPDIR_DMG="$(mktemp -d)"
-          TMP_DMG="/tmp/SkillFlow-rw.dmg"
+          WORK_DIR="$(mktemp -d)"
+          STAGE_DIR="$WORK_DIR/stage"
+          TMP_DMG="$WORK_DIR/SkillFlow-${{ matrix.name }}-rw.dmg"
           FINAL_DMG="build/bin/SkillFlow-${{ matrix.name }}.dmg"
+          MOUNT_POINT=""
+
+          cleanup() {
+            if [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
+              hdiutil detach "$MOUNT_POINT" || hdiutil detach -force "$MOUNT_POINT" || true
+            fi
+            rm -rf "$WORK_DIR"
+          }
+          trap cleanup EXIT
 
           # Create a staging folder: app + Applications symlink
-          cp -R build/bin/SkillFlow.app "$TMPDIR_DMG/SkillFlow.app"
-          ln -s /Applications "$TMPDIR_DMG/Applications"
+          rm -f "$FINAL_DMG"
+          mkdir -p "$STAGE_DIR"
+          ditto build/bin/SkillFlow.app "$STAGE_DIR/SkillFlow.app"
+          ln -s /Applications "$STAGE_DIR/Applications"
 
-          # Create a writable DMG from the staging folder
-          hdiutil create -srcfolder "$TMPDIR_DMG" \
-            -volname "SkillFlow" -fs HFS+ \
-            -fsargs "-c c=64,a=16,b=16" \
-            -format UDRW -size 300m "$TMP_DMG"
+          sync
+          sleep 2
+
+          # Create a writable DMG from the staging folder.
+          for i in 1 2 3; do
+            if hdiutil create -ov -srcfolder "$STAGE_DIR" \
+              -volname "SkillFlow" -fs HFS+ \
+              -fsargs "-c c=64,a=16,b=16" \
+              -format UDRW -size 300m "$TMP_DMG"; then
+              break
+            fi
+
+            if [ "$i" -eq 3 ]; then
+              echo "::error::Failed to create writable DMG after $i attempts"
+              exit 1
+            fi
+
+            echo "Create attempt $i failed, retrying in 5s..."
+            rm -f "$TMP_DMG"
+            sync
+            sleep 5
+          done
 
           # Mount the writable DMG
           MOUNT_POINT="$(hdiutil attach -readwrite -noverify -noautoopen "$TMP_DMG" | grep '/Volumes/' | awk '{print $NF}')"
@@ -83,14 +114,19 @@ jobs:
 
           # Detach with retry and force fallback
           for i in 1 2 3; do
-            hdiutil detach "$MOUNT_POINT" && break
+            if hdiutil detach "$MOUNT_POINT"; then
+              MOUNT_POINT=""
+              break
+            fi
             echo "Detach attempt $i failed, retrying in 5s..."
             sleep 5
-          done || hdiutil detach -force "$MOUNT_POINT"
+          done || {
+            hdiutil detach -force "$MOUNT_POINT"
+            MOUNT_POINT=""
+          }
 
           # Convert to compressed read-only DMG
-          hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$FINAL_DMG"
-          rm -f "$TMP_DMG"
+          hdiutil convert -ov "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$FINAL_DMG"
 
           # Sign DMG with ad-hoc identity.
           codesign --force --sign - "$FINAL_DMG"
