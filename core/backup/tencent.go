@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,7 +13,9 @@ import (
 )
 
 type TencentProvider struct {
-	client *cos.Client
+	endpoint  string
+	secretID  string
+	secretKey string
 }
 
 func NewTencentProvider() *TencentProvider { return &TencentProvider{} }
@@ -23,25 +26,26 @@ func (t *TencentProvider) RequiredCredentials() []CredentialField {
 	return []CredentialField{
 		{Key: "secret_id", Label: "Secret ID", Secret: false},
 		{Key: "secret_key", Label: "Secret Key", Secret: true},
-		{Key: "bucket_url", Label: "Bucket URL", Placeholder: "https://mybucket-1250000000.cos.ap-guangzhou.myqcloud.com"},
+		{Key: "endpoint", Label: "Endpoint", Placeholder: "cos.ap-guangzhou.myqcloud.com"},
 	}
 }
 
 func (t *TencentProvider) Init(creds map[string]string) error {
-	u, err := url.Parse(creds["bucket_url"])
+	endpoint, err := normalizeTencentEndpoint(creds["endpoint"])
 	if err != nil {
 		return err
 	}
-	t.client = cos.NewClient(&cos.BaseURL{BucketURL: u}, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  creds["secret_id"],
-			SecretKey: creds["secret_key"],
-		},
-	})
+	t.endpoint = endpoint
+	t.secretID = creds["secret_id"]
+	t.secretKey = creds["secret_key"]
 	return nil
 }
 
 func (t *TencentProvider) Sync(ctx context.Context, localDir, bucket, remotePath string, onProgress func(string)) error {
+	client, err := t.clientForBucket(bucket)
+	if err != nil {
+		return err
+	}
 	return filepath.Walk(localDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -65,15 +69,19 @@ func (t *TencentProvider) Sync(ctx context.Context, localDir, bucket, remotePath
 			return err
 		}
 		defer f.Close()
-		_, err = t.client.Object.Put(ctx, key, f, nil)
+		_, err = client.Object.Put(ctx, key, f, nil)
 		return err
 	})
 }
 
 func (t *TencentProvider) Restore(ctx context.Context, bucket, remotePath, localDir string) error {
+	client, err := t.clientForBucket(bucket)
+	if err != nil {
+		return err
+	}
 	var marker string
 	for {
-		result, _, err := t.client.Bucket.Get(ctx, &cos.BucketGetOptions{
+		result, _, err := client.Bucket.Get(ctx, &cos.BucketGetOptions{
 			Prefix: remotePath,
 			Marker: marker,
 		})
@@ -89,7 +97,7 @@ func (t *TencentProvider) Restore(ctx context.Context, bucket, remotePath, local
 			if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
 				return err
 			}
-			_, err := t.client.Object.GetToFile(ctx, obj.Key, local, nil)
+			_, err := client.Object.GetToFile(ctx, obj.Key, local, nil)
 			if err != nil {
 				return err
 			}
@@ -103,10 +111,14 @@ func (t *TencentProvider) Restore(ctx context.Context, bucket, remotePath, local
 }
 
 func (t *TencentProvider) List(ctx context.Context, bucket, remotePath string) ([]RemoteFile, error) {
+	client, err := t.clientForBucket(bucket)
+	if err != nil {
+		return nil, err
+	}
 	var files []RemoteFile
 	var marker string
 	for {
-		result, _, err := t.client.Bucket.Get(ctx, &cos.BucketGetOptions{
+		result, _, err := client.Bucket.Get(ctx, &cos.BucketGetOptions{
 			Prefix: remotePath,
 			Marker: marker,
 		})
@@ -129,4 +141,84 @@ func (t *TencentProvider) List(ctx context.Context, bucket, remotePath string) (
 		marker = result.NextMarker
 	}
 	return files, nil
+}
+
+func (t *TencentProvider) clientForBucket(bucket string) (*cos.Client, error) {
+	if strings.TrimSpace(t.endpoint) == "" {
+		return nil, fmt.Errorf("tencent cos client is not initialized")
+	}
+	bucketURL, err := buildTencentBucketURL(bucket, t.endpoint)
+	if err != nil {
+		return nil, err
+	}
+	return cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  t.secretID,
+			SecretKey: t.secretKey,
+		},
+	}), nil
+}
+
+func normalizeTencentEndpoint(raw string) (string, error) {
+	endpoint := normalizeHostLikeValue(raw)
+	if endpoint == "" {
+		return "", fmt.Errorf("tencent cos endpoint is required")
+	}
+	parts := strings.Split(endpoint, ".")
+	if len(parts) >= 5 && parts[1] == "cos" && isValidTencentBucketName(parts[0]) {
+		endpoint = strings.Join(parts[1:], ".")
+	}
+	return endpoint, nil
+}
+
+func normalizeTencentBucketName(raw string) (string, error) {
+	bucket := strings.TrimSpace(raw)
+	if bucket == "" {
+		return "", fmt.Errorf("tencent cos bucket name is required")
+	}
+	if isValidTencentBucketName(bucket) {
+		return bucket, nil
+	}
+	host := normalizeHostLikeValue(bucket)
+	if host != "" {
+		parts := strings.Split(host, ".")
+		if len(parts) >= 5 && parts[1] == "cos" && isValidTencentBucketName(parts[0]) {
+			return parts[0], nil
+		}
+	}
+	return "", fmt.Errorf("invalid tencent cos bucket name %q: enter bucket name only, not the full COS URL or host", raw)
+}
+
+func buildTencentBucketURL(bucket, endpoint string) (*url.URL, error) {
+	bucketName, err := normalizeTencentBucketName(bucket)
+	if err != nil {
+		return nil, err
+	}
+	normalizedEndpoint, err := normalizeTencentEndpoint(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	u, err := url.Parse("https://" + bucketName + "." + normalizedEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tencent cos bucket URL: %w", err)
+	}
+	return u, nil
+}
+
+func isValidTencentBucketName(name string) bool {
+	if len(name) < 3 || len(name) > 63 {
+		return false
+	}
+	for i, r := range name {
+		isLower := r >= 'a' && r <= 'z'
+		isDigit := r >= '0' && r <= '9'
+		isHyphen := r == '-'
+		if !isLower && !isDigit && !isHyphen {
+			return false
+		}
+		if (i == 0 || i == len(name)-1) && !isLower && !isDigit {
+			return false
+		}
+	}
+	return true
 }

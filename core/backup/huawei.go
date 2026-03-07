@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,15 +27,23 @@ func (h *HuaweiProvider) RequiredCredentials() []CredentialField {
 }
 
 func (h *HuaweiProvider) Init(creds map[string]string) error {
-	client, err := obs.New(creds["access_key_id"], creds["secret_access_key"], creds["endpoint"])
+	endpoint, err := normalizeHuaweiEndpoint(creds["endpoint"])
 	if err != nil {
 		return err
+	}
+	client, err := obs.New(creds["access_key_id"], creds["secret_access_key"], endpoint)
+	if err != nil {
+		return fmt.Errorf("init huawei obs client failed: %w", err)
 	}
 	h.client = client
 	return nil
 }
 
 func (h *HuaweiProvider) Sync(_ context.Context, localDir, bucket, remotePath string, onProgress func(string)) error {
+	bucketName, err := h.bucketName(bucket)
+	if err != nil {
+		return err
+	}
 	return filepath.Walk(localDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -54,7 +63,7 @@ func (h *HuaweiProvider) Sync(_ context.Context, localDir, bucket, remotePath st
 			onProgress(rel)
 		}
 		input := &obs.PutFileInput{}
-		input.Bucket = bucket
+		input.Bucket = bucketName
 		input.Key = key
 		input.SourceFile = path
 		_, err = h.client.PutFile(input)
@@ -63,7 +72,11 @@ func (h *HuaweiProvider) Sync(_ context.Context, localDir, bucket, remotePath st
 }
 
 func (h *HuaweiProvider) Restore(_ context.Context, bucket, remotePath, localDir string) error {
-	input := &obs.ListObjectsInput{Bucket: bucket}
+	bucketName, err := h.bucketName(bucket)
+	if err != nil {
+		return err
+	}
+	input := &obs.ListObjectsInput{Bucket: bucketName}
 	input.Prefix = remotePath
 	for {
 		result, err := h.client.ListObjects(input)
@@ -80,7 +93,7 @@ func (h *HuaweiProvider) Restore(_ context.Context, bucket, remotePath, localDir
 				return err
 			}
 			getInput := &obs.GetObjectInput{}
-			getInput.Bucket = bucket
+			getInput.Bucket = bucketName
 			getInput.Key = obj.Key
 			resp, err := h.client.GetObject(getInput)
 			if err != nil {
@@ -107,7 +120,11 @@ func (h *HuaweiProvider) Restore(_ context.Context, bucket, remotePath, localDir
 }
 
 func (h *HuaweiProvider) List(_ context.Context, bucket, remotePath string) ([]RemoteFile, error) {
-	input := &obs.ListObjectsInput{Bucket: bucket}
+	bucketName, err := h.bucketName(bucket)
+	if err != nil {
+		return nil, err
+	}
+	input := &obs.ListObjectsInput{Bucket: bucketName}
 	input.Prefix = remotePath
 	var files []RemoteFile
 	for {
@@ -131,4 +148,63 @@ func (h *HuaweiProvider) List(_ context.Context, bucket, remotePath string) ([]R
 		input.Marker = result.NextMarker
 	}
 	return files, nil
+}
+
+func (h *HuaweiProvider) bucketName(raw string) (string, error) {
+	if h.client == nil {
+		return "", fmt.Errorf("huawei obs client is not initialized")
+	}
+	bucket, err := normalizeHuaweiBucketName(raw)
+	if err != nil {
+		return "", err
+	}
+	return bucket, nil
+}
+
+func normalizeHuaweiEndpoint(raw string) (string, error) {
+	endpoint := normalizeHostLikeValue(raw)
+	if endpoint == "" {
+		return "", fmt.Errorf("huawei obs endpoint is required")
+	}
+	parts := strings.Split(endpoint, ".")
+	if len(parts) >= 5 && parts[1] == "obs" && isValidHuaweiBucketName(parts[0]) {
+		endpoint = strings.Join(parts[1:], ".")
+	}
+	return endpoint, nil
+}
+
+func normalizeHuaweiBucketName(raw string) (string, error) {
+	bucket := strings.TrimSpace(raw)
+	if bucket == "" {
+		return "", fmt.Errorf("huawei obs bucket name is required")
+	}
+	if isValidHuaweiBucketName(bucket) {
+		return bucket, nil
+	}
+	host := normalizeHostLikeValue(bucket)
+	if host != "" {
+		parts := strings.Split(host, ".")
+		if len(parts) >= 5 && parts[1] == "obs" && isValidHuaweiBucketName(parts[0]) {
+			return parts[0], nil
+		}
+	}
+	return "", fmt.Errorf("invalid huawei obs bucket name %q: enter bucket name only, not the full OBS URL or host", raw)
+}
+
+func isValidHuaweiBucketName(name string) bool {
+	if len(name) < 3 || len(name) > 63 {
+		return false
+	}
+	for i, r := range name {
+		isLower := r >= 'a' && r <= 'z'
+		isDigit := r >= '0' && r <= '9'
+		isHyphen := r == '-'
+		if !isLower && !isDigit && !isHyphen {
+			return false
+		}
+		if (i == 0 || i == len(name)-1) && !isLower && !isDigit {
+			return false
+		}
+	}
+	return true
 }

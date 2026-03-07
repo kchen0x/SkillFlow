@@ -35,6 +35,22 @@ export namespace config {
 	        this.url = source["url"];
 	    }
 	}
+	export class CloudProviderConfig {
+	    bucketName: string;
+	    remotePath: string;
+	    credentials: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new CloudProviderConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bucketName = source["bucketName"];
+	        this.remotePath = source["remotePath"];
+	        this.credentials = source["credentials"];
+	    }
+	}
 	export class CloudConfig {
 	    provider: string;
 	    enabled: boolean;
@@ -84,6 +100,7 @@ export namespace config {
 	    repoScanMaxDepth: number;
 	    tools: ToolConfig[];
 	    cloud: CloudConfig;
+	    cloudProfiles?: Record<string, CloudProviderConfig>;
 	    proxy: ProxyConfig;
 	    skippedUpdateVersion?: string;
 	
@@ -99,6 +116,7 @@ export namespace config {
 	        this.repoScanMaxDepth = source["repoScanMaxDepth"];
 	        this.tools = this.convertValues(source["tools"], ToolConfig);
 	        this.cloud = this.convertValues(source["cloud"], CloudConfig);
+	        this.cloudProfiles = this.convertValues(source["cloudProfiles"], CloudProviderConfig, true);
 	        this.proxy = this.convertValues(source["proxy"], ProxyConfig);
 	        this.skippedUpdateVersion = source["skippedUpdateVersion"];
 	    }
@@ -121,6 +139,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 

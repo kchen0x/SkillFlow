@@ -40,7 +40,8 @@ SkillFlow is a **Wails v2** desktop app (Go 1.23, Wails v2.11.0). The Go backend
         ...other files
   meta/                ← JSON sidecars (sibling of skills/)
     <uuid>.json        ← one per skill, contains Skill struct
-  config.json          ← AppConfig (tools, cloud, proxy)
+  config.json          ← synced app config (tools, active cloud state, per-provider non-sensitive cloud profiles, proxy)
+  config_local.json    ← local-only paths + per-provider sensitive cloud credentials
   star_repos.json      ← StarredRepo[] array
   cache/               ← temporary cloned repos for starred repos
     <cached-repo-dirs>/
@@ -177,8 +178,14 @@ type CloudConfig struct {
     Provider    string            // "aliyun", "tencent", "huawei", "git"
     Enabled     bool
     BucketName  string
-    RemotePath  string            // e.g. "skillflow/"
-    Credentials map[string]string // provider-specific credentials
+    RemotePath  string            // normalized backup prefix, always ending in "skillflow/"
+    Credentials map[string]string // runtime merged view; sync-safe fields live in config.json, sensitive credentials in config_local.json
+}
+
+type CloudProviderConfig struct {
+    BucketName  string
+    RemotePath  string
+    Credentials map[string]string // runtime merged view for a specific provider
 }
 
 type ProxyConfig struct {
@@ -192,6 +199,7 @@ type AppConfig struct {
     LogLevel             string        // "debug" | "info" | "error"
     Tools                []ToolConfig
     Cloud                CloudConfig
+    CloudProfiles        map[string]CloudProviderConfig // provider-specific settings persisted independently
     Proxy                ProxyConfig
     SkippedUpdateVersion string        // version tag to suppress startup update prompt
 }

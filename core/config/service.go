@@ -2,20 +2,31 @@ package config
 
 import (
 	"encoding/json"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // sharedConfig is stored in config.json and safe to sync across platforms.
-// It contains no file system paths.
+// It contains no file system paths or sensitive cloud credentials.
 type sharedConfig struct {
-	DefaultCategory      string             `json:"defaultCategory"`
-	LogLevel             string             `json:"logLevel"`
-	RepoScanMaxDepth     int                `json:"repoScanMaxDepth"`
-	Tools                []sharedToolConfig `json:"tools"`
-	Cloud                CloudConfig        `json:"cloud"`
-	Proxy                ProxyConfig        `json:"proxy"`
-	SkippedUpdateVersion string             `json:"skippedUpdateVersion,omitempty"`
+	DefaultCategory      string                         `json:"defaultCategory"`
+	LogLevel             string                         `json:"logLevel"`
+	RepoScanMaxDepth     int                            `json:"repoScanMaxDepth"`
+	Tools                []sharedToolConfig             `json:"tools"`
+	Cloud                sharedCloudState               `json:"cloud"`
+	CloudProfiles        map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
+	Proxy                ProxyConfig                    `json:"proxy"`
+	SkippedUpdateVersion string                         `json:"skippedUpdateVersion,omitempty"`
+	legacyCloudMigrated  bool                           `json:"-"`
+}
+
+type sharedCloudState struct {
+	Provider            string `json:"provider"`
+	Enabled             bool   `json:"enabled"`
+	SyncIntervalMinutes int    `json:"syncIntervalMinutes"`
 }
 
 // sharedToolConfig stores only the platform-agnostic settings for a built-in tool.
@@ -25,10 +36,12 @@ type sharedToolConfig struct {
 }
 
 // localConfig is stored in config_local.json and never synced to cloud/git.
-// It holds all file system paths that differ between platforms.
+// It holds all file system paths and sensitive cloud credentials.
 type localConfig struct {
-	SkillsStorageDir string            `json:"skillsStorageDir"`
-	Tools            []localToolConfig `json:"tools"`
+	SkillsStorageDir           string                       `json:"skillsStorageDir"`
+	Tools                      []localToolConfig            `json:"tools"`
+	CloudCredentialsByProvider map[string]map[string]string `json:"cloudCredentialsByProvider,omitempty"`
+	CloudCredentials           map[string]string            `json:"cloudCredentials,omitempty"`
 }
 
 // localToolConfig holds path settings for one tool.
@@ -72,9 +85,13 @@ func (s *Service) Load() (AppConfig, error) {
 		return AppConfig{}, err
 	}
 	local := s.loadLocal()
+	if s.migrateCloudStorage(&shared, &local) {
+		_ = os.MkdirAll(s.dataDir, 0755)
+		_ = s.saveShared(shared)
+		_ = s.saveLocal(local)
+	}
 	cfg := s.merge(shared, local)
 
-	// Persist defaults for any file that does not exist yet (fresh install).
 	_ = os.MkdirAll(s.dataDir, 0755)
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
 		_ = s.saveShared(s.splitShared(cfg))
@@ -92,6 +109,22 @@ func (s *Service) Save(cfg AppConfig) error {
 	}
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
 	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
+
+	shared, err := s.loadShared()
+	if err != nil {
+		return err
+	}
+	local := s.loadLocal()
+	_ = s.migrateCloudStorage(&shared, &local)
+
+	existingProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
+	cfg.CloudProfiles = mergeRuntimeCloudProfiles(existingProfiles, cfg.CloudProfiles, cfg.Cloud)
+	cfg.Cloud = buildRuntimeCloudConfig(sharedCloudState{
+		Provider:            strings.TrimSpace(cfg.Cloud.Provider),
+		Enabled:             cfg.Cloud.Enabled,
+		SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes,
+	}, cfg.CloudProfiles)
+
 	if err := s.saveShared(s.splitShared(cfg)); err != nil {
 		return err
 	}
@@ -103,17 +136,16 @@ func (s *Service) Save(cfg AppConfig) error {
 // or when config.json does not exist yet.
 func (s *Service) maybeMigrate() {
 	if _, err := os.Stat(s.localConfigPath); err == nil {
-		return // already migrated
+		return
 	}
 	data, err := os.ReadFile(s.configPath)
 	if err != nil {
-		return // config.json doesn't exist yet — fresh install
+		return
 	}
 	var legacy legacyAppConfig
 	if err := json.Unmarshal(data, &legacy); err != nil || legacy.SkillsStorageDir == "" {
-		return // not the old format
+		return
 	}
-	// Old format detected: unmarshal full AppConfig and re-save in split format.
 	var old AppConfig
 	if err := json.Unmarshal(data, &old); err != nil {
 		return
@@ -135,6 +167,28 @@ func (s *Service) loadShared() (sharedConfig, error) {
 	if err := json.Unmarshal(data, &sc); err != nil {
 		return sharedConfig{}, err
 	}
+	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
+	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
+	sc.CloudProfiles = normalizeCloudProfiles(sc.CloudProfiles)
+
+	var legacy struct {
+		Cloud CloudConfig `json:"cloud"`
+	}
+	if err := json.Unmarshal(data, &legacy); err == nil {
+		provider := strings.TrimSpace(legacy.Cloud.Provider)
+		if provider != "" {
+			if sc.Cloud.Provider == "" {
+				sc.Cloud.Provider = provider
+			}
+			if len(sc.CloudProfiles) == 0 {
+				sc.CloudProfiles = map[string]CloudProviderConfig{
+					provider: cloudProviderConfigFromCloud(legacy.Cloud),
+				}
+				sc.legacyCloudMigrated = true
+			}
+		}
+	}
+
 	return sc, nil
 }
 
@@ -150,11 +204,14 @@ func (s *Service) loadLocal() localConfig {
 	if lc.SkillsStorageDir == "" {
 		lc.SkillsStorageDir = filepath.Join(s.dataDir, "skills")
 	}
+	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	return lc
 }
 
 func (s *Service) saveShared(sc sharedConfig) error {
 	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
+	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
+	sc.CloudProfiles = splitSharedCloudProfiles(sc.CloudProfiles)
 	data, err := json.MarshalIndent(sc, "", "  ")
 	if err != nil {
 		return err
@@ -163,6 +220,8 @@ func (s *Service) saveShared(sc sharedConfig) error {
 }
 
 func (s *Service) saveLocal(lc localConfig) error {
+	lc.CloudCredentials = nil
+	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	data, err := json.MarshalIndent(lc, "", "  ")
 	if err != nil {
 		return err
@@ -170,7 +229,6 @@ func (s *Service) saveLocal(lc localConfig) error {
 	return os.WriteFile(s.localConfigPath, data, 0644)
 }
 
-// defaultShared returns the default shared config (no paths).
 func (s *Service) defaultShared() sharedConfig {
 	tools := make([]sharedToolConfig, 0, len(builtinTools))
 	for _, name := range builtinTools {
@@ -181,11 +239,9 @@ func (s *Service) defaultShared() sharedConfig {
 		LogLevel:         DefaultLogLevel,
 		RepoScanMaxDepth: DefaultRepoScanMaxDepth,
 		Tools:            tools,
-		Cloud:            CloudConfig{RemotePath: "skillflow/"},
 	}
 }
 
-// defaultLocal returns the default local config using platform-specific paths.
 func (s *Service) defaultLocal() localConfig {
 	tools := make([]localToolConfig, 0, len(builtinTools))
 	for _, name := range builtinTools {
@@ -209,7 +265,6 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 	}
 
 	var tools []ToolConfig
-	// Built-in tools: enabled/name from shared, paths from local (fall back to platform defaults).
 	for _, st := range shared.Tools {
 		lt := localMap[st.Name]
 		scanDirs := lt.ScanDirs
@@ -228,7 +283,6 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 			Custom:   false,
 		})
 	}
-	// Custom tools are stored entirely in local config.
 	for _, lt := range local.Tools {
 		if lt.Custom {
 			tools = append(tools, ToolConfig{
@@ -241,13 +295,15 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		}
 	}
 
+	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
 		SkillsStorageDir:     local.SkillsStorageDir,
 		DefaultCategory:      shared.DefaultCategory,
 		LogLevel:             NormalizeLogLevel(shared.LogLevel),
 		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
 		Tools:                tools,
-		Cloud:                shared.Cloud,
+		Cloud:                buildRuntimeCloudConfig(shared.Cloud, cloudProfiles),
+		CloudProfiles:        cloudProfiles,
 		Proxy:                shared.Proxy,
 		SkippedUpdateVersion: shared.SkippedUpdateVersion,
 	}
@@ -261,12 +317,14 @@ func (s *Service) splitShared(cfg AppConfig) sharedConfig {
 			tools = append(tools, sharedToolConfig{Name: t.Name, Enabled: t.Enabled})
 		}
 	}
+	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return sharedConfig{
 		DefaultCategory:      cfg.DefaultCategory,
 		LogLevel:             NormalizeLogLevel(cfg.LogLevel),
 		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
 		Tools:                tools,
-		Cloud:                cfg.Cloud,
+		Cloud:                sharedCloudState{Provider: strings.TrimSpace(cfg.Cloud.Provider), Enabled: cfg.Cloud.Enabled, SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes},
+		CloudProfiles:        splitSharedCloudProfiles(profiles),
 		Proxy:                cfg.Proxy,
 		SkippedUpdateVersion: cfg.SkippedUpdateVersion,
 	}
@@ -284,8 +342,433 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 			Enabled:  t.Enabled,
 		})
 	}
+	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return localConfig{
-		SkillsStorageDir: cfg.SkillsStorageDir,
-		Tools:            tools,
+		SkillsStorageDir:           cfg.SkillsStorageDir,
+		Tools:                      tools,
+		CloudCredentialsByProvider: splitLocalCloudCredentialsByProvider(profiles),
+	}
+}
+
+func (s *Service) migrateCloudStorage(shared *sharedConfig, local *localConfig) bool {
+	changed := shared.legacyCloudMigrated
+
+	normalizedSharedProfiles := normalizeCloudProfiles(shared.CloudProfiles)
+	if !cloudProfilesEqual(shared.CloudProfiles, normalizedSharedProfiles) {
+		shared.CloudProfiles = normalizedSharedProfiles
+		changed = true
+	}
+
+	normalizedLocalCredentials := normalizeCredentialProfiles(local.CloudCredentialsByProvider)
+	if !credentialProfileMapsEqual(local.CloudCredentialsByProvider, normalizedLocalCredentials) {
+		local.CloudCredentialsByProvider = normalizedLocalCredentials
+		changed = true
+	}
+
+	if len(local.CloudCredentials) > 0 {
+		provider := strings.TrimSpace(shared.Cloud.Provider)
+		if provider != "" {
+			nextCredentials := cloneCredentialProfiles(local.CloudCredentialsByProvider)
+			if nextCredentials == nil {
+				nextCredentials = make(map[string]map[string]string)
+			}
+			nextCredentials[provider] = mergeCredentialMaps(nextCredentials[provider], local.CloudCredentials)
+			local.CloudCredentialsByProvider = normalizeCredentialProfiles(nextCredentials)
+		}
+		local.CloudCredentials = nil
+		changed = true
+	}
+
+	if len(shared.CloudProfiles) > 0 {
+		nextSharedProfiles := cloneCloudProfiles(shared.CloudProfiles)
+		nextLocalCredentials := cloneCredentialProfiles(local.CloudCredentialsByProvider)
+		if nextSharedProfiles == nil {
+			nextSharedProfiles = make(map[string]CloudProviderConfig)
+		}
+		if nextLocalCredentials == nil {
+			nextLocalCredentials = make(map[string]map[string]string)
+		}
+		for provider, profile := range shared.CloudProfiles {
+			sharedCredsProfile := normalizeCloudProviderConfig(provider, profile)
+			sharedCreds := splitSharedCloudCredentials(sharedCredsProfile.Credentials)
+			localCreds := splitLocalCloudCredentials(sharedCredsProfile.Credentials)
+			nextProfile := sharedCredsProfile
+			nextProfile.Credentials = sharedCreds
+			nextSharedProfiles[provider] = nextProfile
+			if len(localCreds) > 0 {
+				nextLocalCredentials[provider] = mergeCredentialMaps(nextLocalCredentials[provider], localCreds)
+			}
+		}
+		nextSharedProfiles = normalizeCloudProfiles(nextSharedProfiles)
+		nextLocalCredentials = normalizeCredentialProfiles(nextLocalCredentials)
+		if !cloudProfilesEqual(shared.CloudProfiles, nextSharedProfiles) {
+			shared.CloudProfiles = nextSharedProfiles
+			changed = true
+		}
+		if !credentialProfileMapsEqual(local.CloudCredentialsByProvider, nextLocalCredentials) {
+			local.CloudCredentialsByProvider = nextLocalCredentials
+			changed = true
+		}
+	}
+
+	return changed
+}
+
+func buildRuntimeCloudConfig(state sharedCloudState, profiles map[string]CloudProviderConfig) CloudConfig {
+	provider := strings.TrimSpace(state.Provider)
+	profile := normalizeCloudProviderConfig(provider, profiles[provider])
+	return CloudConfig{
+		Provider:            provider,
+		Enabled:             state.Enabled,
+		BucketName:          profile.BucketName,
+		RemotePath:          profile.RemotePath,
+		Credentials:         cloneStringMap(profile.Credentials),
+		SyncIntervalMinutes: state.SyncIntervalMinutes,
+	}
+}
+
+func cloudProviderConfigFromCloud(cloud CloudConfig) CloudProviderConfig {
+	provider := strings.TrimSpace(cloud.Provider)
+	return normalizeCloudProviderConfig(provider, CloudProviderConfig{
+		BucketName:  strings.TrimSpace(cloud.BucketName),
+		RemotePath:  cloud.RemotePath,
+		Credentials: cloneStringMap(cloud.Credentials),
+	})
+}
+
+func normalizeCloudProviderConfig(provider string, profile CloudProviderConfig) CloudProviderConfig {
+	normalized := CloudProviderConfig{
+		BucketName:  strings.TrimSpace(profile.BucketName),
+		RemotePath:  NormalizeCloudRemotePath(profile.RemotePath),
+		Credentials: cloneStringMap(profile.Credentials),
+	}
+	switch strings.TrimSpace(provider) {
+	case "tencent":
+		normalized = normalizeTencentCloudProviderConfig(normalized)
+	}
+	if len(normalized.Credentials) == 0 {
+		normalized.Credentials = nil
+	}
+	return normalized
+}
+
+func normalizeTencentCloudProviderConfig(profile CloudProviderConfig) CloudProviderConfig {
+	profile.BucketName = normalizeTencentBucketNameValue(profile.BucketName)
+	credentials := cloneStringMap(profile.Credentials)
+
+	if endpoint := normalizeTencentEndpointValue(credentials["endpoint"]); endpoint != "" {
+		credentials["endpoint"] = endpoint
+	} else {
+		delete(credentials, "endpoint")
+	}
+	delete(credentials, "bucket_url")
+
+	if len(credentials) == 0 {
+		profile.Credentials = nil
+		return profile
+	}
+	profile.Credentials = credentials
+	return profile
+}
+
+func normalizeTencentBucketNameValue(raw string) string {
+	bucket := strings.TrimSpace(raw)
+	if bucket == "" {
+		return ""
+	}
+	if isValidTencentBucketNameForConfig(bucket) {
+		return bucket
+	}
+	if bucketName, _ := splitTencentBucketURLParts(bucket); bucketName != "" {
+		return bucketName
+	}
+	return bucket
+}
+
+func normalizeTencentEndpointValue(raw string) string {
+	return normalizeConfigHostLikeValue(raw)
+}
+
+func splitTencentBucketURLParts(raw string) (string, string) {
+	host := normalizeConfigHostLikeValue(raw)
+	if host == "" {
+		return "", ""
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) >= 5 && parts[1] == "cos" && isValidTencentBucketNameForConfig(parts[0]) {
+		return parts[0], strings.Join(parts[1:], ".")
+	}
+	return "", ""
+}
+
+func normalizeConfigHostLikeValue(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	if strings.Contains(value, "://") {
+		if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
+			value = parsed.Host
+		}
+	}
+	value = strings.TrimPrefix(value, "//")
+	if slash := strings.Index(value, "/"); slash >= 0 {
+		value = value[:slash]
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	return strings.TrimSuffix(strings.TrimSpace(value), ".")
+}
+
+func isValidTencentBucketNameForConfig(name string) bool {
+	if len(name) < 3 || len(name) > 63 {
+		return false
+	}
+	for i, r := range name {
+		isLower := r >= 'a' && r <= 'z'
+		isDigit := r >= '0' && r <= '9'
+		isHyphen := r == '-'
+		if !isLower && !isDigit && !isHyphen {
+			return false
+		}
+		if (i == 0 || i == len(name)-1) && !isLower && !isDigit {
+			return false
+		}
+	}
+	return true
+}
+
+func mergeRuntimeCloudProfiles(existing map[string]CloudProviderConfig, incoming map[string]CloudProviderConfig, active CloudConfig) map[string]CloudProviderConfig {
+	profiles := cloneCloudProfiles(existing)
+	if profiles == nil {
+		profiles = make(map[string]CloudProviderConfig)
+	}
+	for provider, profile := range incoming {
+		provider = strings.TrimSpace(provider)
+		if provider == "" {
+			continue
+		}
+		profiles[provider] = normalizeCloudProviderConfig(provider, profile)
+	}
+	if provider := strings.TrimSpace(active.Provider); provider != "" {
+		profiles[provider] = cloudProviderConfigFromCloud(active)
+	}
+	return normalizeCloudProfiles(profiles)
+}
+
+func mergeCloudProfiles(sharedProfiles map[string]CloudProviderConfig, localCredentialsByProvider map[string]map[string]string) map[string]CloudProviderConfig {
+	profiles := cloneCloudProfiles(sharedProfiles)
+	if profiles == nil {
+		profiles = make(map[string]CloudProviderConfig)
+	}
+	for provider, credentials := range localCredentialsByProvider {
+		provider = strings.TrimSpace(provider)
+		if provider == "" {
+			continue
+		}
+		profile := profiles[provider]
+		profile.Credentials = mergeCredentialMaps(profile.Credentials, credentials)
+		profiles[provider] = normalizeCloudProviderConfig(provider, profile)
+	}
+	return normalizeCloudProfiles(profiles)
+}
+
+func splitSharedCloudProfiles(profiles map[string]CloudProviderConfig) map[string]CloudProviderConfig {
+	sharedProfiles := make(map[string]CloudProviderConfig)
+	for provider, profile := range profiles {
+		provider = strings.TrimSpace(provider)
+		if provider == "" {
+			continue
+		}
+		sharedProfile := normalizeCloudProviderConfig(provider, profile)
+		sharedProfile.Credentials = splitSharedCloudCredentials(sharedProfile.Credentials)
+		if sharedProfile.RemotePath == "" {
+			sharedProfile.RemotePath = DefaultCloudRemotePath
+		}
+		sharedProfiles[provider] = sharedProfile
+	}
+	if len(sharedProfiles) == 0 {
+		return nil
+	}
+	return sharedProfiles
+}
+
+func splitLocalCloudCredentialsByProvider(profiles map[string]CloudProviderConfig) map[string]map[string]string {
+	localProfiles := make(map[string]map[string]string)
+	for provider, profile := range profiles {
+		provider = strings.TrimSpace(provider)
+		if provider == "" {
+			continue
+		}
+		normalizedProfile := normalizeCloudProviderConfig(provider, profile)
+		credentials := splitLocalCloudCredentials(normalizedProfile.Credentials)
+		if len(credentials) == 0 {
+			continue
+		}
+		localProfiles[provider] = credentials
+	}
+	if len(localProfiles) == 0 {
+		return nil
+	}
+	return localProfiles
+}
+
+func splitSharedCloudCredentials(credentials map[string]string) map[string]string {
+	shared := make(map[string]string)
+	for key, value := range credentials {
+		if isSharedCloudCredentialKey(key) {
+			shared[key] = value
+		}
+	}
+	if len(shared) == 0 {
+		return nil
+	}
+	return shared
+}
+
+func splitLocalCloudCredentials(credentials map[string]string) map[string]string {
+	local := make(map[string]string)
+	for key, value := range credentials {
+		if !isSharedCloudCredentialKey(key) {
+			local[key] = value
+		}
+	}
+	if len(local) == 0 {
+		return nil
+	}
+	return local
+}
+
+func normalizeCloudProfiles(profiles map[string]CloudProviderConfig) map[string]CloudProviderConfig {
+	normalized := make(map[string]CloudProviderConfig)
+	for provider, profile := range profiles {
+		provider = strings.TrimSpace(provider)
+		if provider == "" {
+			continue
+		}
+		normalized[provider] = normalizeCloudProviderConfig(provider, profile)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func normalizeCredentialProfiles(profiles map[string]map[string]string) map[string]map[string]string {
+	normalized := make(map[string]map[string]string)
+	for provider, credentials := range profiles {
+		provider = strings.TrimSpace(provider)
+		if provider == "" {
+			continue
+		}
+		copied := cloneStringMap(credentials)
+		if len(copied) == 0 {
+			continue
+		}
+		normalized[provider] = copied
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func cloneCloudProfiles(profiles map[string]CloudProviderConfig) map[string]CloudProviderConfig {
+	cloned := make(map[string]CloudProviderConfig)
+	for provider, profile := range profiles {
+		cloned[provider] = normalizeCloudProviderConfig(provider, profile)
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
+}
+
+func cloneCredentialProfiles(profiles map[string]map[string]string) map[string]map[string]string {
+	cloned := make(map[string]map[string]string)
+	for provider, credentials := range profiles {
+		copied := cloneStringMap(credentials)
+		if len(copied) == 0 {
+			continue
+		}
+		cloned[provider] = copied
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func mergeCredentialMaps(mapsToMerge ...map[string]string) map[string]string {
+	merged := make(map[string]string)
+	for _, current := range mapsToMerge {
+		for key, value := range current {
+			merged[key] = value
+		}
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
+}
+
+func cloudProfilesEqual(left, right map[string]CloudProviderConfig) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for provider, leftProfile := range left {
+		rightProfile, ok := right[provider]
+		if !ok {
+			return false
+		}
+		if leftProfile.BucketName != rightProfile.BucketName || leftProfile.RemotePath != rightProfile.RemotePath || !credentialMapsEqual(leftProfile.Credentials, rightProfile.Credentials) {
+			return false
+		}
+	}
+	return true
+}
+
+func credentialProfileMapsEqual(left, right map[string]map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for provider, leftCredentials := range left {
+		if !credentialMapsEqual(leftCredentials, right[provider]) {
+			return false
+		}
+	}
+	return true
+}
+
+func credentialMapsEqual(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, value := range left {
+		if right[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func isSharedCloudCredentialKey(key string) bool {
+	switch key {
+	case "endpoint", "repo_url", "branch", "username":
+		return true
+	default:
+		return false
 	}
 }

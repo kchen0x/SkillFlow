@@ -19,6 +19,14 @@ type CloudConfig struct {
 	SyncIntervalMinutes int               `json:"syncIntervalMinutes"` // 0 = on mutation only
 }
 
+type CloudProviderConfig struct {
+	BucketName  string            `json:"bucketName"`
+	RemotePath  string            `json:"remotePath"`
+	Credentials map[string]string `json:"credentials"`
+}
+
+const DefaultCloudRemotePath = "skillflow/"
+
 // ProxyMode controls how outbound HTTP requests are routed.
 // "none" = direct, "system" = read HTTP_PROXY/HTTPS_PROXY env vars, "manual" = use URL field.
 type ProxyMode string
@@ -35,14 +43,15 @@ type ProxyConfig struct {
 }
 
 type AppConfig struct {
-	SkillsStorageDir     string       `json:"skillsStorageDir"`
-	DefaultCategory      string       `json:"defaultCategory"`
-	LogLevel             string       `json:"logLevel"` // "debug" | "info" | "error"
-	RepoScanMaxDepth     int          `json:"repoScanMaxDepth"`
-	Tools                []ToolConfig `json:"tools"`
-	Cloud                CloudConfig  `json:"cloud"`
-	Proxy                ProxyConfig  `json:"proxy"`
-	SkippedUpdateVersion string       `json:"skippedUpdateVersion,omitempty"` // version tag to suppress startup update prompt
+	SkillsStorageDir     string                         `json:"skillsStorageDir"`
+	DefaultCategory      string                         `json:"defaultCategory"`
+	LogLevel             string                         `json:"logLevel"` // "debug" | "info" | "error"
+	RepoScanMaxDepth     int                            `json:"repoScanMaxDepth"`
+	Tools                []ToolConfig                   `json:"tools"`
+	Cloud                CloudConfig                    `json:"cloud"`
+	CloudProfiles        map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
+	Proxy                ProxyConfig                    `json:"proxy"`
+	SkippedUpdateVersion string                         `json:"skippedUpdateVersion,omitempty"` // version tag to suppress startup update prompt
 }
 
 const (
@@ -74,4 +83,28 @@ func NormalizeRepoScanMaxDepth(depth int) int {
 		return MaxRepoScanMaxDepth
 	}
 	return depth
+}
+
+func NormalizeCloudRemotePath(path string) string {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(path, "\\", "/"))
+	if trimmed == "" {
+		return DefaultCloudRemotePath
+	}
+
+	parts := make([]string, 0)
+	for _, part := range strings.Split(trimmed, "/") {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." {
+			continue
+		}
+		parts = append(parts, part)
+	}
+
+	if len(parts) == 0 {
+		return DefaultCloudRemotePath
+	}
+	if parts[len(parts)-1] != "skillflow" {
+		parts = append(parts, "skillflow")
+	}
+	return strings.Join(parts, "/") + "/"
 }

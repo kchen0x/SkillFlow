@@ -40,7 +40,8 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
         ...其他文件
   meta/                ← JSON 附属文件（与 skills/ 同级）
     <uuid>.json        ← 每个 Skill 一个，包含 Skill 结构体
-  config.json          ← AppConfig（工具、云端、代理）
+  config.json          ← 可同步的应用配置（工具、当前云状态、按服务商分组的云端非敏感配置、代理）
+  config_local.json    ← 仅本地保存的路径配置 + 按服务商分组的云端敏感凭据
   star_repos.json      ← StarredRepo[] 数组
   cache/               ← 收藏仓库的临时克隆目录
     <cached-repo-dirs>/
@@ -177,8 +178,14 @@ type CloudConfig struct {
     Provider    string            // "aliyun"、"tencent"、"huawei"、"git"
     Enabled     bool
     BucketName  string
-    RemotePath  string            // 如 "skillflow/"
-    Credentials map[string]string // 各服务商特定的凭据
+    RemotePath  string            // 规范化后的备份前缀，始终以 "skillflow/" 结尾
+    Credentials map[string]string // 运行时合并视图；非敏感字段在 config.json，敏感凭据在 config_local.json
+}
+
+type CloudProviderConfig struct {
+    BucketName  string
+    RemotePath  string
+    Credentials map[string]string // 某个服务商的运行时合并视图
 }
 
 type ProxyConfig struct {
@@ -192,6 +199,7 @@ type AppConfig struct {
     LogLevel             string        // "debug" | "info" | "error"
     Tools                []ToolConfig
     Cloud                CloudConfig
+    CloudProfiles        map[string]CloudProviderConfig // 各服务商独立持久化的配置
     Proxy                ProxyConfig
     SkippedUpdateVersion string        // 用于抑制启动时更新提示的版本 tag
 }

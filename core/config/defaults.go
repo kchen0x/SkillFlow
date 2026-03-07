@@ -81,6 +81,6 @@ func DefaultConfig(dataDir string) AppConfig {
 		LogLevel:         DefaultLogLevel,
 		RepoScanMaxDepth: DefaultRepoScanMaxDepth,
 		Tools:            tools,
-		Cloud:            CloudConfig{RemotePath: "skillflow/"},
+		Cloud:            CloudConfig{RemotePath: DefaultCloudRemotePath},
 	}
 }

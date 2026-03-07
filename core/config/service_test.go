@@ -92,6 +92,33 @@ func TestSaveAndLoadConfigNormalizesRepoScanMaxDepth(t *testing.T) {
 	assert.Equal(t, config.DefaultRepoScanMaxDepth, loaded.RepoScanMaxDepth)
 }
 
+func TestSaveAndLoadConfigNormalizesCloudRemotePath(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Cloud.Provider = "aliyun"
+	cfg.Cloud.RemotePath = "team-a/nightly"
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "team-a/nightly/skillflow/", loaded.Cloud.RemotePath)
+	assert.Equal(t, "team-a/nightly/skillflow/", loaded.CloudProfiles["aliyun"].RemotePath)
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sharedData), `"cloudProfiles"`)
+	assert.Contains(t, string(sharedData), `"remotePath": "team-a/nightly/skillflow/"`)
+
+	cfg.Cloud.RemotePath = "skillflow/"
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err = svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, config.DefaultCloudRemotePath, loaded.Cloud.RemotePath)
+}
+
 func TestConfigFileCreatedOnFirstLoad(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)
@@ -125,6 +152,176 @@ func TestSaveCreatesLocalConfigWithPaths(t *testing.T) {
 	assert.Contains(t, string(localData), "skillsStorageDir")
 }
 
+func TestCloudSensitiveCredentialsStoredOnlyInLocalConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Cloud.Provider = "aliyun"
+	cfg.Cloud.Enabled = true
+	cfg.Cloud.BucketName = "skillflow-bucket"
+	cfg.Cloud.RemotePath = "skillflow/"
+	cfg.Cloud.Credentials = map[string]string{
+		"access_key_id":     "test-ak",
+		"access_key_secret": "test-sk",
+		"endpoint":          "oss-cn-hangzhou.aliyuncs.com",
+	}
+
+	require.NoError(t, svc.Save(cfg))
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sharedData), "cloudProfiles")
+	assert.Contains(t, string(sharedData), "bucketName")
+	assert.Contains(t, string(sharedData), "endpoint")
+	assert.NotContains(t, string(sharedData), "access_key_id")
+	assert.NotContains(t, string(sharedData), "access_key_secret")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), "cloudCredentialsByProvider")
+	assert.Contains(t, string(localData), "aliyun")
+	assert.Contains(t, string(localData), "access_key_id")
+	assert.Contains(t, string(localData), "access_key_secret")
+	assert.NotContains(t, string(localData), "endpoint")
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, cfg.Cloud.Credentials, loaded.Cloud.Credentials)
+	assert.Equal(t, cfg.Cloud.Credentials, loaded.CloudProfiles["aliyun"].Credentials)
+}
+
+func TestCloudProviderProfilesPersistSeparately(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Cloud.Provider = "aliyun"
+	cfg.Cloud.Enabled = true
+	cfg.Cloud.BucketName = "aliyun-bucket"
+	cfg.Cloud.RemotePath = "nightly"
+	cfg.Cloud.Credentials = map[string]string{
+		"access_key_id":     "aliyun-ak",
+		"access_key_secret": "aliyun-sk",
+		"endpoint":          "oss-cn-hangzhou.aliyuncs.com",
+	}
+	cfg.CloudProfiles = map[string]config.CloudProviderConfig{
+		"git": {
+			RemotePath: "skillflow/",
+			Credentials: map[string]string{
+				"repo_url": "https://example.com/org/repo.git",
+				"branch":   "main",
+				"username": "alice",
+				"token":    "git-token",
+			},
+		},
+		"tencent": {
+			BucketName: "bucket-125000",
+			RemotePath: "team-b/backup",
+			Credentials: map[string]string{
+				"endpoint":   "bucket-125000.cos.ap-shanghai.myqcloud.com",
+				"secret_id":  "tx-id",
+				"secret_key": "tx-key",
+			},
+		},
+	}
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "aliyun", loaded.Cloud.Provider)
+	assert.Equal(t, "aliyun-bucket", loaded.Cloud.BucketName)
+	assert.Equal(t, "nightly/skillflow/", loaded.Cloud.RemotePath)
+	assert.Equal(t, "aliyun-sk", loaded.CloudProfiles["aliyun"].Credentials["access_key_secret"])
+	assert.Equal(t, "git-token", loaded.CloudProfiles["git"].Credentials["token"])
+	assert.Equal(t, "https://example.com/org/repo.git", loaded.CloudProfiles["git"].Credentials["repo_url"])
+	assert.Equal(t, "bucket-125000", loaded.CloudProfiles["tencent"].BucketName)
+	assert.Equal(t, "tx-key", loaded.CloudProfiles["tencent"].Credentials["secret_key"])
+	assert.Equal(t, "bucket-125000.cos.ap-shanghai.myqcloud.com", loaded.CloudProfiles["tencent"].Credentials["endpoint"])
+	assert.Equal(t, "team-b/backup/skillflow/", loaded.CloudProfiles["tencent"].RemotePath)
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sharedData), "cloudProfiles")
+	assert.Contains(t, string(sharedData), "aliyun-bucket")
+	assert.Contains(t, string(sharedData), "repo_url")
+	assert.Contains(t, string(sharedData), `"endpoint": "bucket-125000.cos.ap-shanghai.myqcloud.com"`)
+	assert.NotContains(t, string(sharedData), "bucket_url")
+	assert.NotContains(t, string(sharedData), "aliyun-sk")
+	assert.NotContains(t, string(sharedData), "git-token")
+	assert.NotContains(t, string(sharedData), "tx-key")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), "cloudCredentialsByProvider")
+	assert.Contains(t, string(localData), `"aliyun"`)
+	assert.Contains(t, string(localData), `"git"`)
+	assert.Contains(t, string(localData), `"tencent"`)
+	assert.Contains(t, string(localData), "aliyun-sk")
+	assert.Contains(t, string(localData), "git-token")
+	assert.Contains(t, string(localData), "tx-key")
+	assert.NotContains(t, string(localData), "repo_url")
+	assert.NotContains(t, string(localData), "bucket_url")
+	assert.NotContains(t, string(localData), "endpoint")
+}
+
+func TestLoadMigratesCloudSecretsOutOfSharedConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	shared := `{
+	  "defaultCategory": "Default",
+	  "logLevel": "info",
+	  "repoScanMaxDepth": 5,
+	  "tools": [],
+	  "cloud": {
+	    "provider": "git",
+	    "enabled": true,
+	    "remotePath": "skillflow/",
+	    "credentials": {
+	      "repo_url": "https://example.com/org/repo.git",
+	      "branch": "main",
+	      "username": "alice",
+	      "token": "secret-token"
+	    }
+	  },
+	  "proxy": {
+	    "mode": "none",
+	    "url": ""
+	  }
+	}`
+	local := `{
+	  "skillsStorageDir": "` + filepath.ToSlash(filepath.Join(dir, "skills")) + `",
+	  "tools": []
+	}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(shared), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(local), 0644))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/org/repo.git", loaded.Cloud.Credentials["repo_url"])
+	assert.Equal(t, "main", loaded.Cloud.Credentials["branch"])
+	assert.Equal(t, "alice", loaded.Cloud.Credentials["username"])
+	assert.Equal(t, "secret-token", loaded.Cloud.Credentials["token"])
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sharedData), "cloudProfiles")
+	assert.Contains(t, string(sharedData), "repo_url")
+	assert.Contains(t, string(sharedData), "branch")
+	assert.Contains(t, string(sharedData), "username")
+	assert.NotContains(t, string(sharedData), "secret-token")
+	assert.NotContains(t, string(sharedData), `"token"`)
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), "cloudCredentialsByProvider")
+	assert.Contains(t, string(localData), `"git"`)
+	assert.Contains(t, string(localData), "secret-token")
+	assert.NotContains(t, string(localData), "repo_url")
+	assert.NotContains(t, string(localData), "branch")
+	assert.NotContains(t, string(localData), "username")
+	assert.Contains(t, string(localData), "skillsStorageDir")
+}
+
 func TestMigrationFromLegacyConfig(t *testing.T) {
 	dir := t.TempDir()
 	// Write a legacy config.json that includes skillsStorageDir inline
@@ -144,4 +341,32 @@ func TestMigrationFromLegacyConfig(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(dir, "config.json"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "skillsStorageDir")
+}
+
+func TestSaveAndLoadTencentEndpointWithBucketHostPreservesBucketField(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Cloud.Provider = "tencent"
+	cfg.Cloud.Enabled = true
+	cfg.Cloud.BucketName = "shinerio-1258556983"
+	cfg.Cloud.RemotePath = "nightly"
+	cfg.Cloud.Credentials = map[string]string{
+		"secret_id":  "tx-id",
+		"secret_key": "tx-key",
+		"endpoint":   "shinerio-1258556983.cos.ap-guangzhou.myqcloud.com",
+	}
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "shinerio-1258556983", loaded.Cloud.BucketName)
+	assert.Equal(t, "shinerio-1258556983.cos.ap-guangzhou.myqcloud.com", loaded.Cloud.Credentials["endpoint"])
+	assert.Equal(t, "nightly/skillflow/", loaded.Cloud.RemotePath)
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sharedData), `"bucketName": "shinerio-1258556983"`)
+	assert.Contains(t, string(sharedData), `"endpoint": "shinerio-1258556983.cos.ap-guangzhou.myqcloud.com"`)
 }

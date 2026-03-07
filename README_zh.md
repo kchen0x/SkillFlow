@@ -22,7 +22,7 @@
 | **GitHub 安装** | 克隆任意仓库，递归发现仓库内嵌套的 Skill 候选项，并一键选择安装；后续扫描自动拉取更新 |
 | **跨工具同步** | 推送或拉取 Skills 到/从 Claude Code、OpenCode、Codex、Gemini CLI、OpenClaw 及自定义工具；支持搜索 / 排序筛选候选 Skill，并逐条处理冲突 |
 | **仓库收藏** | 关注 Git 仓库，无需导入即可递归浏览和使用仓库内嵌套的 Skills；平铺与仓库详情视图支持搜索和字母排序 |
-| **云端备份** | 将 Skill 库镜像至阿里云 OSS、腾讯云 COS、华为云 OBS 或任意 Git 仓库 |
+| **云端备份** | 将 Skill 库镜像至阿里云 OSS、腾讯云 COS、华为云 OBS 或任意 Git 仓库，支持自定义对象存储远程路径预览、按服务商独立保存配置，并让敏感云凭据仅保存在本地 |
 | **更新检测** | 自动检测 GitHub 来源 Skills 的新提交；一键更新 |
 | **应用自动更新** | 弹出模态对话框提示新版本；Windows 支持一键下载并重启；macOS 链接至 GitHub Releases 页面；用户可跳过当前版本以抑制后续启动弹窗 |
 | **托盘驻留** | 点击窗口关闭按钮后应用继续在后台运行；macOS 会隐藏 Dock 图标并仅保留顶部状态栏黑白图标入口，Windows 驻留系统托管区 |
@@ -55,6 +55,10 @@ my-skill/
 
 - 可同步的设置和元数据保存在应用数据目录中，并使用相对路径保证跨平台恢复正确。
 - 仅本机使用的文件系统路径（如 `SkillsStorageDir`、工具扫描/推送目录）保存在 `config_local.json` 中，不参与备份/同步。
+- 敏感云凭据（如 Access Key ID、Secret Key、访问令牌）只保存在 `config_local.json` 中按服务商分组的本地配置里；可同步的 `config.json` 仅保留存储桶、Endpoint、仓库地址、分支等非敏感云配置。
+- 对象存储服务商支持自定义父级 `remotePath`；最终备份前缀始终会渲染并保存为 `<存储桶>/<remotePath>/skillflow/`（若父级路径为空，则为 `<存储桶>/skillflow/`）。
+- 每个云服务商都会保留各自独立的存储桶 / 路径 / 凭据配置，因此在设置中切换服务商时不会覆盖其他服务商的值。
+- 阿里云 OSS、腾讯云 COS、华为云 OBS 使用相同的存储桶 + Endpoint 配置模型。对于腾讯云 COS，存储桶始终来自单独的存储桶输入框，而 Endpoint 字段既可填写纯 Endpoint host，也可填写完整桶域名/URL，并会按用户输入形式保留。
 - 应用数据目录：
   - macOS：`~/Library/Application Support/SkillFlow/`
   - Windows：`%USERPROFILE%\.skillflow\`
@@ -63,10 +67,10 @@ my-skill/
 
 | 云服务商 | 必填字段 |
 |----------|---------|
-| 阿里云 OSS | Access Key ID、Access Key Secret、Endpoint |
-| 腾讯云 COS | SecretId、SecretKey、Region |
-| 华为云 OBS | Access Key、Secret Key、Endpoint |
-| Git 仓库 | 仓库地址、分支、用户名、访问令牌 |
+| 阿里云 OSS | Access Key ID（仅本地）、Access Key Secret（仅本地）、Endpoint（同步） |
+| 腾讯云 COS | SecretId（仅本地）、SecretKey（仅本地）、Endpoint（同步） |
+| 华为云 OBS | Access Key（仅本地）、Secret Key（仅本地）、Endpoint（同步） |
+| Git 仓库 | 仓库地址（同步）、分支（同步）、用户名（同步）、访问令牌（仅本地） |
 
 ## 参与贡献 & 自行构建
 

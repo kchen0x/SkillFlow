@@ -48,7 +48,7 @@ const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
   tencent: {
     secret_id: 'settings.cloudFieldSecretId',
     secret_key: 'settings.cloudFieldSecretKey',
-    bucket_url: 'settings.cloudFieldBucketUrl',
+    endpoint: 'settings.cloudFieldEndpoint',
   },
   huawei: {
     access_key: 'settings.cloudFieldAccessKey',
@@ -66,6 +66,7 @@ const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
 const defaultRepoScanMaxDepth = 5
 const minRepoScanMaxDepth = 1
 const maxRepoScanMaxDepth = 20
+const CLOUD_REMOTE_ROOT_DIR = 'skillflow'
 
 function clampRepoScanMaxDepth(value: number) {
   if (!Number.isFinite(value) || value < minRepoScanMaxDepth) {
@@ -85,6 +86,81 @@ function getCloudProviderDisplayName(name: string, t: (key: TranslationKey) => s
 function getCloudFieldLabel(providerName: string | undefined, fieldKey: string, fallback: string, t: (key: TranslationKey) => string) {
   const key = providerName ? CLOUD_FIELD_LABEL_KEYS[providerName]?.[fieldKey] : undefined
   return key ? t(key) : fallback
+}
+
+function splitCloudRemoteSegments(value: string | undefined) {
+  return (value ?? '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .map(part => part.trim())
+    .filter(part => part && part !== '.')
+}
+
+function getCloudRemotePathInputValue(storedRemotePath: string | undefined) {
+  const parts = splitCloudRemoteSegments(storedRemotePath)
+  if (parts[parts.length - 1] === CLOUD_REMOTE_ROOT_DIR) {
+    return parts.slice(0, -1).join('/')
+  }
+  return parts.join('/')
+}
+
+function buildStoredCloudRemotePath(inputValue: string | undefined) {
+  const parts = splitCloudRemoteSegments(inputValue)
+  if (parts[parts.length - 1] !== CLOUD_REMOTE_ROOT_DIR) {
+    parts.push(CLOUD_REMOTE_ROOT_DIR)
+  }
+  return `${parts.join('/')}/`
+}
+
+function buildCloudBackupPreviewPath(bucketName: string | undefined, storedRemotePath: string | undefined, bucketPlaceholder: string) {
+  const bucket = (bucketName ?? '').trim() || bucketPlaceholder
+  return `${bucket}/${buildStoredCloudRemotePath(getCloudRemotePathInputValue(storedRemotePath))}`
+}
+
+function buildEmptyCloudProfile() {
+  return {
+    bucketName: '',
+    remotePath: buildStoredCloudRemotePath(''),
+    credentials: {} as Record<string, string>,
+  }
+}
+
+function getCloudProfileDraft(source: any, providerName: string) {
+  const profile = source?.cloudProfiles?.[providerName] ?? buildEmptyCloudProfile()
+  return {
+    bucketName: profile.bucketName ?? '',
+    remotePath: profile.remotePath ?? buildStoredCloudRemotePath(''),
+    credentials: { ...(profile.credentials ?? {}) },
+  }
+}
+
+function syncActiveCloudProfile(source: any) {
+  const provider = source?.cloud?.provider
+  if (!provider) {
+    return source
+  }
+  return {
+    ...source,
+    cloudProfiles: {
+      ...(source?.cloudProfiles ?? {}),
+      [provider]: {
+        bucketName: source?.cloud?.bucketName ?? '',
+        remotePath: source?.cloud?.remotePath ?? buildStoredCloudRemotePath(''),
+        credentials: { ...(source?.cloud?.credentials ?? {}) },
+      },
+    },
+  }
+}
+
+function buildCloudFromProfile(source: any, providerName: string) {
+  const profile = getCloudProfileDraft(source, providerName)
+  return {
+    ...source?.cloud,
+    provider: providerName,
+    bucketName: profile.bucketName,
+    remotePath: profile.remotePath,
+    credentials: profile.credentials,
+  }
 }
 
 function ThemeOptionCard({ option, active, onSelect }: { option: ThemeOption; active: boolean; onSelect: (theme: Theme) => void }) {
@@ -304,7 +380,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     Promise.all([GetConfig(), ListCloudProviders(), GetAppVersion(), GetLogDir()]).then(([c, p, v, logPath]) => {
-      setCfg(c)
+      setCfg(syncActiveCloudProfile(c))
       setProviders(p ?? [])
       setAppVersion(v as string)
       setLogDir(logPath as string)
@@ -330,8 +406,20 @@ export default function SettingsPage() {
 
   const save = async () => {
     setSaving(true)
-    await SaveConfig(cfg)
+    const nextCfg = syncActiveCloudProfile(cfg)
+    await SaveConfig(nextCfg)
+    setCfg(nextCfg)
     setSaving(false)
+  }
+
+  const updateActiveCloud = (patch: Record<string, any>) => {
+    setCfg((prev: any) => syncActiveCloudProfile({
+      ...prev,
+      cloud: {
+        ...prev.cloud,
+        ...patch,
+      },
+    }))
   }
 
   const updateTool = (name: string, field: string, value: any) => {
@@ -393,6 +481,8 @@ export default function SettingsPage() {
 
   const selectedProvider = providers.find((p: any) => p.name === cfg?.cloud?.provider)
   const proxyMode: ProxyMode = (cfg?.proxy?.Mode as ProxyMode) || 'none'
+  const cloudRemotePathInput = getCloudRemotePathInputValue(cfg?.cloud?.remotePath)
+  const cloudBackupPreviewPath = buildCloudBackupPreviewPath(cfg?.cloud?.bucketName, cfg?.cloud?.remotePath, t('settings.remotePathBucketPlaceholder'))
 
   if (!cfg) return <div className="p-8" style={{ color: 'var(--text-muted)' }}>{t('common.loading')}</div>
 
@@ -544,7 +634,7 @@ export default function SettingsPage() {
 
               {tool.custom && (
                 <button
-                  onClick={async () => { await RemoveCustomTool(tool.name); const c = await GetConfig(); setCfg(c) }}
+                  onClick={async () => { await RemoveCustomTool(tool.name); const c = await GetConfig(); setCfg(syncActiveCloudProfile(c)) }}
                   className="mt-2 text-xs flex items-center gap-1 transition-colors"
                   style={{ color: 'var(--color-error)' }}
                 >
@@ -586,7 +676,7 @@ export default function SettingsPage() {
                 onClick={async () => {
                   if (newTool.name && newTool.pushDir) {
                     await AddCustomTool(newTool.name, newTool.pushDir)
-                    const c = await GetConfig(); setCfg(c)
+                    const c = await GetConfig(); setCfg(syncActiveCloudProfile(c))
                     setNewTool({ name: '', pushDir: '' })
                   }
                 }}
@@ -608,7 +698,13 @@ export default function SettingsPage() {
               {providers.map((p: any) => (
                 <button
                   key={p.name}
-                  onClick={() => setCfg((prev: any) => ({ ...prev, cloud: { ...prev.cloud, provider: p.name } }))}
+                  onClick={() => setCfg((prev: any) => {
+                    const synced = syncActiveCloudProfile(prev)
+                    return {
+                      ...synced,
+                      cloud: buildCloudFromProfile(synced, p.name),
+                    }
+                  })}
                   className="px-4 py-2 rounded-lg text-sm transition-all duration-200"
                   style={cfg.cloud?.provider === p.name ? {
                     background: 'var(--accent-glow)',
@@ -630,14 +726,52 @@ export default function SettingsPage() {
           {selectedProvider && (
             <>
               {cfg.cloud?.provider !== 'git' && (
-                <div>
-                  <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.bucket')}</p>
-                  <input
-                    value={cfg.cloud?.bucketName ?? ''}
-                    onChange={e => setCfg((p: any) => ({ ...p, cloud: { ...p.cloud, bucketName: e.target.value } }))}
-                    className="input-base"
-                  />
-                </div>
+                <>
+                  <div>
+                    <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.bucket')}</p>
+                    <input
+                      value={cfg.cloud?.bucketName ?? ''}
+                      onChange={e => updateActiveCloud({ bucketName: e.target.value })}
+                      className="input-base"
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.remotePath')}</p>
+                    <input
+                      value={cloudRemotePathInput}
+                      onChange={e => updateActiveCloud({ remotePath: buildStoredCloudRemotePath(e.target.value) })}
+                      placeholder="team-a/nightly"
+                      className="input-base font-mono"
+                    />
+                    <p className="mt-2 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+                      {t('settings.remotePathHint')}
+                    </p>
+                  </div>
+
+                  <div
+                    className="relative overflow-hidden rounded-2xl px-4 py-3"
+                    style={{
+                      background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-glow) 58%, transparent) 0%, color-mix(in srgb, var(--bg-elevated) 92%, transparent) 100%)',
+                      border: '1px solid color-mix(in srgb, var(--border-accent) 68%, var(--border-base) 32%)',
+                      boxShadow: 'var(--shadow-card)',
+                    }}
+                  >
+                    <div
+                      className="pointer-events-none absolute inset-y-0 right-0 w-28"
+                      style={{
+                        background: 'radial-gradient(circle at top right, color-mix(in srgb, var(--accent-primary) 28%, transparent) 0%, transparent 72%)',
+                        opacity: 0.8,
+                      }}
+                    />
+                    <p className="text-xs uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>
+                      {t('settings.remotePathPreview')}
+                    </p>
+                    <p className="mt-2 text-sm font-mono break-all" style={{ color: 'var(--text-primary)' }}>
+                      {cloudBackupPreviewPath}
+                    </p>
+                  </div>
+                </>
               )}
               {selectedProvider.fields.map((f: any) => (
                 <div key={f.key}>
@@ -646,9 +780,9 @@ export default function SettingsPage() {
                     type={f.secret ? 'password' : 'text'}
                     placeholder={f.placeholder ?? ''}
                     value={cfg.cloud?.credentials?.[f.key] ?? ''}
-                    onChange={e => setCfg((p: any) => ({
-                      ...p, cloud: { ...p.cloud, credentials: { ...p.cloud?.credentials, [f.key]: e.target.value } }
-                    }))}
+                    onChange={e => updateActiveCloud({
+                      credentials: { ...(cfg.cloud?.credentials ?? {}), [f.key]: e.target.value },
+                    })}
                     className="input-base font-mono"
                   />
                 </div>
@@ -659,14 +793,14 @@ export default function SettingsPage() {
                   type="number"
                   min={0}
                   value={cfg.cloud?.syncIntervalMinutes ?? 0}
-                  onChange={e => setCfg((p: any) => ({ ...p, cloud: { ...p.cloud, syncIntervalMinutes: parseInt(e.target.value) || 0 } }))}
+                  onChange={e => updateActiveCloud({ syncIntervalMinutes: parseInt(e.target.value) || 0 })}
                   className="input-base w-32"
                 />
               </div>
               <label className="flex items-center gap-3 cursor-pointer">
                 <Toggle
                   enabled={!!cfg.cloud?.enabled}
-                  onToggle={() => setCfg((p: any) => ({ ...p, cloud: { ...p.cloud, enabled: !p.cloud?.enabled } }))}
+                  onToggle={() => updateActiveCloud({ enabled: !cfg.cloud?.enabled })}
                 />
                 <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('settings.enableAutoBackup')}</span>
               </label>

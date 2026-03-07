@@ -61,7 +61,7 @@ Central library for managing your skill collection.
 |---------|--------|
 | **Search input** | Wide search field for real-time case-insensitive filter by skill name; the toolbar wraps on narrower window widths so controls stay visible |
 | **Sort toggle** | Two-button toggle for alphabetical order by skill name: **A-Z** or **Z-A** |
-| **Update** (RefreshCw) | Calls backend `CheckUpdates()`; marks updated skills with a red dot |
+| **Update** (RefreshCw) | Calls backend `CheckUpdates()`; compares installed Git-backed skills with remote SHAs, then marks updatable cards with a red dot and Update action. This checks only — it does not overwrite local files by itself |
 | **Batch Delete** (CheckSquare) | Toggles multi-select mode |
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
 | **Remote Install** (Github) | Opens the GitHub Install dialog |
@@ -93,6 +93,39 @@ Central library for managing your skill collection.
 - **Drag-and-drop** — drag a skill card to a category in the sidebar to move it; when drag starts, a smaller floating card follows the cursor; once a sidebar category is targeted, the original card collapses into a thin line until drag ends. Dragging a folder from the OS file manager onto the window imports it directly.
 - **Window-level drag overlay** — semi-transparent indigo overlay with "Release to import Skill" message activates when a file is dragged over the window.
 - **Hover tooltip** — appears after 300 ms hovering over a card (see [Skill Tooltip](#9-skill-tooltip)).
+
+### Skill Update Flow
+
+- Toolbar **Update** performs a remote update check for installed Git-backed skills and only marks cards as updatable.
+- Card-level **Update** is the action that actually downloads the latest files and overwrites the installed copy in **My Skills**.
+
+```text
+[Dashboard toolbar Update]
+          |
+          v
+     CheckUpdates()
+          |
+          v
+Compare installed SourceSHA with remote latest SHA
+          |
+          +--> no newer SHA  -> keep card unchanged
+          |
+          +--> newer SHA     -> store LatestSHA -> show red dot / Update action
+
+[Dashboard card Update]
+          |
+          v
+   UpdateSkill(skillID)
+          |
+          v
+Download latest repo subpath again
+          |
+          v
+Overwrite installed folder in My Skills
+          |
+          v
+SourceSHA = LatestSHA -> clear update marker
+```
 
 ---
 
@@ -222,6 +255,31 @@ Browse and import skills directly from watched Git repositories without installi
 - Breadcrumb back button (ChevronLeft) to return to the repo grid.
 - Skills grid with same select/import behavior as flat view.
 
+### Repo Sync vs Installed Skill Update
+
+- Repo-card **Update** and toolbar **Update All** refresh the locally cached clone for the starred repo.
+- This makes the latest repo contents visible in **Starred Repos** so the user can browse or import newer skill files.
+- It does **not** overwrite the already installed copy in **My Skills**.
+- If a skill has already been imported into the library, updating that installed copy still happens from **My Skills (Dashboard)** via the card-level **Update** action.
+
+```text
+                    Cross-page update flow
+
+[Starred Repo card Update]                  [My Skills card Update]
+            |                                          |
+            v                                          v
+   UpdateStarredRepo(url)                       UpdateSkill(skillID)
+            |                                          |
+            v                                          v
+Refresh cached repo clone                      Overwrite installed library copy
+            |                                          |
+            v                                          v
+Refresh Starred Repos list                     Clear update marker in My Skills
+            |
+            +--> enables newer import candidates
+            x--> does NOT change installed My Skills files
+```
+
 ### Add Repo Dialog
 
 - URL input (HTTPS or SSH format); Enter key triggers add.
@@ -300,8 +358,11 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - Object storage listings are paginated internally, so the UI shows the complete remote file set instead of only the first page.
 - Scrollable, max-height container.
 - **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `config.json`, etc.); `cache/` and `.git/` are excluded.
+- **Custom object-storage prefix** — object storage providers let the user choose a parent `remotePath`; SkillFlow always writes under `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
+- **Provider-specific cloud profiles** — each cloud provider keeps its own bucket/path/credential set; switching providers in Settings restores that provider's saved values instead of overwriting another provider's form state.
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json` and `star_repos.json`) are stored as forward-slash relative paths under the synchronized root, so restores continue to work across macOS and Windows.
 - **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as external `SkillsStorageDir` values and tool `ScanDirs` / `PushDir`; it is excluded from backup and git sync.
+- **Local-only cloud secrets** — sensitive cloud credentials (for example access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as provider, bucket name, remote path, endpoint, repo URL, or branch.
 - **Git backup compatibility** — when Git backup uses a parent directory as the working tree, SkillFlow automatically moves any legacy nested `skills/.git` metadata aside so actual skill files remain trackable.
 
 ### Auto-Backup
@@ -363,9 +424,12 @@ For each built-in or custom tool:
 
 | Control | Description |
 |---------|-------------|
-| **Provider buttons** | Select cloud provider: Aliyun OSS / Tencent COS / Huawei OBS / **git** |
+| **Provider buttons** | Select cloud provider: Aliyun OSS / Tencent COS / Huawei OBS / **git**. Each provider restores its own saved bucket/path/credential draft when selected |
 | **Bucket name** | Object storage bucket name (hidden when git provider is selected) |
-| **Credential fields** | Dynamically rendered from `RequiredCredentials()` — text or password inputs per provider. Git fields: repo URL, branch, username, access token |
+| **Remote path** | Object storage parent path (optional). Users enter the parent folder only; SkillFlow always appends `/skillflow/` to build the final backup prefix |
+| **Final backup path preview** | Real-time rendered object-storage destination shown as `<bucket>/<remotePath>/skillflow/` so users can verify the exact remote backup location before saving |
+| **Credential fields** | Dynamically rendered from `RequiredCredentials()` — text or password inputs per provider. Sync-safe connection fields such as endpoint / repo URL / branch remain in `config.json`, while sensitive credentials such as access keys and tokens are stored only in `config_local.json`. Git fields: repo URL, branch, username, access token |
+| **Input normalization** | Aliyun OSS and Huawei OBS bucket fields accept either a plain bucket name or a common full bucket host/URL and normalize it automatically. Tencent COS uses the same bucket + endpoint model as the other object-storage providers. The bucket value always comes from the dedicated bucket field, while the endpoint field may contain either a plain endpoint host or a full bucket host/URL and is preserved as entered for display |
 | **Auto-sync interval** | Number input (minutes); 0 = sync only after mutations; positive value starts a background periodic timer |
 | **Enable auto backup toggle** | Turns on/off automatic post-mutation backups and the periodic timer |
 
@@ -435,6 +499,36 @@ Reusable card component shown in the My Skills grid and Sync pages.
 | **Copy button** (hover) | Same clipboard behavior |
 | **Open folder button** (hover) | Same as dashboard card |
 | **Selection checkbox** (bottom-right) | Shown when `showSelection = true` |
+
+### Unified Status Semantics
+
+| State | Meaning |
+|------|---------|
+| **installed** | The logical skill already exists in **My Skills** as at least one installed instance |
+| **imported** | External-page wording for **installed**; on GitHub / Starred Repos / tool views it means “already in My Skills” |
+| **pushed** | The logical skill already exists in a tool's configured **PushDir** |
+| **seenInToolScan** | The logical skill was detected in one of a tool's configured **ScanDirs**; this means the tool already has it somewhere, but not necessarily because SkillFlow pushed it |
+| **updatable** | An installed Git-backed skill has a newer remote SHA than its installed `SourceSHA` |
+
+```text
+                 Unified skill status picture
+
+[GitHub candidate] [Starred skill] [Tool scan candidate]
+         \              |               /
+          \             |              /
+           +---- same logical skill ----+
+                        |
+                        v
+                 [My Skills instance]
+                  installed = true
+           external pages show imported = true
+                        |
+                        +---- copy to tool PushDir ----> pushed = true
+                        |
+                        +---- remote newer SHA -------> updatable = true
+
+[Tool ScanDirs] ---- detect same logical skill ----> seenInToolScan = true
+```
 
 ---
 

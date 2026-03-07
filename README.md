@@ -22,7 +22,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones with one click; subsequent scans auto-pull updates |
 | **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; searchable, sortable skill pickers and conflict handling per skill |
 | **Starred Repos** | Watch Git repos and recursively browse/import nested repo skills without adding them to your library first, with search and alphabetical sorting in skill grids |
-| **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo |
+| **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo, with a custom object-storage remote path preview, provider-specific saved profiles, and local-only sensitive credentials |
 | **Update Checker** | Detects new commits for GitHub-sourced skills; one-click update |
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
 | **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
@@ -55,6 +55,10 @@ Configure in **Settings → Cloud Storage**.
 
 - Sync-safe settings and metadata live under the app data directory and use relative paths for cross-platform restore.
 - Local-only filesystem paths (such as `SkillsStorageDir` and tool scan/push directories) live in `config_local.json` and are excluded from backup/sync.
+- Sensitive cloud credentials (such as access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as bucket, endpoint, repo URL, and branch.
+- Object storage providers support a custom parent `remotePath`; the final backup prefix is always rendered and stored as `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
+- Each cloud provider keeps its own saved bucket/path/credential profile, so switching providers in Settings does not overwrite another provider's values.
+- Aliyun OSS, Tencent COS, and Huawei OBS share the same bucket + endpoint configuration model. For Tencent COS, the bucket always comes from the dedicated bucket field, while the endpoint field can store either a plain endpoint host or a full bucket host/URL and is preserved as entered.
 - App data directory:
   - macOS: `~/Library/Application Support/SkillFlow/`
   - Windows: `%USERPROFILE%\.skillflow\`
@@ -63,10 +67,10 @@ Supported providers and required fields:
 
 | Provider | Required Fields |
 |----------|----------------|
-| Aliyun OSS | Access Key ID, Access Key Secret, Endpoint |
-| Tencent COS | SecretId, SecretKey, Region |
-| Huawei OBS | Access Key, Secret Key, Endpoint |
-| Git Repo | Repo URL, Branch, Username, Access Token |
+| Aliyun OSS | Access Key ID (local-only), Access Key Secret (local-only), Endpoint (synced) |
+| Tencent COS | SecretId (local-only), SecretKey (local-only), Endpoint (synced) |
+| Huawei OBS | Access Key (local-only), Secret Key (local-only), Endpoint (synced) |
+| Git Repo | Repo URL (synced), Branch (synced), Username (synced), Access Token (local-only) |
 
 ## Contributing & Building from Source
 
