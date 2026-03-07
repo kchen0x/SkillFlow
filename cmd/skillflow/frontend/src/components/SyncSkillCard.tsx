@@ -5,12 +5,12 @@ import SkillTooltip from './SkillTooltip'
 
 interface Props {
   name: string
-  subtitle?: string      // e.g. category or path hint
-  source?: string        // 'github' | 'manual' | undefined
-  path?: string          // filesystem path to open in file manager / fetch meta from
-  id?: string            // if provided, use GetSkillMeta(id); else GetSkillMetaByPath(path)
-  showSelection?: boolean  // default true; set false to hide selection checkbox (e.g. StarredRepos non-select mode)
-  imported?: boolean     // show "已导入" badge
+  subtitle?: string
+  source?: string
+  path?: string
+  id?: string
+  showSelection?: boolean
+  imported?: boolean
   selected: boolean
   onToggle: () => void
 }
@@ -76,22 +76,26 @@ export default function SyncSkillCard({
         onClick={onToggle}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`relative flex flex-col gap-2 p-3 rounded-xl border cursor-pointer transition-colors select-none group ${
-          selected
-            ? 'bg-indigo-900/30 border-indigo-500'
-            : 'bg-gray-800 border-gray-700 hover:border-indigo-500'
-        }`}
+        className="card-base relative flex flex-col gap-2 p-3 cursor-pointer select-none group"
+        style={selected ? {
+          background: 'var(--accent-glow)',
+          borderColor: 'var(--border-accent)',
+          boxShadow: 'var(--glow-accent-sm)',
+        } : undefined}
       >
-        {/* Top-right action buttons — visible on hover */}
+        {/* Top-right action buttons */}
         <div className="absolute top-2 right-2 flex items-center gap-0.5 z-10">
           {path && (
             <button
               onClick={handleCopy}
               title="复制 skill.md"
-              className="p-1 rounded text-gray-500 opacity-0 group-hover:opacity-100 hover:text-gray-200 hover:bg-gray-700 transition-all"
+              className="p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
             >
               {copied
-                ? <Check size={12} className="text-green-400" />
+                ? <Check size={12} style={{ color: 'var(--color-success)' }} />
                 : <Copy size={12} />}
             </button>
           )}
@@ -99,7 +103,10 @@ export default function SyncSkillCard({
             <button
               onClick={handleOpen}
               title="打开目录"
-              className="p-1 rounded text-gray-500 opacity-0 group-hover:opacity-100 hover:text-gray-200 hover:bg-gray-700 transition-all"
+              className="p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
             >
               <FolderOpenDot size={13} />
             </button>
@@ -109,31 +116,59 @@ export default function SyncSkillCard({
         {/* Source badge + imported badge */}
         <div className="flex items-center gap-1.5 pr-14 flex-wrap">
           {source === 'github'
-            ? <Github size={12} className="text-gray-400 shrink-0" />
-            : <FolderOpen size={12} className="text-gray-400 shrink-0" />}
+            ? <Github size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
+            : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />}
           {source && (
-            <span className={`text-xs px-1.5 py-0.5 rounded max-w-[72px] truncate ${
-              source === 'github' ? 'bg-blue-900/50 text-blue-300' : 'bg-gray-700 text-gray-400'
-            }`} title={source}>{source}</span>
+            <span
+              className="text-xs px-1.5 py-0.5 rounded max-w-[72px] truncate"
+              style={source === 'github' ? {
+                background: 'rgba(14, 165, 233, 0.15)',
+                color: 'var(--accent-secondary)',
+                border: '1px solid rgba(14, 165, 233, 0.25)',
+              } : {
+                background: 'var(--bg-overlay)',
+                color: 'var(--text-muted)',
+              }}
+              title={source}
+            >
+              {source}
+            </span>
           )}
           {imported && (
-            <span className="text-xs bg-green-900/50 text-green-300 px-1.5 py-0.5 rounded">已导入</span>
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(52, 211, 153, 0.15)',
+                color: 'var(--color-success)',
+                border: '1px solid rgba(52, 211, 153, 0.25)',
+              }}
+            >
+              已导入
+            </span>
           )}
         </div>
 
         {/* Skill name */}
-        <p className="text-sm font-medium leading-snug truncate pr-5">{name}</p>
+        <p className="text-sm font-medium leading-snug truncate pr-5" style={{ color: 'var(--text-primary)' }}>{name}</p>
 
-        {/* Subtitle (category or repo name) */}
+        {/* Subtitle */}
         {subtitle && (
-          <p className="text-xs text-gray-500 truncate">{subtitle}</p>
+          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>
         )}
 
         {/* Selection indicator */}
         {showSelection && (
-          <div className={`absolute bottom-2 right-2 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-            selected ? 'bg-indigo-500 border-indigo-500' : 'border-gray-600 bg-gray-700'
-          }`}>
+          <div
+            className="absolute bottom-2 right-2 w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-150"
+            style={selected ? {
+              background: 'var(--accent-secondary)',
+              borderColor: 'var(--accent-secondary)',
+              boxShadow: 'var(--glow-accent-sm)',
+            } : {
+              borderColor: 'var(--text-muted)',
+              background: 'var(--bg-elevated)',
+            }}
+          >
             {selected && (
               <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />

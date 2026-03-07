@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ListSkills, ListCategories, MoveSkillCategory,
   DeleteSkill, DeleteSkills, ImportLocal, UpdateSkill, CheckUpdates,
@@ -10,6 +11,7 @@ import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
 import GitHubInstallDialog from '../components/GitHubInstallDialog'
 import { Github, FolderOpen, RefreshCw, Search, Trash2, CheckSquare } from 'lucide-react'
+import { gridContainerVariants, cardVariants } from '../lib/motionVariants'
 
 export default function Dashboard() {
   const [skills, setSkills] = useState<any[]>([])
@@ -125,7 +127,6 @@ export default function Dashboard() {
 
   const allSelected = filtered.length > 0 && selectedIDs.size === filtered.length
 
-  // Hover handlers
   const clearHover = () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     setHoveredSkill(null)
@@ -146,16 +147,20 @@ export default function Dashboard() {
     clearHover()
   }
 
+  const containerVariants = gridContainerVariants(filtered.length)
+
   return (
     <div
-      className={`flex h-full relative ${dragOver ? 'ring-2 ring-inset ring-indigo-500' : ''}`}
+      className={`flex h-full relative ${dragOver ? 'ring-2 ring-inset' : ''}`}
+      style={dragOver ? { '--tw-ring-color': 'var(--accent-primary)' } as any : {}}
       onDragOver={handleWindowDragOver}
       onDragLeave={handleWindowDragLeave}
       onDrop={handleWindowDrop}
     >
       {dragOver && (
-        <div className="absolute inset-0 bg-indigo-500/10 flex items-center justify-center z-40 pointer-events-none">
-          <p className="text-indigo-300 text-lg font-medium">松开以导入 Skill</p>
+        <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none"
+          style={{ background: 'var(--accent-glow)' }}>
+          <p className="text-lg font-medium" style={{ color: 'var(--accent-primary)' }}>松开以导入 Skill</p>
         </div>
       )}
 
@@ -172,13 +177,16 @@ export default function Dashboard() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-gray-800">
+        <div
+          className="flex flex-wrap items-center gap-3 px-6 py-4"
+          style={{ borderBottom: '1px solid var(--border-base)' }}
+        >
           <div className="relative flex-1 min-w-[260px] max-w-[520px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
             <input
               value={search} onChange={e => setSearch(e.target.value)}
               placeholder="搜索 Skills..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-3 py-2 text-sm outline-none focus:border-indigo-500"
+              className="input-base pl-10"
             />
           </div>
 
@@ -186,7 +194,10 @@ export default function Dashboard() {
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               <button
                 onClick={toggleSelectAll}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
               >
                 <CheckSquare size={14} />
                 {allSelected ? '取消全选' : '全选'}
@@ -194,66 +205,82 @@ export default function Dashboard() {
               <button
                 onClick={handleBatchDelete}
                 disabled={selectedIDs.size === 0}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                style={{ backgroundColor: 'var(--color-error)', color: 'white' }}
               >
                 <Trash2 size={14} /> 删除 {selectedIDs.size > 0 ? `(${selectedIDs.size})` : ''}
               </button>
               <button
                 onClick={toggleSelectMode}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
               >
                 取消
               </button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <button
-                onClick={() => CheckUpdates()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 whitespace-nowrap"
-              ><RefreshCw size={14} /> 更新</button>
-              <button
-                onClick={toggleSelectMode}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 whitespace-nowrap"
-              ><CheckSquare size={14} /> 批删</button>
-              <button
-                onClick={handleImportButton}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 whitespace-nowrap"
-              ><FolderOpen size={14} /> 导入</button>
+              {[
+                { icon: <RefreshCw size={14} />, label: '更新', onClick: () => CheckUpdates() },
+                { icon: <CheckSquare size={14} />, label: '批删', onClick: toggleSelectMode },
+                { icon: <FolderOpen size={14} />, label: '导入', onClick: handleImportButton },
+              ].map(btn => (
+                <button
+                  key={btn.label}
+                  onClick={btn.onClick}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  {btn.icon} {btn.label}
+                </button>
+              ))}
               <button
                 onClick={() => setShowGitHub(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg whitespace-nowrap"
-              ><Github size={14} /> 远程安装</button>
+                className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap"
+              >
+                <Github size={14} /> 远程安装
+              </button>
             </div>
           )}
         </div>
 
         {/* Skills grid */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
+          <motion.div
+            className="grid grid-cols-3 xl:grid-cols-4 gap-4"
+            variants={containerVariants}
+            initial="initial"
+            animate="animate"
+          >
             {filtered.map(sk => (
-              <SkillCard
-                key={sk.ID}
-                skill={{ id: sk.ID, name: sk.Name, category: sk.Category, source: sk.Source, hasUpdate: !!sk.LatestSHA, path: sk.Path }}
-                categories={categories}
-                onDelete={async () => { await DeleteSkill(sk.ID); load() }}
-                onUpdate={async () => { await UpdateSkill(sk.ID); load() }}
-                onMoveCategory={async cat => { await MoveSkillCategory(sk.ID, cat); load() }}
-                dragging={draggingSkillID === sk.ID}
-                dropTargetActive={draggingSkillID === sk.ID && categoryDragActive}
-                onDragStateChange={(dragging) => {
-                  setDraggingSkillID(dragging ? sk.ID : null)
-                  if (!dragging) setCategoryDragActive(false)
-                }}
-                selectMode={selectMode}
-                selected={selectedIDs.has(sk.ID)}
-                onToggleSelect={() => toggleSelectID(sk.ID)}
-                onHoverStart={rect => handleHoverStart(sk, rect)}
-                onHoverEnd={handleHoverEnd}
-              />
+              <motion.div key={sk.ID} variants={filtered.length <= 30 ? cardVariants : undefined}>
+                <SkillCard
+                  skill={{ id: sk.ID, name: sk.Name, category: sk.Category, source: sk.Source, hasUpdate: !!sk.LatestSHA, path: sk.Path }}
+                  categories={categories}
+                  onDelete={async () => { await DeleteSkill(sk.ID); load() }}
+                  onUpdate={async () => { await UpdateSkill(sk.ID); load() }}
+                  onMoveCategory={async cat => { await MoveSkillCategory(sk.ID, cat); load() }}
+                  dragging={draggingSkillID === sk.ID}
+                  dropTargetActive={draggingSkillID === sk.ID && categoryDragActive}
+                  onDragStateChange={(dragging) => {
+                    setDraggingSkillID(dragging ? sk.ID : null)
+                    if (!dragging) setCategoryDragActive(false)
+                  }}
+                  selectMode={selectMode}
+                  selected={selectedIDs.has(sk.ID)}
+                  onToggleSelect={() => toggleSelectID(sk.ID)}
+                  onHoverStart={rect => handleHoverStart(sk, rect)}
+                  onHoverEnd={handleHoverEnd}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
           {filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+            <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
               <p className="text-sm">没有找到 Skills</p>
               <p className="text-xs mt-1">从远程仓库安装或拖拽文件夹到此处</p>
             </div>
@@ -269,9 +296,11 @@ export default function Dashboard() {
         />
       )}
 
-      {showGitHub && (
-        <GitHubInstallDialog onClose={() => setShowGitHub(false)} onDone={() => { setShowGitHub(false); load() }} />
-      )}
+      <AnimatePresence>
+        {showGitHub && (
+          <GitHubInstallDialog onClose={() => setShowGitHub(false)} onDone={() => { setShowGitHub(false); load() }} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AlertCircle, Plus } from 'lucide-react'
 import ContextMenu from './ContextMenu'
 import { CreateCategory, RenameCategory, DeleteCategory } from '../../wailsjs/go/main/App'
+import AnimatedDialog from './ui/AnimatedDialog'
 
 interface Props {
   categories: string[]
@@ -73,8 +74,30 @@ export default function CategoryPanel({
     }
   }
 
+  const getCategoryStyle = (isActive: boolean, isDragTarget: boolean) => {
+    if (isDragTarget) return {
+      background: 'var(--accent-glow)',
+      color: 'var(--accent-primary)',
+      border: '1px solid var(--border-accent)',
+      boxShadow: 'var(--glow-accent-sm)',
+    }
+    if (isActive) return {
+      background: 'var(--accent-glow)',
+      color: 'var(--accent-primary)',
+      border: '1px solid var(--border-accent)',
+      boxShadow: 'var(--glow-accent-sm)',
+    }
+    return {
+      color: 'var(--text-muted)',
+      border: '1px solid transparent',
+    }
+  }
+
   return (
-    <div className="w-48 flex-shrink-0 border-r border-gray-800 p-3 flex flex-col gap-0.5">
+    <div
+      className="w-48 flex-shrink-0 p-3 flex flex-col gap-0.5"
+      style={{ borderRight: '1px solid var(--border-base)' }}
+    >
       {/* All */}
       <div
         onClick={() => onSelect(null)}
@@ -82,13 +105,20 @@ export default function CategoryPanel({
         onDragOver={e => handleDragOver(e, '')}
         onDragLeave={() => handleDragLeave('')}
         onDrop={e => handleDrop(e, '')}
-        className={`px-3 py-2 rounded-lg text-sm cursor-pointer transition-all ${
-          dragTarget === ''
-            ? 'bg-indigo-500/20 text-white ring-2 ring-inset ring-indigo-400 shadow-[inset_4px_0_0_0_rgba(129,140,248,0.95)]'
-            : selected === null
-              ? 'bg-indigo-600 text-white'
-              : 'text-gray-400 hover:bg-gray-800'
-        }`}
+        className="px-3 py-2 rounded-lg text-sm cursor-pointer transition-all duration-150"
+        style={getCategoryStyle(selected === null, dragTarget === '')}
+        onMouseEnter={e => {
+          if (selected !== null && dragTarget !== '') {
+            e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
+            e.currentTarget.style.color = 'var(--text-primary)'
+          }
+        }}
+        onMouseLeave={e => {
+          if (selected !== null && dragTarget !== '') {
+            e.currentTarget.style.backgroundColor = ''
+            e.currentTarget.style.color = 'var(--text-muted)'
+          }
+        }}
       >全部</div>
 
       {/* Categories */}
@@ -105,7 +135,7 @@ export default function CategoryPanel({
                 if (e.key === 'Enter') { await RenameCategory(cat, newName); onRefresh(); setRenaming(null) }
                 if (e.key === 'Escape') setRenaming(null)
               }}
-              className="px-3 py-1.5 rounded-lg text-sm bg-gray-700 text-white outline-none w-full"
+              className="input-base px-3 py-1.5 rounded-lg text-sm w-full"
             />
           : <div
               key={cat}
@@ -119,13 +149,20 @@ export default function CategoryPanel({
                 if (cat === defaultCategoryName) return
                 setMenu({ x: e.clientX, y: e.clientY, cat })
               }}
-              className={`px-3 py-2 rounded-lg text-sm cursor-pointer transition-all ${
-                dragTarget === cat
-                  ? 'bg-indigo-500/20 text-white ring-2 ring-inset ring-indigo-400 shadow-[inset_4px_0_0_0_rgba(129,140,248,0.95)]'
-                  : selected === cat
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-gray-400 hover:bg-gray-800'
-              }`}
+              className="px-3 py-2 rounded-lg text-sm cursor-pointer transition-all duration-150"
+              style={getCategoryStyle(selected === cat, dragTarget === cat)}
+              onMouseEnter={e => {
+                if (selected !== cat && dragTarget !== cat) {
+                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                }
+              }}
+              onMouseLeave={e => {
+                if (selected !== cat && dragTarget !== cat) {
+                  e.currentTarget.style.backgroundColor = ''
+                  e.currentTarget.style.color = 'var(--text-muted)'
+                }
+              }}
             >{cat}</div>
       ))}
 
@@ -142,12 +179,17 @@ export default function CategoryPanel({
               if (e.key === 'Enter') { await CreateCategory(createName); onRefresh(); setCreating(false); setCreateName('') }
               if (e.key === 'Escape') { setCreating(false); setCreateName('') }
             }}
-            className="px-3 py-1.5 rounded-lg text-sm bg-gray-700 text-white outline-none w-full"
+            className="input-base px-3 py-1.5 rounded-lg text-sm w-full"
           />
         : <button
             onClick={() => setCreating(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 hover:text-gray-300 mt-1"
-          ><Plus size={14} /> 新建分类</button>
+            className="flex items-center gap-1.5 px-3 py-2 text-sm mt-1 transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+          >
+            <Plus size={14} /> 新建分类
+          </button>
       }
 
       {/* Context menu */}
@@ -162,39 +204,29 @@ export default function CategoryPanel({
         />
       )}
 
-      {deleteBlocked && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[420px] border border-gray-700">
-            <h3 className="font-semibold mb-2 flex items-center gap-2 text-amber-400">
-              <AlertCircle size={16} /> 无法删除分类
-            </h3>
-            <p className="text-sm text-gray-300 mb-4">
-              分类「<span className="text-white font-medium">{deleteBlocked.cat}</span>」下
-              {deleteBlocked.count > 0 ? `还有 ${deleteBlocked.count} 个 Skill，` : '还有 Skill，'}
-              请先清空该分类后再删除。
-            </p>
-            <button
-              onClick={() => setDeleteBlocked(null)}
-              className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
-            >我知道了</button>
-          </div>
-        </div>
-      )}
+      <AnimatedDialog open={deleteBlocked !== null} onClose={() => setDeleteBlocked(null)} width="w-[420px]" zIndex={50}>
+        <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-warning)' }}>
+          <AlertCircle size={16} /> 无法删除分类
+        </h3>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+          分类「<span className="font-medium" style={{ color: 'var(--text-primary)' }}>{deleteBlocked?.cat}</span>」下
+          {(deleteBlocked?.count ?? 0) > 0 ? `还有 ${deleteBlocked?.count} 个 Skill，` : '还有 Skill，'}
+          请先清空该分类后再删除。
+        </p>
+        <button onClick={() => setDeleteBlocked(null)} className="btn-secondary w-full py-2 rounded-lg text-sm">
+          我知道了
+        </button>
+      </AnimatedDialog>
 
-      {deleteError && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[420px] border border-gray-700">
-            <h3 className="font-semibold mb-2 flex items-center gap-2 text-red-400">
-              <AlertCircle size={16} /> 删除失败
-            </h3>
-            <p className="text-sm text-gray-300 mb-4">{deleteError}</p>
-            <button
-              onClick={() => setDeleteError(null)}
-              className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
-            >关闭</button>
-          </div>
-        </div>
-      )}
+      <AnimatedDialog open={deleteError !== null} onClose={() => setDeleteError(null)} width="w-[420px]" zIndex={50}>
+        <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-error)' }}>
+          <AlertCircle size={16} /> 删除失败
+        </h3>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>{deleteError}</p>
+        <button onClick={() => setDeleteError(null)} className="btn-secondary w-full py-2 rounded-lg text-sm">
+          关闭
+        </button>
+      </AnimatedDialog>
     </div>
   )
 }

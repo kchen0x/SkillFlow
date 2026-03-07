@@ -100,6 +100,15 @@ export default function SkillCard({
     { label: '删除', onClick: onDelete, danger: true },
   ]
 
+  if (dragging && dropTargetActive) {
+    return (
+      <div className="relative min-h-[88px] rounded-xl border border-transparent bg-transparent">
+        <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 h-[2px] rounded-full"
+          style={{ background: 'var(--accent-primary)', boxShadow: 'var(--glow-accent-sm)' }} />
+      </div>
+    )
+  }
+
   return (
     <>
       <div
@@ -121,26 +130,28 @@ export default function SkillCard({
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`relative border rounded-xl transition-all duration-150 group ${
-          selectMode ? 'cursor-pointer' : 'cursor-grab'
-        } ${
-          dragging && dropTargetActive ? 'bg-transparent border-transparent min-h-[88px]' :
-          dragging ? 'bg-gray-800/50 border-indigo-400/50 p-4 scale-[0.96] opacity-55' :
-          selected
-            ? 'bg-gray-800 border-indigo-500 bg-indigo-900/20 p-4'
-            : 'bg-gray-800 border-gray-700 hover:border-indigo-500 p-4'
+        className={`card-base relative p-4 ${selectMode ? 'cursor-pointer' : 'cursor-grab'} group ${
+          dragging ? 'opacity-55 scale-[0.96]' : ''
         }`}
+        style={selected ? {
+          background: 'var(--accent-glow)',
+          borderColor: 'var(--border-accent)',
+          boxShadow: 'var(--glow-accent-sm)',
+        } : undefined}
       >
-        {dragging && dropTargetActive && (
-          <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 h-[2px] rounded-full bg-indigo-400 shadow-[0_0_0_1px_rgba(99,102,241,0.3)]" />
-        )}
-
-        <div className={`${dragging && dropTargetActive ? 'opacity-0 pointer-events-none' : 'opacity-100'} transition-opacity`}>
         {selectMode && (
           <div className="absolute top-2 left-2 z-10">
-            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-              selected ? 'bg-indigo-500 border-indigo-500' : 'border-gray-500 bg-gray-700'
-            }`}>
+            <div
+              className="w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-150"
+              style={selected ? {
+                background: 'var(--accent-secondary)',
+                borderColor: 'var(--accent-secondary)',
+                boxShadow: 'var(--glow-accent-sm)',
+              } : {
+                borderColor: 'var(--text-muted)',
+                background: 'var(--bg-elevated)',
+              }}
+            >
               {selected && (
                 <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -150,49 +161,83 @@ export default function SkillCard({
           </div>
         )}
 
-        {/* Open folder button — top-right, visible on hover */}
+        {/* Open folder button */}
         {!selectMode && skill.path && (
           <button
             onClick={handleOpenFolder}
             title="打开目录"
-            className="absolute top-2 right-2 z-10 p-1 rounded text-gray-600 opacity-0 group-hover:opacity-100 hover:text-gray-200 hover:bg-gray-700 transition-all"
+            className="absolute top-2 right-2 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
           >
             <FolderOpenDot size={14} />
           </button>
         )}
 
         {skill.hasUpdate && !selectMode && (
-          <span className="absolute top-2 right-8 w-2.5 h-2.5 rounded-full bg-red-500" />
+          <span className="absolute top-2 right-8 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-error)' }} />
         )}
         {skill.hasUpdate && selectMode && (
-          <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-red-500" />
+          <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-error)' }} />
         )}
 
         <div className={`flex items-center gap-2 mb-2 ${selectMode ? 'pl-5' : ''}`}>
           {skill.source === 'github'
-            ? <Github size={14} className="text-gray-400" />
-            : <FolderOpen size={14} className="text-gray-400" />}
-          <span className={`text-xs px-1.5 py-0.5 rounded ${skill.source === 'github' ? 'bg-blue-900/50 text-blue-300' : 'text-gray-400'}`}>
+            ? <Github size={14} style={{ color: 'var(--text-muted)' }} />
+            : <FolderOpen size={14} style={{ color: 'var(--text-muted)' }} />}
+          <span
+            className="text-xs px-1.5 py-0.5 rounded"
+            style={skill.source === 'github' ? {
+              background: 'rgba(14, 165, 233, 0.15)',
+              color: 'var(--accent-secondary)',
+              border: '1px solid rgba(14, 165, 233, 0.25)',
+            } : {
+              color: 'var(--text-muted)',
+            }}
+          >
             {skill.source}
           </span>
         </div>
-        <p className={`font-medium text-sm truncate ${selectMode ? 'pl-5' : 'pr-5'}`}>{skill.name}</p>
+        <p
+          className={`font-medium text-sm truncate ${selectMode ? 'pl-5' : 'pr-5'}`}
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {skill.name}
+        </p>
         {!selectMode && (
           <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
             {skill.hasUpdate && (
-              <button onClick={e => { e.stopPropagation(); onUpdate?.() }} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+              <button
+                onClick={e => { e.stopPropagation(); onUpdate?.() }}
+                className="text-xs flex items-center gap-1 transition-colors"
+                style={{ color: 'var(--accent-primary)' }}
+              >
                 <RefreshCw size={12} /> 更新
               </button>
             )}
             {skill.path && (
-              <button onClick={handleCopy} className="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1">
-                {copied ? <><Check size={12} className="text-green-400" /> 已复制</> : <><Copy size={12} /> 复制</>}
+              <button
+                onClick={handleCopy}
+                className="text-xs flex items-center gap-1 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+              >
+                {copied
+                  ? <><Check size={12} style={{ color: 'var(--color-success)' }} /> 已复制</>
+                  : <><Copy size={12} /> 复制</>}
               </button>
             )}
-            <button onClick={e => { e.stopPropagation(); onDelete() }} className="text-xs text-red-400 hover:text-red-300 ml-auto">删除</button>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              className="text-xs ml-auto transition-colors"
+              style={{ color: 'var(--color-error)' }}
+            >
+              删除
+            </button>
           </div>
         )}
-        </div>
       </div>
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />

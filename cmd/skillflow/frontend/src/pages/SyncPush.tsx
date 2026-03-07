@@ -11,6 +11,7 @@ import ConflictDialog from '../components/ConflictDialog'
 import SyncSkillCard from '../components/SyncSkillCard'
 import { ArrowUpFromLine, CheckSquare, FolderPlus, Square, X } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
+import AnimatedDialog from '../components/ui/AnimatedDialog'
 
 type Scope = 'auto' | 'manual'
 
@@ -120,17 +121,37 @@ export default function SyncPush() {
     setSelectedSkills(new Set(filteredSkills.map((skill: any) => skill.ID)))
   }
 
+  const getNavStyle = (isActive: boolean) => isActive ? {
+    background: 'var(--accent-glow)',
+    color: 'var(--accent-primary)',
+    border: '1px solid var(--border-accent)',
+    boxShadow: 'var(--glow-accent-sm)',
+  } : {
+    color: 'var(--text-muted)',
+    border: '1px solid transparent',
+  }
+
+  const getScopeButtonStyle = (isActive: boolean) => isActive ? {
+    background: 'var(--accent-glow)',
+    color: 'var(--accent-primary)',
+    border: '1px solid var(--border-accent)',
+    boxShadow: 'var(--glow-accent-sm)',
+  } : {
+    background: 'var(--bg-elevated)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border-base)',
+  }
+
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="w-48 shrink-0 border-r border-gray-800 p-3 flex flex-col gap-0.5">
-        <div className="px-3 py-1.5 text-xs font-medium tracking-wide text-gray-500 uppercase">
+      <div className="w-48 shrink-0 p-3 flex flex-col gap-0.5" style={{ borderRight: '1px solid var(--border-base)' }}>
+        <div className="px-3 py-1.5 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
           推送范围
         </div>
         <button
           onClick={() => setSelectedCategory(null)}
-          className={`px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-            selectedCategory === null ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'
-          }`}
+          className="px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
+          style={getNavStyle(selectedCategory === null)}
         >
           全部
         </button>
@@ -138,9 +159,8 @@ export default function SyncPush() {
           <button
             key={category}
             onClick={() => setSelectedCategory(category)}
-            className={`px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-              selectedCategory === category ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'
-            }`}
+            className="px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
+            style={getNavStyle(selectedCategory === category)}
           >
             {category}
           </button>
@@ -148,24 +168,30 @@ export default function SyncPush() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800 flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-lg font-semibold">
+        <div className="px-6 py-4 flex flex-col gap-4" style={{ borderBottom: '1px solid var(--border-base)' }}>
+          <div className="flex items-center gap-2 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
             <ArrowUpFromLine size={18} />
             推送到工具
           </div>
 
           <section>
-            <p className="text-sm text-gray-400 mb-3">目标工具</p>
+            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>目标工具</p>
             <div className="flex flex-wrap gap-2">
               {tools.map(tool => (
                 <button
                   key={tool.name}
                   onClick={() => toggleTool(tool.name)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
-                    selectedTools.has(tool.name)
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
-                  }`}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200"
+                  style={selectedTools.has(tool.name) ? {
+                    background: 'var(--accent-glow)',
+                    color: 'var(--accent-primary)',
+                    border: '1px solid var(--border-accent)',
+                    boxShadow: 'var(--glow-accent-sm)',
+                  } : {
+                    background: 'var(--bg-elevated)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-base)',
+                  }}
                 >
                   <ToolIcon name={tool.name} size={20} />
                   {tool.name}
@@ -178,38 +204,35 @@ export default function SyncPush() {
             <div className="flex items-center gap-2">
               <button
                 onClick={setAutoScope}
-                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                  scope === 'auto'
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
-                }`}
+                className="px-3 py-1.5 rounded-lg text-sm transition-all duration-200"
+                style={getScopeButtonStyle(scope === 'auto')}
               >
                 {selectedCategory === null ? '推送全部' : '推送当前分类'}
               </button>
               <button
                 onClick={setManualScope}
-                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                  scope === 'manual'
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
-                }`}
+                className="px-3 py-1.5 rounded-lg text-sm transition-all duration-200"
+                style={getScopeButtonStyle(scope === 'manual')}
               >
                 手动选择 Skill
               </button>
             </div>
-            <p className="text-sm text-gray-400">{scopeLabel}</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{scopeLabel}</p>
           </div>
 
           {scope === 'manual' && (
             <div className="flex items-center gap-4 text-sm">
               <button
                 onClick={toggleAllManual}
-                className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"
+                className="flex items-center gap-1.5 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
               >
                 {allManualSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                 {allManualSelected ? '取消全选' : '全选当前列表'}
               </button>
-              <span className="text-gray-500">
+              <span style={{ color: 'var(--text-muted)' }}>
                 当前可选 {filteredSkills.length} 个 Skill
               </span>
             </div>
@@ -234,22 +257,22 @@ export default function SyncPush() {
           </div>
 
           {filteredSkills.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+            <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
               <p className="text-sm">当前范围内没有 Skill</p>
-              <p className="text-xs mt-1">选择“全部”或切换到其他分类后再试</p>
+              <p className="text-xs mt-1">选择"全部"或切换到其他分类后再试</p>
             </div>
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-800 shrink-0 flex items-center gap-4">
+        <div className="px-6 py-4 shrink-0 flex items-center gap-4" style={{ borderTop: '1px solid var(--border-base)' }}>
           <button
             onClick={push}
             disabled={pushing || selectedTools.size === 0 || pushCount === 0}
-            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
+            className="btn-primary px-6 py-2 rounded-lg text-sm"
           >
             {pushing ? '推送中...' : `开始推送 (${pushCount})`}
           </button>
-          {done && <span className="text-sm text-green-400">推送完成</span>}
+          {done && <span className="text-sm" style={{ color: 'var(--color-success)' }}>推送完成</span>}
         </div>
       </div>
 
@@ -266,39 +289,43 @@ export default function SyncPush() {
         />
       )}
 
-      {pendingPush && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[460px] border border-gray-700">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="font-semibold flex items-center gap-2"><FolderPlus size={16} /> 目录不存在</h3>
-              <button onClick={() => { setMissingDirs([]); setPendingPush(false) }}><X size={16} className="text-gray-400" /></button>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">以下推送目录尚未创建，是否自动创建后继续推送？</p>
-            <ul className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
-              {missingDirs.map(dir => (
-                <li key={dir.name} className="text-sm bg-gray-900 rounded-lg px-3 py-2">
-                  <span className="text-gray-300 font-medium">{dir.name}</span>
-                  <span className="text-gray-500 text-xs block truncate" title={dir.dir}>{dir.dir}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-3">
-              <button
-                onClick={confirmMkdirAndPush}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm"
-              >
-                创建并推送
-              </button>
-              <button
-                onClick={() => { setMissingDirs([]); setPendingPush(false) }}
-                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
-              >
-                取消
-              </button>
-            </div>
-          </div>
+      <AnimatedDialog open={pendingPush} width="w-[460px]" zIndex={50}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <FolderPlus size={16} /> 目录不存在
+          </h3>
+          <button
+            onClick={() => { setMissingDirs([]); setPendingPush(false) }}
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <X size={16} />
+          </button>
         </div>
-      )}
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>以下推送目录尚未创建，是否自动创建后继续推送？</p>
+        <ul className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
+          {missingDirs.map(dir => (
+            <li
+              key={dir.name}
+              className="text-sm rounded-lg px-3 py-2"
+              style={{ background: 'var(--bg-surface)' }}
+            >
+              <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{dir.name}</span>
+              <span className="text-xs block truncate" style={{ color: 'var(--text-muted)' }} title={dir.dir}>{dir.dir}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-3">
+          <button onClick={confirmMkdirAndPush} className="btn-primary flex-1 py-2 rounded-lg text-sm">
+            创建并推送
+          </button>
+          <button
+            onClick={() => { setMissingDirs([]); setPendingPush(false) }}
+            className="btn-secondary flex-1 py-2 rounded-lg text-sm"
+          >
+            取消
+          </button>
+        </div>
+      </AnimatedDialog>
     </div>
   )
 }

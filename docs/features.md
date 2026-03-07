@@ -37,8 +37,9 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 | `/backup` | Cloud | Cloud Backup |
 | `/settings` | Settings | Settings |
 
-- Active route: highlighted with indigo background.
+- Active route: highlighted with cyan glow background (`var(--accent-glow)`) and cyan border accent.
 - Inactive routes: gray text with hover highlight.
+- Top-right of sidebar: **Sun/Moon** theme toggle button; switches between Dark and Light modes immediately.
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
 - Window close button behavior: clicking the top-left close button hides the main window and keeps the app running in background.
 - macOS tray behavior: the app creates a monochrome status icon in the menu-bar status area on startup; after the main window is hidden, the Dock icon is removed and only the menu-bar icon remains. Use native single-click to open a menu with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`.
@@ -359,6 +360,7 @@ For each built-in or custom tool:
 
 | Control | Description |
 |---------|-------------|
+| **Appearance theme** | Toggle between **Dark** (default, deep space blue + cyan accent) and **Light** (sky blue) themes; persisted to `localStorage`; takes effect immediately without restart |
 | **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button that opens at the current path or nearest existing parent |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
 | **Log level buttons** | Toggle runtime log level between `debug`, `info`, and `error` (default: `error`); takes effect after saving settings |

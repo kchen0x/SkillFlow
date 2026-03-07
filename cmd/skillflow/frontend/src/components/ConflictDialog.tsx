@@ -1,3 +1,5 @@
+import AnimatedDialog from './ui/AnimatedDialog'
+
 interface Props {
   conflicts: string[]
   onOverwrite: (name: string) => void
@@ -9,23 +11,15 @@ export default function ConflictDialog({ conflicts, onOverwrite, onSkip, onDone 
   if (conflicts.length === 0) { onDone(); return null }
   const current = conflicts[0]
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-2xl p-6 w-96 border border-gray-700">
-        <h3 className="text-base font-semibold mb-2">冲突检测</h3>
-        <p className="text-sm text-gray-400 mb-6">
-          <span className="text-white font-medium">{current}</span> 已存在，如何处理？
-        </p>
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={() => onSkip(current)}
-            className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600"
-          >跳过</button>
-          <button
-            onClick={() => onOverwrite(current)}
-            className="px-4 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500"
-          >覆盖</button>
-        </div>
+    <AnimatedDialog open={true} width="w-96" zIndex={50}>
+      <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>冲突检测</h3>
+      <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+        <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{current}</span> 已存在，如何处理？
+      </p>
+      <div className="flex gap-3 justify-end">
+        <button onClick={() => onSkip(current)} className="btn-secondary px-4 py-2 text-sm rounded-lg">跳过</button>
+        <button onClick={() => onOverwrite(current)} className="btn-primary px-4 py-2 text-sm rounded-lg">覆盖</button>
       </div>
-    </div>
+    </AnimatedDialog>
   )
 }

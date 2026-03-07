@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ScanGitHub, InstallFromGitHub, ListCategories } from '../../wailsjs/go/main/App'
 import { Github, X, AlertCircle } from 'lucide-react'
+import AnimatedDialog from './ui/AnimatedDialog'
 
 interface Props { onClose: () => void; onDone: () => void }
 
@@ -59,72 +60,113 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-2xl p-6 w-[520px] border border-gray-700">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold flex items-center gap-2"><Github size={16} /> 从远程仓库安装</h3>
-          <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <input
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !scanning && url && scan()}
-            placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
-            className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
-          />
-          <button onClick={scan} disabled={scanning || !url} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50 min-w-[72px]">
-            {scanning ? (
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
-                克隆/更新中...
-              </span>
-            ) : '扫描'}
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mb-3">首次扫描会 git clone 仓库，后续自动 git pull 更新</p>
-
-        {scanError && (
-          <div className="flex items-start gap-2 bg-red-950 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm mb-4">
-            <AlertCircle size={15} className="mt-0.5 shrink-0 text-red-400" />
-            <span className="flex-1">{scanError}</span>
-          </div>
-        )}
-
-        {candidates.length > 0 && (
-          <>
-            <div className="max-h-52 overflow-y-auto space-y-1 mb-4">
-              {candidates.map(c => (
-                <label key={c.Name} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 cursor-pointer">
-                  <input type="checkbox" checked={selected.has(c.Name)} onChange={() => toggle(c.Name)} className="accent-indigo-500" />
-                  <span className="text-sm flex-1">{c.Name}</span>
-                  {c.Installed && <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">已安装</span>}
-                </label>
-              ))}
-            </div>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-sm text-gray-400">安装到分类</span>
-              <select
-                value={category} onChange={e => setCategory(e.target.value)}
-                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm flex-1"
-              >
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            {installError && (
-              <div className="flex items-start gap-2 bg-red-950 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm mb-3">
-                <AlertCircle size={15} className="mt-0.5 shrink-0 text-red-400" />
-                <span>{installError}</span>
-              </div>
-            )}
-            <button
-              onClick={install} disabled={installing || selected.size === 0}
-              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
-            >{installing ? '安装中...' : `安装 ${selected.size} 个 Skill`}</button>
-          </>
-        )}
+    <AnimatedDialog open={true} onClose={onClose} width="w-[520px]">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+          <Github size={16} /> 从远程仓库安装
+        </h3>
+        <button onClick={onClose} style={{ color: 'var(--text-muted)' }} className="hover:opacity-80 transition-opacity">
+          <X size={16} />
+        </button>
       </div>
-    </div>
+
+      <div className="flex gap-2 mb-4">
+        <input
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !scanning && url && scan()}
+          placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
+          className="input-base flex-1"
+        />
+        <button
+          onClick={scan}
+          disabled={scanning || !url}
+          className="btn-primary px-4 py-2 rounded-lg text-sm min-w-[72px]"
+        >
+          {scanning ? (
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+              克隆/更新中...
+            </span>
+          ) : '扫描'}
+        </button>
+      </div>
+      <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>首次扫描会 git clone 仓库，后续自动 git pull 更新</p>
+
+      {scanError && (
+        <div
+          className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm mb-4"
+          style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--color-error)' }}
+        >
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span className="flex-1">{scanError}</span>
+        </div>
+      )}
+
+      {candidates.length > 0 && (
+        <>
+          <div
+            className="max-h-52 overflow-y-auto space-y-1 mb-4 rounded-lg p-1"
+            style={{ background: 'var(--bg-surface)' }}
+          >
+            {candidates.map(c => (
+              <label
+                key={c.Name}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors"
+                style={{ color: 'var(--text-primary)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(c.Name)}
+                  onChange={() => toggle(c.Name)}
+                  style={{ accentColor: 'var(--accent-secondary)' }}
+                />
+                <span className="text-sm flex-1">{c.Name}</span>
+                {c.Installed && (
+                  <span
+                    className="text-xs px-2 py-0.5 rounded"
+                    style={{
+                      background: 'rgba(14, 165, 233, 0.15)',
+                      color: 'var(--accent-secondary)',
+                      border: '1px solid rgba(14, 165, 233, 0.25)',
+                    }}
+                  >
+                    已安装
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>安装到分类</span>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className="select-base flex-1"
+            >
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {installError && (
+            <div
+              className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm mb-3"
+              style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--color-error)' }}
+            >
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
+              <span>{installError}</span>
+            </div>
+          )}
+          <button
+            onClick={install}
+            disabled={installing || selected.size === 0}
+            className="btn-primary w-full py-2 rounded-lg text-sm"
+          >
+            {installing ? '安装中...' : `安装 ${selected.size} 个 Skill`}
+          </button>
+        </>
+      )}
+    </AnimatedDialog>
   )
 }

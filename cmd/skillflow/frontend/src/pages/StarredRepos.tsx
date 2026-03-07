@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   ListStarredRepos, AddStarredRepo, AddStarredRepoWithCredentials, RemoveStarredRepo,
   UpdateStarredRepo, UpdateAllStarredRepos,
@@ -14,6 +15,8 @@ import {
 } from 'lucide-react'
 import SyncSkillCard from '../components/SyncSkillCard'
 import { ToolIcon } from '../config/toolIcons'
+import AnimatedDialog from '../components/ui/AnimatedDialog'
+import { toastVariants } from '../lib/motionVariants'
 
 export default function StarredRepos() {
   const { repoEncoded } = useParams()
@@ -155,7 +158,6 @@ export default function StarredRepos() {
     setImporting(true)
     try {
       const skills = currentRepo ? repoSkills : allSkills
-      // group by repoUrl for multi-repo flat import
       const byRepo = new Map<string, string[]>()
       for (const path of selectedPaths) {
         const sk = skills.find((s: any) => s.path === path)
@@ -244,71 +246,141 @@ export default function StarredRepos() {
 
   const skills = currentRepo ? repoSkills : allSkills
 
+  const toolBtnStyle = (active: boolean) => active ? {
+    background: 'var(--accent-glow)',
+    color: 'var(--accent-primary)',
+    border: '1px solid var(--border-accent)',
+    boxShadow: 'var(--glow-accent-sm)',
+  } : {
+    background: 'var(--bg-elevated)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border-base)',
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Success toast */}
-      {pushSuccessMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-800 border border-emerald-600 text-emerald-100 rounded-xl text-sm shadow-lg">
-          <CheckCircle size={15} className="shrink-0" />
-          {pushSuccessMsg}
-        </div>
-      )}
+      <AnimatePresence>
+        {pushSuccessMsg && (
+          <motion.div
+            variants={toastVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm shadow-dialog"
+            style={{
+              background: 'rgba(52,211,153,0.15)',
+              border: '1px solid rgba(52,211,153,0.4)',
+              color: 'var(--color-success)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <CheckCircle size={15} className="shrink-0" />
+            {pushSuccessMsg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-800 flex-wrap">
+      <div className="flex items-center gap-3 px-6 py-4 flex-wrap" style={{ borderBottom: '1px solid var(--border-base)' }}>
         {currentRepo ? (
-          <button onClick={() => { navigate('/starred'); setSelectMode(false); setSelectedPaths(new Set()) }}
-            className="flex items-center gap-1 text-sm text-gray-400 hover:text-white">
+          <button
+            onClick={() => { navigate('/starred'); setSelectMode(false); setSelectedPaths(new Set()) }}
+            className="flex items-center gap-1 text-sm transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+          >
             <ChevronLeft size={14} />
             <span>{currentRepo.split('/').slice(-2).join('/')}</span>
           </button>
         ) : (
-          <h2 className="text-sm font-medium flex items-center gap-2">
+          <h2 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <Star size={14} /> 仓库收藏
           </h2>
         )}
         <div className="flex-1" />
         {selectMode ? (
           <>
-            <button onClick={() => toggleSelectAll(skills)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800">
+            <button
+              onClick={() => toggleSelectAll(skills)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+            >
               <CheckSquare size={14} />{selectedPaths.size === skills.length ? '取消全选' : '全选'}
             </button>
-            <button onClick={() => { setSelectedTools(new Set()); setShowPushToolDialog(true) }} disabled={selectedPaths.size === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-lg">
+            <button
+              onClick={() => { setSelectedTools(new Set()); setShowPushToolDialog(true) }}
+              disabled={selectedPaths.size === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:opacity-40 transition-colors"
+              style={{ background: 'rgba(52,211,153,0.2)', color: 'var(--color-success)', border: '1px solid rgba(52,211,153,0.4)' }}
+            >
               <ArrowUpToLine size={14} /> 推送到工具 {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
             </button>
-            <button onClick={() => setShowImportDialog(true)} disabled={selectedPaths.size === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-lg">
+            <button
+              onClick={() => setShowImportDialog(true)}
+              disabled={selectedPaths.size === 0}
+              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:opacity-40"
+            >
               <Download size={14} /> 导入到我的Skills {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
             </button>
-            <button onClick={() => { setSelectMode(false); setSelectedPaths(new Set()) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800">取消</button>
+            <button
+              onClick={() => { setSelectMode(false); setSelectedPaths(new Set()) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+            >取消</button>
           </>
         ) : (
           <>
             {!currentRepo && (
               <>
-                <button onClick={() => setView('folder')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg ${view === 'folder' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
-                  <Folder size={14} /> 文件夹
-                </button>
-                <button onClick={() => setView('flat')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg ${view === 'flat' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
-                  <LayoutGrid size={14} /> 平铺
-                </button>
+                {[['folder', '文件夹', <Folder size={14} />], ['flat', '平铺', <LayoutGrid size={14} />]].map(([v, label, icon]) => (
+                  <button
+                    key={v as string}
+                    onClick={() => setView(v as 'folder' | 'flat')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-all duration-150"
+                    style={view === v ? {
+                      background: 'var(--bg-elevated)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-surface)',
+                    } : {
+                      color: 'var(--text-muted)',
+                      border: '1px solid transparent',
+                    }}
+                  >
+                    {icon} {label}
+                  </button>
+                ))}
               </>
             )}
-            <button onClick={() => setSelectMode(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800">
+            <button
+              onClick={() => setSelectMode(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+            >
               <CheckSquare size={14} /> 批量导入
             </button>
-            <button onClick={handleUpdateAll} disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800">
+            <button
+              onClick={handleUpdateAll}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+            >
               <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> 全部更新
             </button>
             {!currentRepo && (
-              <button onClick={() => setShowAdd(true)}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg">
+              <button
+                onClick={() => setShowAdd(true)}
+                className="btn-primary flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg"
+              >
                 <Plus size={14} /> 添加仓库
               </button>
             )}
@@ -331,210 +403,208 @@ export default function StarredRepos() {
       </div>
 
       {/* Add repo dialog */}
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[460px] border border-gray-700">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold flex items-center gap-2"><Star size={16} /> 添加远程仓库</h3>
-              <button onClick={() => { setShowAdd(false); setAddError('') }}><X size={16} className="text-gray-400" /></button>
-            </div>
-            <div className="flex gap-2 mb-3">
-              <input value={addUrl} onChange={e => setAddUrl(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !adding && addUrl && handleAddRepo()}
-                placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
-                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" />
-              <button onClick={handleAddRepo} disabled={adding || !addUrl}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50 min-w-[72px]">
-                {adding ? '克隆中...' : '添加'}
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">首次添加会 git clone 仓库，可能需要一些时间</p>
-            {addError && (
-              <div className="flex items-start gap-2 bg-red-950 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
-                <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                <span>{addError}</span>
-              </div>
-            )}
-          </div>
+      <AnimatedDialog open={showAdd} onClose={() => { setShowAdd(false); setAddError('') }} width="w-[460px]">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Star size={16} /> 添加远程仓库
+          </h3>
+          <button onClick={() => { setShowAdd(false); setAddError('') }} style={{ color: 'var(--text-muted)' }}>
+            <X size={16} />
+          </button>
         </div>
-      )}
+        <div className="flex gap-2 mb-3">
+          <input
+            value={addUrl}
+            onChange={e => setAddUrl(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !adding && addUrl && handleAddRepo()}
+            placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
+            className="input-base flex-1"
+          />
+          <button
+            onClick={handleAddRepo}
+            disabled={adding || !addUrl}
+            className="btn-primary px-4 py-2 rounded-lg text-sm min-w-[72px]"
+          >
+            {adding ? '克隆中...' : '添加'}
+          </button>
+        </div>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>首次添加会 git clone 仓库，可能需要一些时间</p>
+        {addError && (
+          <div
+            className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm"
+            style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--color-error)' }}
+          >
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <span>{addError}</span>
+          </div>
+        )}
+      </AnimatedDialog>
 
       {/* Import to My Skills dialog */}
-      {showImportDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[380px] border border-gray-700">
-            <h3 className="font-semibold mb-4">选择导入分类</h3>
-            <select value={importCategory} onChange={e => setImportCategory(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm mb-4">
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <div className="flex gap-3">
-              <button onClick={handleBatchImport} disabled={importing}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50">
-                {importing ? '导入中...' : `导入 ${selectedPaths.size} 个`}
-              </button>
-              <button onClick={() => setShowImportDialog(false)}
-                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">取消</button>
-            </div>
-          </div>
+      <AnimatedDialog open={showImportDialog} onClose={() => setShowImportDialog(false)} width="w-[380px]">
+        <h3 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>选择导入分类</h3>
+        <select
+          value={importCategory}
+          onChange={e => setImportCategory(e.target.value)}
+          className="select-base mb-4"
+        >
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <div className="flex gap-3">
+          <button
+            onClick={handleBatchImport}
+            disabled={importing}
+            className="btn-primary flex-1 py-2 rounded-lg text-sm"
+          >
+            {importing ? '导入中...' : `导入 ${selectedPaths.size} 个`}
+          </button>
+          <button onClick={() => setShowImportDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
         </div>
-      )}
+      </AnimatedDialog>
 
       {/* Mkdir confirmation dialog */}
-      {showMkdirDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-60">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[460px] border border-gray-700">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="font-semibold flex items-center gap-2"><FolderPlus size={16} /> 目录不存在</h3>
-              <button onClick={() => { setShowMkdirDialog(false); setMissingDirs([]) }}><X size={16} className="text-gray-400" /></button>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">以下推送目录尚未创建，是否自动创建后继续推送？</p>
-            <ul className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
-              {missingDirs.map(d => (
-                <li key={d.name} className="text-sm bg-gray-900 rounded-lg px-3 py-2">
-                  <span className="text-gray-300 font-medium">{d.name}</span>
-                  <span className="text-gray-500 text-xs block truncate" title={d.dir}>{d.dir}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-3">
-              <button onClick={confirmMkdirAndPush}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm">
-                创建并推送
-              </button>
-              <button onClick={() => { setShowMkdirDialog(false); setMissingDirs([]) }}
-                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">取消</button>
-            </div>
-          </div>
+      <AnimatedDialog open={showMkdirDialog} onClose={() => { setShowMkdirDialog(false); setMissingDirs([]) }} width="w-[460px]" zIndex={60}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <FolderPlus size={16} /> 目录不存在
+          </h3>
+          <button onClick={() => { setShowMkdirDialog(false); setMissingDirs([]) }} style={{ color: 'var(--text-muted)' }}>
+            <X size={16} />
+          </button>
         </div>
-      )}
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>以下推送目录尚未创建，是否自动创建后继续推送？</p>
+        <ul className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
+          {missingDirs.map(d => (
+            <li key={d.name} className="text-sm rounded-lg px-3 py-2" style={{ background: 'var(--bg-surface)' }}>
+              <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{d.name}</span>
+              <span className="text-xs block truncate" style={{ color: 'var(--text-muted)' }} title={d.dir}>{d.dir}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-3">
+          <button onClick={confirmMkdirAndPush} className="btn-primary flex-1 py-2 rounded-lg text-sm">创建并推送</button>
+          <button onClick={() => { setShowMkdirDialog(false); setMissingDirs([]) }} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
+        </div>
+      </AnimatedDialog>
 
       {/* Push to tool dialog */}
-      {showPushToolDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[420px] border border-gray-700">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="font-semibold flex items-center gap-2"><ArrowUpToLine size={16} /> 推送到工具</h3>
-              <button onClick={() => setShowPushToolDialog(false)}><X size={16} className="text-gray-400" /></button>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">将 Skill 直接复制到工具目录，无需导入到「我的Skills」</p>
-            {tools.length === 0 ? (
-              <p className="text-sm text-gray-500 py-4 text-center">没有可用的工具，请在设置中启用工具</p>
-            ) : (
-              <div className="flex flex-wrap gap-2 mb-4">
-                {tools.map((t: any) => (
-                  <button
-                    key={t.name}
-                    onClick={() => toggleTool(t.name)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
-                      selectedTools.has(t.name)
-                        ? 'bg-indigo-600 border-indigo-500 text-white'
-                        : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'
-                    }`}
-                  >
-                    <ToolIcon name={t.name} size={16} />
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-3">
-              <button onClick={handlePushToTools} disabled={pushingToTools || selectedTools.size === 0 || tools.length === 0}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50">
-                {pushingToTools ? '推送中...' : `推送到 ${selectedTools.size} 个工具`}
-              </button>
-              <button onClick={() => setShowPushToolDialog(false)}
-                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">取消</button>
-            </div>
-          </div>
+      <AnimatedDialog open={showPushToolDialog} onClose={() => setShowPushToolDialog(false)} width="w-[420px]">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <ArrowUpToLine size={16} /> 推送到工具
+          </h3>
+          <button onClick={() => setShowPushToolDialog(false)} style={{ color: 'var(--text-muted)' }}><X size={16} /></button>
         </div>
-      )}
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>将 Skill 直接复制到工具目录，无需导入到「我的Skills」</p>
+        {tools.length === 0 ? (
+          <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>没有可用的工具，请在设置中启用工具</p>
+        ) : (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {tools.map((t: any) => (
+              <button
+                key={t.name}
+                onClick={() => toggleTool(t.name)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200"
+                style={toolBtnStyle(selectedTools.has(t.name))}
+              >
+                <ToolIcon name={t.name} size={16} />
+                {t.name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button
+            onClick={handlePushToTools}
+            disabled={pushingToTools || selectedTools.size === 0 || tools.length === 0}
+            className="btn-primary flex-1 py-2 rounded-lg text-sm"
+          >
+            {pushingToTools ? '推送中...' : `推送到 ${selectedTools.size} 个工具`}
+          </button>
+          <button onClick={() => setShowPushToolDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
+        </div>
+      </AnimatedDialog>
 
       {/* HTTP auth dialog */}
-      {showHttpAuthDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[460px] border border-gray-700">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="font-semibold flex items-center gap-2"><Lock size={16} /> 需要认证</h3>
-              <button onClick={() => setShowHttpAuthDialog(false)}><X size={16} className="text-gray-400" /></button>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">仓库需要用户名和密码（或 Access Token）才能访问</p>
-            <div className="space-y-2 mb-4">
-              <input
-                value={authUsername}
-                onChange={e => setAuthUsername(e.target.value)}
-                placeholder="用户名"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
-              />
-              <input
-                type="password"
-                value={authPassword}
-                onChange={e => setAuthPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !authAdding && handleAuthRetry()}
-                placeholder="密码 / Access Token"
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500"
-              />
-            </div>
-            {authError && (
-              <div className="flex items-start gap-2 bg-red-950 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm mb-3">
-                <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                <span>{authError}</span>
-              </div>
-            )}
-            <div className="flex gap-3">
-              <button onClick={handleAuthRetry} disabled={authAdding}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50">
-                {authAdding ? '连接中...' : '确认'}
-              </button>
-              <button onClick={() => setShowHttpAuthDialog(false)}
-                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">取消</button>
-            </div>
-          </div>
+      <AnimatedDialog open={showHttpAuthDialog} onClose={() => setShowHttpAuthDialog(false)} width="w-[460px]">
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Lock size={16} /> 需要认证
+          </h3>
+          <button onClick={() => setShowHttpAuthDialog(false)} style={{ color: 'var(--text-muted)' }}><X size={16} /></button>
         </div>
-      )}
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>仓库需要用户名和密码（或 Access Token）才能访问</p>
+        <div className="space-y-2 mb-4">
+          <input
+            value={authUsername}
+            onChange={e => setAuthUsername(e.target.value)}
+            placeholder="用户名"
+            className="input-base"
+          />
+          <input
+            type="password"
+            value={authPassword}
+            onChange={e => setAuthPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !authAdding && handleAuthRetry()}
+            placeholder="密码 / Access Token"
+            className="input-base"
+          />
+        </div>
+        {authError && (
+          <div
+            className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm mb-3"
+            style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--color-error)' }}
+          >
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <span>{authError}</span>
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button onClick={handleAuthRetry} disabled={authAdding} className="btn-primary flex-1 py-2 rounded-lg text-sm">
+            {authAdding ? '连接中...' : '确认'}
+          </button>
+          <button onClick={() => setShowHttpAuthDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
+        </div>
+      </AnimatedDialog>
 
       {/* SSH auth error dialog */}
-      {showSshErrorDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[460px] border border-gray-700">
-            <h3 className="font-semibold mb-2 flex items-center gap-2 text-amber-400">
-              <KeyRound size={16} /> SSH 认证失败
-            </h3>
-            <p className="text-sm text-gray-300 mb-3">无法使用 SSH 访问远程仓库，请检查以下配置：</p>
-            <ul className="text-sm text-gray-400 space-y-1.5 list-disc list-inside mb-4">
-              <li>SSH 密钥是否已生成（<code className="text-gray-300">ssh-keygen</code>）</li>
-              <li>公钥是否已添加到 GitHub / GitLab 等远程仓库</li>
-              <li>SSH Agent 是否正在运行（<code className="text-gray-300">ssh-add</code>）</li>
-              <li>可尝试改用 HTTPS 协议克隆</li>
-            </ul>
-            <button onClick={() => setShowSshErrorDialog(false)}
-              className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">关闭</button>
-          </div>
-        </div>
-      )}
+      <AnimatedDialog open={showSshErrorDialog} onClose={() => setShowSshErrorDialog(false)} width="w-[460px]">
+        <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-warning)' }}>
+          <KeyRound size={16} /> SSH 认证失败
+        </h3>
+        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>无法使用 SSH 访问远程仓库，请检查以下配置：</p>
+        <ul className="text-sm space-y-1.5 list-disc list-inside mb-4" style={{ color: 'var(--text-muted)' }}>
+          <li>SSH 密钥是否已生成（<code style={{ color: 'var(--text-secondary)' }}>ssh-keygen</code>）</li>
+          <li>公钥是否已添加到 GitHub / GitLab 等远程仓库</li>
+          <li>SSH Agent 是否正在运行（<code style={{ color: 'var(--text-secondary)' }}>ssh-add</code>）</li>
+          <li>可尝试改用 HTTPS 协议克隆</li>
+        </ul>
+        <button onClick={() => setShowSshErrorDialog(false)} className="btn-secondary w-full py-2 rounded-lg text-sm">关闭</button>
+      </AnimatedDialog>
 
       {/* Push conflict dialog */}
-      {showPushConflictDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-[420px] border border-gray-700">
-            <h3 className="font-semibold mb-2 flex items-center gap-2 text-amber-400">
-              <AlertCircle size={16} /> 发现冲突
-            </h3>
-            <p className="text-sm text-gray-400 mb-3">以下 Skill 在目标工具目录中已存在：</p>
-            <ul className="space-y-1 mb-4 max-h-40 overflow-y-auto">
-              {pushConflicts.map(c => (
-                <li key={c} className="text-sm text-gray-300 bg-gray-900 px-3 py-1.5 rounded">{c}</li>
-              ))}
-            </ul>
-            <div className="flex gap-3">
-              <button onClick={handlePushToToolsForce}
-                className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm">覆盖全部</button>
-              <button onClick={() => { setShowPushConflictDialog(false); setSelectMode(false); setSelectedPaths(new Set()); setPushConflicts([]) }}
-                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm">跳过冲突</button>
-            </div>
-          </div>
+      <AnimatedDialog open={showPushConflictDialog} onClose={() => setShowPushConflictDialog(false)} width="w-[420px]">
+        <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-warning)' }}>
+          <AlertCircle size={16} /> 发现冲突
+        </h3>
+        <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>以下 Skill 在目标工具目录中已存在：</p>
+        <ul className="space-y-1 mb-4 max-h-40 overflow-y-auto">
+          {pushConflicts.map(c => (
+            <li key={c} className="text-sm px-3 py-1.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>{c}</li>
+          ))}
+        </ul>
+        <div className="flex gap-3">
+          <button
+            onClick={handlePushToToolsForce}
+            className="flex-1 py-2 rounded-lg text-sm text-white transition-colors"
+            style={{ background: 'var(--color-warning)' }}
+          >覆盖全部</button>
+          <button
+            onClick={() => { setShowPushConflictDialog(false); setSelectMode(false); setSelectedPaths(new Set()); setPushConflicts([]) }}
+            className="btn-secondary flex-1 py-2 rounded-lg text-sm"
+          >跳过冲突</button>
         </div>
-      )}
+      </AnimatedDialog>
     </div>
   )
 }
@@ -547,7 +617,7 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
 }) {
   if (repos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+      <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
         <Star size={32} className="mb-2 opacity-30" />
         <p className="text-sm">还没有收藏的仓库</p>
         <p className="text-xs mt-1">点击「添加仓库」开始收藏</p>
@@ -557,31 +627,52 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
   return (
     <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
       {repos.map((r: any) => (
-        <div key={r.url} onClick={() => onEnter(r.url)}
-          className="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-indigo-500 cursor-pointer transition-colors">
+        <div
+          key={r.url}
+          onClick={() => onEnter(r.url)}
+          className="card-base p-4 cursor-pointer"
+        >
           <div className="flex justify-between items-start mb-2">
-            <span className="font-medium text-sm truncate flex-1 mr-2">{r.name}</span>
+            <span className="font-medium text-sm truncate flex-1 mr-2" style={{ color: 'var(--text-primary)' }}>{r.name}</span>
             <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-              <button onClick={() => OpenURL(r.source ? `https://${r.source}` : r.url)}
-                className="p-1 text-gray-400 hover:text-indigo-400 rounded" title="在浏览器中打开">
+              <button
+                onClick={() => OpenURL(r.source ? `https://${r.source}` : r.url)}
+                className="p-1 rounded transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+                title="在浏览器中打开"
+              >
                 <ExternalLink size={12} />
               </button>
-              <button onClick={() => onUpdate(r.url)}
-                className="p-1 text-gray-400 hover:text-white rounded" title="更新">
+              <button
+                onClick={() => onUpdate(r.url)}
+                className="p-1 rounded transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+                title="更新"
+              >
                 <RefreshCw size={12} />
               </button>
-              <button onClick={() => onRemove(r.url)}
-                className="p-1 text-gray-400 hover:text-red-400 rounded" title="删除收藏">
+              <button
+                onClick={() => onRemove(r.url)}
+                className="p-1 rounded transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-error)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+                title="删除收藏"
+              >
                 <Trash2 size={12} />
               </button>
             </div>
           </div>
           {r.syncError ? (
-            <p className="text-xs text-red-400 truncate" title={r.syncError}>{r.syncError}</p>
+            <p className="text-xs truncate" style={{ color: 'var(--color-error)' }} title={r.syncError}>{r.syncError}</p>
           ) : (
             <>
-              <p className="text-xs text-gray-500 truncate" title={r.source || r.url}>{r.source || r.url}</p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={r.source || r.url}>{r.source || r.url}</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                 {r.lastSync && r.lastSync !== '0001-01-01T00:00:00Z'
                   ? `同步于 ${new Date(r.lastSync).toLocaleString()}`
                   : '未同步'}
@@ -603,7 +694,7 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
 }) {
   if (skills.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+      <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
         <p className="text-sm">没有找到 Skills</p>
       </div>
     )
@@ -614,17 +705,17 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
         const src = sk.source || sk.repoUrl || ''
         const sourceType = src.includes('github.com') ? 'github' : src ? 'git' : undefined
         return (
-        <SyncSkillCard
-          key={sk.path}
-          name={sk.name}
-          path={sk.path}
-          source={sourceType}
-          subtitle={showRepo ? sk.repoName : undefined}
-          imported={sk.imported}
-          showSelection={selectMode}
-          selected={selectedPaths.has(sk.path)}
-          onToggle={() => selectMode && onToggle(sk.path)}
-        />
+          <SyncSkillCard
+            key={sk.path}
+            name={sk.name}
+            path={sk.path}
+            source={sourceType}
+            subtitle={showRepo ? sk.repoName : undefined}
+            imported={sk.imported}
+            showSelection={selectMode}
+            selected={selectedPaths.has(sk.path)}
+            onToggle={() => selectMode && onToggle(sk.path)}
+          />
         )
       })}
     </div>

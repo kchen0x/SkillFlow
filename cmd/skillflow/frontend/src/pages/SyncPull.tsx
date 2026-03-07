@@ -72,19 +72,28 @@ export default function SyncPull() {
 
   const allSelected = scanned.length > 0 && selected.size === scanned.length
 
+  const getNavStyle = (isActive: boolean) => isActive ? {
+    background: 'var(--accent-glow)',
+    color: 'var(--accent-primary)',
+    border: '1px solid var(--border-accent)',
+    boxShadow: 'var(--glow-accent-sm)',
+  } : {
+    color: 'var(--text-muted)',
+    border: '1px solid transparent',
+  }
+
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="w-48 shrink-0 border-r border-gray-800 p-3 flex flex-col gap-0.5">
-        <div className="px-3 py-1.5 text-xs font-medium tracking-wide text-gray-500 uppercase">
+      <div className="w-48 shrink-0 p-3 flex flex-col gap-0.5" style={{ borderRight: '1px solid var(--border-base)' }}>
+        <div className="px-3 py-1.5 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
           导入分类
         </div>
         {categories.map(category => (
           <button
             key={category}
             onClick={() => setTargetCategory(category)}
-            className={`px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-              targetCategory === category ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'
-            }`}
+            className="px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
+            style={getNavStyle(targetCategory === category)}
           >
             {category}
           </button>
@@ -92,14 +101,14 @@ export default function SyncPull() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800 flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-lg font-semibold">
+        <div className="px-6 py-4 flex flex-col gap-4" style={{ borderBottom: '1px solid var(--border-base)' }}>
+          <div className="flex items-center gap-2 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
             <ArrowDownToLine size={18} />
             从工具拉取
           </div>
 
           <section>
-            <p className="text-sm text-gray-400 mb-3">来源工具</p>
+            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>来源工具</p>
             <div className="flex flex-wrap gap-2">
               {tools.map(t => (
                 <button
@@ -112,11 +121,17 @@ export default function SyncPull() {
                     setScannedOnce(false)
                     scan(t.name)
                   }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
-                    selectedTool === t.name
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
-                  }`}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200"
+                  style={selectedTool === t.name ? {
+                    background: 'var(--accent-glow)',
+                    color: 'var(--accent-primary)',
+                    border: '1px solid var(--border-accent)',
+                    boxShadow: 'var(--glow-accent-sm)',
+                  } : {
+                    background: 'var(--bg-elevated)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-base)',
+                  }}
                 >
                   <ToolIcon name={t.name} size={20} />
                   {t.name}
@@ -126,22 +141,28 @@ export default function SyncPull() {
           </section>
 
           {scanning && (
-            <p className="text-sm text-gray-400">扫描中...</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>扫描中...</p>
           )}
 
           {scanError && (
-            <div className="flex items-start gap-2 bg-red-950 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
-              <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-400" />
+            <div
+              className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm"
+              style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--color-error)' }}
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
               <span className="flex-1">{scanError}</span>
-              <button onClick={() => setScanError('')} className="shrink-0 text-red-500 hover:text-red-300">
+              <button onClick={() => setScanError('')} className="shrink-0 hover:opacity-70">
                 <X size={14} />
               </button>
             </div>
           )}
 
           {!scanError && !scanning && scannedOnce && scanned.length === 0 && (
-            <div className="flex items-center gap-2 bg-yellow-950 border border-yellow-700 text-yellow-300 rounded-lg px-4 py-3 text-sm">
-              <AlertCircle size={16} className="shrink-0 text-yellow-400" />
+            <div
+              className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm"
+              style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: 'var(--color-warning)' }}
+            >
+              <AlertCircle size={16} className="shrink-0" />
               <span>未发现任何 Skill，请确认工具目录中包含含有 skill.md 的子目录</span>
             </div>
           )}
@@ -149,20 +170,23 @@ export default function SyncPull() {
           {scanned.length > 0 && (
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <p className="text-sm text-gray-400">
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                   选择要导入的 Skills
-                  <span className="ml-1 text-gray-500">（{selected.size}/{scanned.length}）</span>
+                  <span className="ml-1" style={{ color: 'var(--text-disabled)' }}>（{selected.size}/{scanned.length}）</span>
                 </p>
                 <button
                   onClick={toggleAll}
-                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 text-xs transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
                 >
                   {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
                   {allSelected ? '取消全选' : '全选'}
                 </button>
               </div>
-              <p className="text-sm text-gray-400">
-                导入到分类「<span className="text-gray-200">{targetCategory || defaultCategory}</span>」
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                导入到分类「<span style={{ color: 'var(--text-primary)' }}>{targetCategory || defaultCategory}</span>」
               </p>
             </div>
           )}
@@ -184,15 +208,15 @@ export default function SyncPull() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-800 flex items-center gap-4">
+            <div className="px-6 py-4 flex items-center gap-4" style={{ borderTop: '1px solid var(--border-base)' }}>
               <button
                 onClick={pull}
                 disabled={pulling || selected.size === 0}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50"
+                className="btn-primary px-6 py-2 rounded-lg text-sm"
               >
                 {pulling ? '拉取中...' : `开始拉取 (${selected.size})`}
               </button>
-              {done && <span className="text-sm text-green-400">拉取完成 ✓</span>}
+              {done && <span className="text-sm" style={{ color: 'var(--color-success)' }}>拉取完成 ✓</span>}
             </div>
           </>
         )}

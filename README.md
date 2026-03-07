@@ -27,6 +27,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
 | **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
 | **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, and local-only path settings kept out of sync; folder pickers reopen at the current location |
+| **Light / Dark Theme** | One-click toggle between deep-space Dark theme (cyan accent) and sky-blue Light theme; persisted across restarts |
 
 For a complete description of every button, dialog, and interaction, see **[docs/features.md](docs/features.md)**.
 
