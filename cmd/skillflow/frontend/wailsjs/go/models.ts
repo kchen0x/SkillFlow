@@ -84,6 +84,7 @@ export namespace config {
 	    tools: ToolConfig[];
 	    cloud: CloudConfig;
 	    proxy: ProxyConfig;
+	    skippedUpdateVersion?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -97,6 +98,7 @@ export namespace config {
 	        this.tools = this.convertValues(source["tools"], ToolConfig);
 	        this.cloud = this.convertValues(source["cloud"], CloudConfig);
 	        this.proxy = this.convertValues(source["proxy"], ProxyConfig);
+	        this.skippedUpdateVersion = source["skippedUpdateVersion"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

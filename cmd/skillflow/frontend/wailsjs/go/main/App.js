@@ -30,14 +30,6 @@ export function CheckAppUpdateAndNotify() {
   return window['go']['main']['App']['CheckAppUpdateAndNotify']();
 }
 
-export function GetSkippedUpdateVersion() {
-  return window['go']['main']['App']['GetSkippedUpdateVersion']();
-}
-
-export function SetSkippedUpdateVersion(arg1) {
-  return window['go']['main']['App']['SetSkippedUpdateVersion'](arg1);
-}
-
 export function CheckMissingPushDirs(arg1) {
   return window['go']['main']['App']['CheckMissingPushDirs'](arg1);
 }
@@ -92,6 +84,10 @@ export function GetSkillMeta(arg1) {
 
 export function GetSkillMetaByPath(arg1) {
   return window['go']['main']['App']['GetSkillMetaByPath'](arg1);
+}
+
+export function GetSkippedUpdateVersion() {
+  return window['go']['main']['App']['GetSkippedUpdateVersion']();
 }
 
 export function Greet(arg1) {
@@ -216,6 +212,10 @@ export function ScanGitHub(arg1) {
 
 export function ScanToolSkills(arg1) {
   return window['go']['main']['App']['ScanToolSkills'](arg1);
+}
+
+export function SetSkippedUpdateVersion(arg1) {
+  return window['go']['main']['App']['SetSkippedUpdateVersion'](arg1);
 }
 
 export function UpdateAllStarredRepos() {

@@ -21,10 +21,6 @@ export function CheckAppUpdate():Promise<main.AppUpdateInfo>;
 
 export function CheckAppUpdateAndNotify():Promise<main.AppUpdateInfo>;
 
-export function GetSkippedUpdateVersion():Promise<string>;
-
-export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
-
 export function CheckMissingPushDirs(arg1:Array<string>):Promise<Array<Record<string, string>>>;
 
 export function CheckUpdates():Promise<void>;
@@ -52,6 +48,8 @@ export function GetLogDir():Promise<string>;
 export function GetSkillMeta(arg1:string):Promise<skill.SkillMeta>;
 
 export function GetSkillMetaByPath(arg1:string):Promise<skill.SkillMeta>;
+
+export function GetSkippedUpdateVersion():Promise<string>;
 
 export function Greet(arg1:string):Promise<string>;
 
@@ -114,6 +112,8 @@ export function SaveConfig(arg1:config.AppConfig):Promise<void>;
 export function ScanGitHub(arg1:string):Promise<Array<install.SkillCandidate>>;
 
 export function ScanToolSkills(arg1:string):Promise<Array<skill.Skill>>;
+
+export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 
 export function UpdateAllStarredRepos():Promise<void>;
 

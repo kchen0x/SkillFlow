@@ -44,8 +44,12 @@ install-frontend:
 clean:
 ifeq ($(OS),Windows_NT)
 	if exist $(APP_DIR)\build\bin rmdir /s /q $(APP_DIR)\build\bin
+	if exist $(APP_DIR)\frontend\dist rmdir /s /q $(APP_DIR)\frontend\dist
+	if exist $(APP_DIR)\frontend\package.json.md5 del /f /q $(APP_DIR)\frontend\package.json.md5
 else
 	rm -rf $(APP_DIR)/build/bin
+	rm -rf $(APP_DIR)/frontend/dist
+	rm -f $(APP_DIR)/frontend/package.json.md5
 endif
 
 ## help: Show this help
