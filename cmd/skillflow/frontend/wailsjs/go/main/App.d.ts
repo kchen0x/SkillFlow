@@ -33,6 +33,8 @@ export function DeleteSkill(arg1:string):Promise<void>;
 
 export function DeleteSkills(arg1:Array<string>):Promise<void>;
 
+export function DeleteToolSkill(arg1:string,arg2:string):Promise<void>;
+
 export function DownloadAppUpdate(arg1:string):Promise<void>;
 
 export function GetAppVersion():Promise<string>;
@@ -72,6 +74,8 @@ export function ListRepoStarSkills(arg1:string):Promise<Array<git.StarSkill>>;
 export function ListSkills():Promise<Array<skill.Skill>>;
 
 export function ListStarredRepos():Promise<Array<git.StarredRepo>>;
+
+export function ListToolSkills(arg1:string):Promise<Array<main.ToolSkillEntry>>;
 
 export function MoveSkillCategory(arg1:string,arg2:string):Promise<void>;
 

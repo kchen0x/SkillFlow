@@ -241,6 +241,24 @@ export namespace main {
 	        this.canAutoUpdate = source["canAutoUpdate"];
 	    }
 	}
+	export class ToolSkillEntry {
+	    name: string;
+	    path: string;
+	    inPush: boolean;
+	    inScan: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ToolSkillEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.inPush = source["inPush"];
+	        this.inScan = source["inScan"];
+	    }
+	}
 
 }
 

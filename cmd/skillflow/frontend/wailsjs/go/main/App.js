@@ -54,6 +54,10 @@ export function DeleteSkills(arg1) {
   return window['go']['main']['App']['DeleteSkills'](arg1);
 }
 
+export function DeleteToolSkill(arg1, arg2) {
+  return window['go']['main']['App']['DeleteToolSkill'](arg1, arg2);
+}
+
 export function DownloadAppUpdate(arg1) {
   return window['go']['main']['App']['DownloadAppUpdate'](arg1);
 }
@@ -132,6 +136,10 @@ export function ListSkills() {
 
 export function ListStarredRepos() {
   return window['go']['main']['App']['ListStarredRepos']();
+}
+
+export function ListToolSkills(arg1) {
+  return window['go']['main']['App']['ListToolSkills'](arg1);
 }
 
 export function MoveSkillCategory(arg1, arg2) {

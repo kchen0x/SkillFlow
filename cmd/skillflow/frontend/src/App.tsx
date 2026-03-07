@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Route, Routes, NavLink } from 'react-router-dom'
-import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink } from 'lucide-react'
+import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import SyncPush from './pages/SyncPush'
 import SyncPull from './pages/SyncPull'
 import Backup from './pages/Backup'
 import SettingsPage from './pages/Settings'
 import StarredRepos from './pages/StarredRepos'
+import ToolSkills from './pages/ToolSkills'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { DownloadAppUpdate, ApplyAppUpdate, GetGitConflictPending, ResolveGitConflict, OpenURL, SetSkippedUpdateVersion } from '../wailsjs/go/main/App'
 import { main } from '../wailsjs/go/models'
@@ -179,6 +180,7 @@ export default function App() {
           <aside className="w-56 bg-gray-900 border-r border-gray-800 flex flex-col p-4 gap-1">
             <h1 className="text-lg font-bold mb-6 px-2">SkillFlow</h1>
             <NavItem to="/" icon={<Package size={16} />} label="我的 Skills" />
+            <NavItem to="/tools" icon={<Wrench size={16} />} label="我的工具" end={false} />
             <p className="text-xs text-gray-500 px-2 mt-3 mb-1">同步管理</p>
             <NavItem to="/sync/push" icon={<ArrowUpFromLine size={16} />} label="推送到工具" />
             <NavItem to="/sync/pull" icon={<ArrowDownToLine size={16} />} label="从工具拉取" />
@@ -205,6 +207,7 @@ export default function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/starred" element={<StarredRepos />} />
               <Route path="/starred/:repoEncoded" element={<StarredRepos />} />
+              <Route path="/tools" element={<ToolSkills />} />
             </Routes>
           </main>
         </div>

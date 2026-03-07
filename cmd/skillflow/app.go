@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -686,6 +687,101 @@ func (a *App) ScanToolSkills(toolName string) ([]*skill.Skill, error) {
 		}
 	}
 	return nil, nil
+}
+
+// ToolSkillEntry describes a skill found in a tool's configured directories.
+type ToolSkillEntry struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	InPush bool   `json:"inPush"`
+	InScan bool   `json:"inScan"`
+}
+
+// ListToolSkills returns all skills for a tool, annotated with whether each
+// skill lives in the push directory and/or the scan directories.
+func (a *App) ListToolSkills(toolName string) ([]ToolSkillEntry, error) {
+	cfg, err := a.config.Load()
+	if err != nil {
+		return nil, err
+	}
+	var tc *config.ToolConfig
+	for i := range cfg.Tools {
+		if cfg.Tools[i].Name == toolName {
+			tc = &cfg.Tools[i]
+			break
+		}
+	}
+	if tc == nil {
+		return nil, fmt.Errorf("tool %s not found", toolName)
+	}
+	adapter := getAdapter(*tc)
+
+	type entryState struct {
+		path   string
+		inPush bool
+		inScan bool
+	}
+	byName := map[string]*entryState{}
+
+	if tc.PushDir != "" {
+		if _, statErr := os.Stat(tc.PushDir); statErr == nil {
+			if pushSkills, pullErr := adapter.Pull(a.ctx, tc.PushDir); pullErr == nil {
+				for _, sk := range pushSkills {
+					byName[sk.Name] = &entryState{path: sk.Path, inPush: true}
+				}
+			}
+		}
+	}
+
+	if scanSkills, _ := scanToolSkills(a.ctx, adapter, tc.ScanDirs); scanSkills != nil {
+		for _, sk := range scanSkills {
+			if e, ok := byName[sk.Name]; ok {
+				e.inScan = true
+			} else {
+				byName[sk.Name] = &entryState{path: sk.Path, inScan: true}
+			}
+		}
+	}
+
+	result := make([]ToolSkillEntry, 0, len(byName))
+	for name, e := range byName {
+		result = append(result, ToolSkillEntry{Name: name, Path: e.path, InPush: e.inPush, InScan: e.inScan})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
+// DeleteToolSkill removes a skill directory from a tool's push directory.
+// Returns an error if skillPath is not within the tool's configured push directory.
+func (a *App) DeleteToolSkill(toolName string, skillPath string) error {
+	cfg, err := a.config.Load()
+	if err != nil {
+		return err
+	}
+	var tc *config.ToolConfig
+	for i := range cfg.Tools {
+		if cfg.Tools[i].Name == toolName {
+			tc = &cfg.Tools[i]
+			break
+		}
+	}
+	if tc == nil {
+		return fmt.Errorf("tool %s not found", toolName)
+	}
+	if tc.PushDir == "" {
+		return fmt.Errorf("工具 %s 未配置推送路径", toolName)
+	}
+	rel, relErr := filepath.Rel(tc.PushDir, skillPath)
+	if relErr != nil || strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("无法删除不在推送路径下的 Skill")
+	}
+	a.logInfof("DeleteToolSkill: deleting %s from tool %s push dir started", filepath.Base(skillPath), toolName)
+	if err := os.RemoveAll(skillPath); err != nil {
+		a.logErrorf("DeleteToolSkill: delete %s failed: %v", skillPath, err)
+		return fmt.Errorf("删除失败: %w", err)
+	}
+	a.logInfof("DeleteToolSkill: deleted %s from tool %s push dir completed", filepath.Base(skillPath), toolName)
+	return nil
 }
 
 // CheckMissingPushDirs returns tool names and paths whose push directory does not yet exist.

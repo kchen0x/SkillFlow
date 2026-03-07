@@ -10,9 +10,10 @@ import {
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   Star, RefreshCw, Plus, Trash2, LayoutGrid, Folder,
-  ChevronLeft, CheckSquare, Download, AlertCircle, X, ExternalLink, ArrowUpToLine, Lock, KeyRound, FolderPlus,
+  ChevronLeft, CheckSquare, Download, AlertCircle, X, ExternalLink, ArrowUpToLine, Lock, KeyRound, FolderPlus, CheckCircle,
 } from 'lucide-react'
 import SyncSkillCard from '../components/SyncSkillCard'
+import { ToolIcon } from '../config/toolIcons'
 
 export default function StarredRepos() {
   const { repoEncoded } = useParams()
@@ -42,6 +43,7 @@ export default function StarredRepos() {
   const [showPushConflictDialog, setShowPushConflictDialog] = useState(false)
   const [missingDirs, setMissingDirs] = useState<{name: string, dir: string}[]>([])
   const [showMkdirDialog, setShowMkdirDialog] = useState(false)
+  const [pushSuccessMsg, setPushSuccessMsg] = useState('')
   // Auth dialogs
   const [showHttpAuthDialog, setShowHttpAuthDialog] = useState(false)
   const [showSshErrorDialog, setShowSshErrorDialog] = useState(false)
@@ -187,6 +189,10 @@ export default function StarredRepos() {
       } else {
         setSelectMode(false)
         setSelectedPaths(new Set())
+        const count = paths.length
+        const toolCount = toolNames.length
+        setPushSuccessMsg(`已成功推送 ${count} 个 Skill 到 ${toolCount} 个工具`)
+        setTimeout(() => setPushSuccessMsg(''), 3000)
       }
     } catch (e: any) {
       console.error('Push to tools failed:', e)
@@ -214,11 +220,15 @@ export default function StarredRepos() {
 
   const handlePushToToolsForce = async () => {
     try {
-      await PushStarSkillsToToolsForce([...selectedPaths], [...selectedTools])
+      const paths = [...selectedPaths]
+      const toolNames = [...selectedTools]
+      await PushStarSkillsToToolsForce(paths, toolNames)
       setShowPushConflictDialog(false)
       setSelectMode(false)
       setSelectedPaths(new Set())
       setPushConflicts([])
+      setPushSuccessMsg(`已成功推送 ${paths.length} 个 Skill 到 ${toolNames.length} 个工具`)
+      setTimeout(() => setPushSuccessMsg(''), 3000)
     } catch (e: any) {
       console.error('Force push failed:', e)
     }
@@ -236,6 +246,13 @@ export default function StarredRepos() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Success toast */}
+      {pushSuccessMsg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 bg-emerald-800 border border-emerald-600 text-emerald-100 rounded-xl text-sm shadow-lg">
+          <CheckCircle size={15} className="shrink-0" />
+          {pushSuccessMsg}
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-800 flex-wrap">
         {currentRepo ? (
@@ -257,7 +274,7 @@ export default function StarredRepos() {
               <CheckSquare size={14} />{selectedPaths.size === skills.length ? '取消全选' : '全选'}
             </button>
             <button onClick={() => { setSelectedTools(new Set()); setShowPushToolDialog(true) }} disabled={selectedPaths.size === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-400 hover:text-white disabled:opacity-40 rounded-lg hover:bg-gray-800">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-lg">
               <ArrowUpToLine size={14} /> 推送到工具 {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
             </button>
             <button onClick={() => setShowImportDialog(true)} disabled={selectedPaths.size === 0}
@@ -365,7 +382,7 @@ export default function StarredRepos() {
 
       {/* Mkdir confirmation dialog */}
       {showMkdirDialog && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-60">
           <div className="bg-gray-800 rounded-2xl p-6 w-[460px] border border-gray-700">
             <div className="flex justify-between items-center mb-1">
               <h3 className="font-semibold flex items-center gap-2"><FolderPlus size={16} /> 目录不存在</h3>
@@ -404,17 +421,20 @@ export default function StarredRepos() {
             {tools.length === 0 ? (
               <p className="text-sm text-gray-500 py-4 text-center">没有可用的工具，请在设置中启用工具</p>
             ) : (
-              <div className="space-y-1 mb-4 max-h-52 overflow-y-auto">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {tools.map((t: any) => (
-                  <label key={t.Name} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-700 cursor-pointer">
-                    <input type="checkbox" className="accent-indigo-500 shrink-0"
-                      checked={selectedTools.has(t.Name)}
-                      onChange={() => toggleTool(t.Name)} />
-                    <span className="text-sm font-medium">{t.Name}</span>
-                    {t.PushDir && (
-                      <span className="text-xs text-gray-500 truncate flex-1 text-right" title={t.PushDir}>{t.PushDir}</span>
-                    )}
-                  </label>
+                  <button
+                    key={t.name}
+                    onClick={() => toggleTool(t.name)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
+                      selectedTools.has(t.name)
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    <ToolIcon name={t.name} size={16} />
+                    {t.name}
+                  </button>
                 ))}
               </div>
             )}
@@ -563,7 +583,7 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
               <p className="text-xs text-gray-500 truncate" title={r.source || r.url}>{r.source || r.url}</p>
               <p className="text-xs text-gray-500 mt-1">
                 {r.lastSync && r.lastSync !== '0001-01-01T00:00:00Z'
-                  ? `同步于 ${new Date(r.lastSync).toLocaleDateString()}`
+                  ? `同步于 ${new Date(r.lastSync).toLocaleString()}`
                   : '未同步'}
               </p>
             </>
