@@ -18,16 +18,17 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 
 | Feature | Description |
 |---------|-------------|
-| **Skill Library** | Central store with categories, real-time search, drag-and-drop organization, batch delete, and safe empty-category deletion |
+| **Skill Library** | Central store with categories, real-time search, A-Z / Z-A sorting, drag-and-drop organization, batch delete, and safe empty-category deletion |
 | **GitHub Install** | Clone any repo, browse skill candidates, select and install with one click; auto-pulls on subsequent scans |
-| **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; conflict handling per skill |
-| **Starred Repos** | Watch Git repos and browse/import their skills without adding them to your library first |
+| **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; searchable, sortable skill pickers and conflict handling per skill |
+| **Starred Repos** | Watch Git repos and browse/import their skills without adding them to your library first, with search and alphabetical sorting in skill grids |
 | **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo |
 | **Update Checker** | Detects new commits for GitHub-sourced skills; one-click update |
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
 | **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
 | **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, and local-only path settings kept out of sync; folder pickers reopen at the current location |
-| **Light / Dark Theme** | One-click toggle between deep-space Dark theme (cyan accent) and sky-blue Light theme; persisted across restarts |
+| **Bilingual UI** | Switch the frontend instantly between Chinese and English from the sidebar or Settings; language preference is stored locally |
+| **Dark / Young / Light Themes** | Switch between a refined graphite Dark theme, a softened paper-blue Young theme evolved from the legacy Light palette, and a new Messor-inspired Light theme; persisted across restarts |
 
 For a complete description of every button, dialog, and interaction, see **[docs/features.md](docs/features.md)**.
 

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { FolderOpen, Github, FolderOpenDot, Copy, Check } from 'lucide-react'
 import { OpenPath, GetSkillMeta, GetSkillMetaByPath, ReadSkillFileContent } from '../../wailsjs/go/main/App'
+import { useLanguage } from '../contexts/LanguageContext'
 import SkillTooltip from './SkillTooltip'
 
 interface Props {
@@ -19,11 +20,20 @@ export default function SyncSkillCard({
   name, subtitle, source, path, id,
   showSelection = true, imported, selected, onToggle,
 }: Props) {
+  const { t } = useLanguage()
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null)
   const [meta, setMeta] = useState<any | null>(null)
   const [copied, setCopied] = useState(false)
+
+  const sourceLabel = source === 'github'
+    ? t('common.sourceGitHub')
+    : source === 'manual'
+      ? t('common.sourceManual')
+      : source === 'git'
+        ? t('common.sourceGit')
+        : source
 
   const handleMouseEnter = () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
@@ -83,12 +93,11 @@ export default function SyncSkillCard({
           boxShadow: 'var(--glow-accent-sm)',
         } : undefined}
       >
-        {/* Top-right action buttons */}
         <div className="absolute top-2 right-2 flex items-center gap-0.5 z-10">
           {path && (
             <button
               onClick={handleCopy}
-              title="复制 skill.md"
+              title={t('toolSkills.copySkill')}
               className="p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
@@ -102,7 +111,7 @@ export default function SyncSkillCard({
           {path && (
             <button
               onClick={handleOpen}
-              title="打开目录"
+              title={t('toolSkills.openDir')}
               className="p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
@@ -113,12 +122,11 @@ export default function SyncSkillCard({
           )}
         </div>
 
-        {/* Source badge + imported badge */}
         <div className="flex items-center gap-1.5 pr-14 flex-wrap">
           {source === 'github'
             ? <Github size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
             : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />}
-          {source && (
+          {sourceLabel && (
             <span
               className="text-xs px-1.5 py-0.5 rounded max-w-[72px] truncate"
               style={source === 'github' ? {
@@ -129,9 +137,9 @@ export default function SyncSkillCard({
                 background: 'var(--bg-overlay)',
                 color: 'var(--text-muted)',
               }}
-              title={source}
+              title={sourceLabel}
             >
-              {source}
+              {sourceLabel}
             </span>
           )}
           {imported && (
@@ -143,20 +151,17 @@ export default function SyncSkillCard({
                 border: '1px solid rgba(52, 211, 153, 0.25)',
               }}
             >
-              已导入
+              {t('github.installed')}
             </span>
           )}
         </div>
 
-        {/* Skill name */}
         <p className="text-sm font-medium leading-snug truncate pr-5" style={{ color: 'var(--text-primary)' }}>{name}</p>
 
-        {/* Subtitle */}
         {subtitle && (
           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>
         )}
 
-        {/* Selection indicator */}
         {showSelection && (
           <div
             className="absolute bottom-2 right-2 w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-150"

@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { GetEnabledTools, ListToolSkills, DeleteToolSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
 import { ToolIcon } from '../config/toolIcons'
 import SkillTooltip from '../components/SkillTooltip'
+import SkillListControls from '../components/SkillListControls'
+import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine } from 'lucide-react'
+import { useLanguage } from '../contexts/LanguageContext'
 
 export default function ToolSkills() {
+  const { t } = useLanguage()
   const [tools, setTools] = useState<any[]>([])
   const [selectedTool, setSelectedTool] = useState<string>('')
   const [skills, setSkills] = useState<any[]>([])
@@ -12,6 +16,8 @@ export default function ToolSkills() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [search, setSearch] = useState('')
+  const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
 
   useEffect(() => {
     GetEnabledTools().then(t => {
@@ -71,16 +77,40 @@ export default function ToolSkills() {
   const pushSkills = skills.filter(s => s.inPush)
   const scanOnlySkills = skills.filter(s => s.inScan && !s.inPush)
 
+  const filteredPushSkills = useMemo(
+    () => filterAndSortSkills(pushSkills, search, sortOrder, skill => skill.name ?? ''),
+    [pushSkills, search, sortOrder],
+  )
+
+  const filteredScanOnlySkills = useMemo(
+    () => filterAndSortSkills(scanOnlySkills, search, sortOrder, skill => skill.name ?? ''),
+    [scanOnlySkills, search, sortOrder],
+  )
+
   const toggleSelectAll = () => {
-    if (selectedPaths.size === pushSkills.length) {
-      setSelectedPaths(new Set())
-    } else {
-      setSelectedPaths(new Set(pushSkills.map((s: any) => s.path)))
-    }
+    const visiblePaths = filteredPushSkills.map((skill: any) => skill.path)
+    setSelectedPaths(prev => {
+      const next = new Set(prev)
+      if (visiblePaths.every(path => next.has(path))) {
+        visiblePaths.forEach(path => next.delete(path))
+      } else {
+        visiblePaths.forEach(path => next.add(path))
+      }
+      return next
+    })
   }
 
+  useEffect(() => {
+    if (!selectMode) return
+    const visiblePaths = new Set(filteredPushSkills.map((skill: any) => skill.path))
+    setSelectedPaths(prev => {
+      const next = new Set([...prev].filter(path => visiblePaths.has(path)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [filteredPushSkills, selectMode])
+
   const tool = tools.find(t => t.name === selectedTool)
-  const allSelected = pushSkills.length > 0 && selectedPaths.size === pushSkills.length
+  const allSelected = filteredPushSkills.length > 0 && filteredPushSkills.every((skill: any) => selectedPaths.has(skill.path))
 
   const getNavStyle = (isActive: boolean) => isActive ? {
     background: 'var(--accent-glow)',
@@ -97,7 +127,7 @@ export default function ToolSkills() {
       {/* Left: tool list */}
       <div className="w-48 shrink-0 p-3 flex flex-col gap-0.5 overflow-y-auto" style={{ borderRight: '1px solid var(--border-base)' }}>
         <div className="px-3 py-1.5 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
-          工具列表
+          {t('toolSkills.toolList')}
         </div>
         {tools.map(t => (
           <button
@@ -111,77 +141,88 @@ export default function ToolSkills() {
           </button>
         ))}
         {tools.length === 0 && (
-          <p className="px-3 text-xs mt-2" style={{ color: 'var(--text-disabled)' }}>没有启用的工具，请在设置中启用</p>
+          <p className="px-3 text-xs mt-2" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noTools')}</p>
         )}
       </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-6 py-4 flex-wrap" style={{ borderBottom: '1px solid var(--border-base)' }}>
-          {tool ? (
-            <div className="flex items-center gap-2">
-              <ToolIcon name={tool.name} size={22} />
-              <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{tool.name}</span>
-            </div>
-          ) : (
-            <h2 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <Wrench size={14} /> 我的工具
-            </h2>
-          )}
-          <div className="flex-1" />
-          {selectMode ? (
-            <>
-              <button
-                onClick={toggleSelectAll}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
-              >
-                <CheckSquare size={14} />{allSelected ? '取消全选' : '全选'}
-              </button>
-              <button
-                onClick={handleBatchDelete}
-                disabled={selectedPaths.size === 0 || deleting}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:opacity-40 transition-colors text-white"
-                style={{ background: 'var(--color-error)' }}
-              >
-                <Trash2 size={14} /> 删除 {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
-              </button>
-              <button
-                onClick={() => { setSelectMode(false); setSelectedPaths(new Set()) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
-              >
-                取消
-              </button>
-            </>
-          ) : (
-            pushSkills.length > 0 && (
-              <button
-                onClick={() => setSelectMode(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
-              >
-                <CheckSquare size={14} /> 批量删除
-              </button>
-            )
-          )}
+        <div className="px-6 py-4 flex flex-col gap-4" style={{ borderBottom: '1px solid var(--border-base)' }}>
+          <div className="flex items-center gap-3 flex-wrap">
+            {tool ? (
+              <div className="flex items-center gap-2">
+                <ToolIcon name={tool.name} size={22} />
+                <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{tool.name}</span>
+              </div>
+            ) : (
+              <h2 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Wrench size={14} /> {t('toolSkills.title')}
+              </h2>
+            )}
+            <div className="flex-1" />
+            {selectMode ? (
+              <>
+                <button
+                  onClick={toggleSelectAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  <CheckSquare size={14} />{allSelected ? t('common.deselectAll') : t('common.selectAll')}
+                </button>
+                <button
+                  onClick={handleBatchDelete}
+                  disabled={selectedPaths.size === 0 || deleting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:opacity-40 transition-colors text-white"
+                  style={{ background: 'var(--color-error)' }}
+                >
+                  <Trash2 size={14} /> {t('common.delete')} {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
+                </button>
+                <button
+                  onClick={() => { setSelectMode(false); setSelectedPaths(new Set()) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  {t('common.cancel')}
+                </button>
+              </>
+            ) : (
+              filteredPushSkills.length > 0 && (
+                <button
+                  onClick={() => setSelectMode(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  <CheckSquare size={14} /> {t('toolSkills.batchDelete')}
+                </button>
+              )
+            )}
+          </div>
+
+          <SkillListControls
+            search={search}
+            onSearchChange={setSearch}
+            sortOrder={sortOrder}
+            onSortOrderChange={setSortOrder}
+            placeholder={t('toolSkills.searchPlaceholder')}
+            resultLabel={t('common.showingNSkills', { count: filteredPushSkills.length + filteredScanOnlySkills.length })}
+          />
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           {loading ? (
-            <div className="flex items-center justify-center h-32 text-sm" style={{ color: 'var(--text-muted)' }}>加载中...</div>
+            <div className="flex items-center justify-center h-32 text-sm" style={{ color: 'var(--text-muted)' }}>{t('common.loading')}</div>
           ) : !tool ? (
             <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
               <Wrench size={32} className="mb-2 opacity-30" />
-              <p className="text-sm">请先在左侧选择一个工具</p>
+              <p className="text-sm">{t('toolSkills.selectToolFirst')}</p>
             </div>
           ) : (
             <>
@@ -189,19 +230,21 @@ export default function ToolSkills() {
               <section>
                 <div className="flex items-center gap-2 mb-4">
                   <ArrowUpToLine size={14} style={{ color: 'var(--color-success)' }} className="shrink-0" />
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>推送路径</span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.pushPath')}</span>
                   {tool.pushDir
                     ? <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={tool.pushDir}>{tool.pushDir}</span>
-                    : <span className="text-xs" style={{ color: 'var(--text-disabled)' }}>未配置</span>
+                    : <span className="text-xs" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noPushDir')}</span>
                   }
                 </div>
                 {!tool.pushDir ? (
-                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>该工具未配置推送路径</p>
+                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noPushDirDesc')}</p>
                 ) : pushSkills.length === 0 ? (
-                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>推送路径下暂无 Skill</p>
+                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noPushSkills')}</p>
+                ) : filteredPushSkills.length === 0 ? (
+                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noMatch')}</p>
                 ) : (
                   <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
-                    {pushSkills.map((sk: any) => (
+                    {filteredPushSkills.map((sk: any) => (
                       <ToolSkillCard
                         key={sk.path}
                         name={sk.name}
@@ -221,18 +264,20 @@ export default function ToolSkills() {
               <section>
                 <div className="flex items-center gap-2 mb-4">
                   <ScanLine size={14} style={{ color: 'var(--accent-primary)' }} className="shrink-0" />
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>扫描路径</span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.scanPath')}</span>
                   {tool.scanDirs?.length > 0 && (
                     <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={tool.scanDirs.join(', ')}>
-                      {tool.scanDirs.length} 个目录
+                      {t('toolSkills.nDirs', { count: tool.scanDirs.length })}
                     </span>
                   )}
                 </div>
                 {scanOnlySkills.length === 0 ? (
-                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>扫描路径下暂无独立 Skill</p>
+                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noScanSkills')}</p>
+                ) : filteredScanOnlySkills.length === 0 ? (
+                  <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noMatch')}</p>
                 ) : (
                   <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
-                    {scanOnlySkills.map((sk: any) => (
+                    {filteredScanOnlySkills.map((sk: any) => (
                       <ToolSkillCard
                         key={sk.path}
                         name={sk.name}
@@ -266,6 +311,7 @@ interface ToolSkillCardProps {
 }
 
 function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSelect, onDelete }: ToolSkillCardProps) {
+  const { t } = useLanguage()
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null)
@@ -354,7 +400,7 @@ function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSe
           <div className="absolute top-2 right-2 flex items-center gap-0.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={handleCopy}
-              title="复制 skill.md"
+              title={t('toolSkills.copySkill')}
               className="p-1 rounded transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
@@ -364,7 +410,7 @@ function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSe
             </button>
             <button
               onClick={handleOpen}
-              title="打开目录"
+              title={t('toolSkills.openDir')}
               className="p-1 rounded transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
@@ -390,7 +436,7 @@ function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSe
               className="text-xs ml-auto transition-colors"
               style={{ color: 'var(--color-error)' }}
             >
-              删除
+              {t('toolSkills.delete')}
             </button>
           </div>
         )}
@@ -398,7 +444,7 @@ function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSe
         {/* Read-only badge */}
         {!canDelete && (
           <div className="mt-3 flex">
-            <span className="text-xs ml-auto" style={{ color: 'var(--text-disabled)' }}>只读</span>
+            <span className="text-xs ml-auto" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.readOnly')}</span>
           </div>
         )}
       </div>

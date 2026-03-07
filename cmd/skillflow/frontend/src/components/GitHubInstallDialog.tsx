@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { ScanGitHub, InstallFromGitHub, ListCategories } from '../../wailsjs/go/main/App'
 import { Github, X, AlertCircle } from 'lucide-react'
+import { useLanguage } from '../contexts/LanguageContext'
 import AnimatedDialog from './ui/AnimatedDialog'
 
 interface Props { onClose: () => void; onDone: () => void }
 
 export default function GitHubInstallDialog({ onClose, onDone }: Props) {
+  const { t } = useLanguage()
   const [url, setUrl] = useState('')
   const [candidates, setCandidates] = useState<any[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -31,9 +33,9 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
       if (catList.length > 0 && category === '') setCategory(catList[0])
       setSelected(new Set(skills.filter((x: any) => !x.Installed).map((x: any) => x.Name)))
       setScannedOnce(true)
-      if (skills.length === 0) setScanError('未发现任何 Skill，请确认该仓库包含含有 skill.md的子目录')
+      if (skills.length === 0) setScanError(t('github.noSkills'))
     } catch (e: any) {
-      setScanError(String(e?.message ?? e ?? '扫描失败，请检查网络或仓库地址'))
+      setScanError(String(e?.message ?? e ?? t('github.scanFailed')))
     } finally {
       setScanning(false)
     }
@@ -47,7 +49,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
       await InstallFromGitHub(url, toInstall, category)
       onDone()
     } catch (e: any) {
-      setInstallError(String(e?.message ?? e ?? '安装失败'))
+      setInstallError(String(e?.message ?? e ?? t('github.installFailed')))
     } finally {
       setInstalling(false)
     }
@@ -63,7 +65,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
     <AnimatedDialog open={true} onClose={onClose} width="w-[520px]">
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-          <Github size={16} /> 从远程仓库安装
+          <Github size={16} /> {t('github.title')}
         </h3>
         <button onClick={onClose} style={{ color: 'var(--text-muted)' }} className="hover:opacity-80 transition-opacity">
           <X size={16} />
@@ -75,7 +77,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
           value={url}
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !scanning && url && scan()}
-          placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
+          placeholder={t('github.urlPlaceholder')}
           className="input-base flex-1"
         />
         <button
@@ -86,12 +88,12 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
           {scanning ? (
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
-              克隆/更新中...
+              {t('github.scanning')}
             </span>
-          ) : '扫描'}
+          ) : t('github.scan')}
         </button>
       </div>
-      <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>首次扫描会 git clone 仓库，后续自动 git pull 更新</p>
+      <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>{t('github.hint')}</p>
 
       {scanError && (
         <div
@@ -133,14 +135,14 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
                       border: '1px solid rgba(14, 165, 233, 0.25)',
                     }}
                   >
-                    已安装
+                    {t('github.installed')}
                   </span>
                 )}
               </label>
             ))}
           </div>
           <div className="flex items-center gap-3 mb-4">
-            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>安装到分类</span>
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('github.installTo')}</span>
             <select
               value={category}
               onChange={e => setCategory(e.target.value)}
@@ -163,7 +165,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
             disabled={installing || selected.size === 0}
             className="btn-primary w-full py-2 rounded-lg text-sm"
           >
-            {installing ? '安装中...' : `安装 ${selected.size} 个 Skill`}
+            {installing ? t('github.installing') : t('github.installN', { count: selected.size })}
           </button>
         </>
       )}

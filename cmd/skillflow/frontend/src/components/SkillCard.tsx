@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Github, FolderOpen, RefreshCw, FolderOpenDot, Copy, Check } from 'lucide-react'
 import ContextMenu from './ContextMenu'
 import { OpenPath, ReadSkillFileContent } from '../../wailsjs/go/main/App'
+import { useLanguage } from '../contexts/LanguageContext'
 
 interface Skill { id: string; name: string; category: string; source: 'github' | 'manual'; hasUpdate: boolean; path?: string }
 interface Props {
@@ -26,10 +27,13 @@ export default function SkillCard({
   selectMode, selected, onToggleSelect,
   onHoverStart, onHoverEnd,
 }: Props) {
+  const { t } = useLanguage()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [copied, setCopied] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const dragGhostRef = useRef<HTMLDivElement | null>(null)
+
+  const sourceLabel = skill.source === 'github' ? t('common.sourceGitHub') : t('common.sourceManual')
 
   const setCardDragImage = (e: React.DragEvent) => {
     if (!cardRef.current) return
@@ -92,12 +96,12 @@ export default function SkillCard({
   }
 
   const menuItems = [
-    ...(skill.hasUpdate ? [{ label: '更新', onClick: () => onUpdate?.() }] : []),
+    ...(skill.hasUpdate ? [{ label: t('skillCard.update'), onClick: () => onUpdate?.() }] : []),
     ...categories.filter(c => c !== skill.category).map(c => ({
-      label: `移动到 ${c}`,
+      label: t('skillCard.moveTo', { cat: c }),
       onClick: () => onMoveCategory(c),
     })),
-    { label: '删除', onClick: onDelete, danger: true },
+    { label: t('skillCard.delete'), onClick: onDelete, danger: true },
   ]
 
   if (dragging && dropTargetActive) {
@@ -161,11 +165,10 @@ export default function SkillCard({
           </div>
         )}
 
-        {/* Open folder button */}
         {!selectMode && skill.path && (
           <button
             onClick={handleOpenFolder}
-            title="打开目录"
+            title={t('skillCard.openDir')}
             className="absolute top-2 right-2 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-all"
             style={{ color: 'var(--text-muted)' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
@@ -196,7 +199,7 @@ export default function SkillCard({
               color: 'var(--text-muted)',
             }}
           >
-            {skill.source}
+            {sourceLabel}
           </span>
         </div>
         <p
@@ -213,7 +216,7 @@ export default function SkillCard({
                 className="text-xs flex items-center gap-1 transition-colors"
                 style={{ color: 'var(--accent-primary)' }}
               >
-                <RefreshCw size={12} /> 更新
+                <RefreshCw size={12} /> {t('skillCard.update')}
               </button>
             )}
             {skill.path && (
@@ -225,8 +228,8 @@ export default function SkillCard({
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
               >
                 {copied
-                  ? <><Check size={12} style={{ color: 'var(--color-success)' }} /> 已复制</>
-                  : <><Copy size={12} /> 复制</>}
+                  ? <><Check size={12} style={{ color: 'var(--color-success)' }} /> {t('skillCard.copied')}</>
+                  : <><Copy size={12} /> {t('skillCard.copy')}</>}
               </button>
             )}
             <button
@@ -234,7 +237,7 @@ export default function SkillCard({
               className="text-xs ml-auto transition-colors"
               style={{ color: 'var(--color-error)' }}
             >
-              删除
+              {t('skillCard.delete')}
             </button>
           </div>
         )}

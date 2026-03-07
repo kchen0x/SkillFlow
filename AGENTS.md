@@ -153,6 +153,21 @@ The following operations must have reasonable logs (at minimum `info` on start/s
   - max 1MB per file
   - rotate and overwrite oldest when size limit is reached
 
+## Python Tooling Rule — MANDATORY
+
+Any Python-related work in this repository must use `uv` for interpreter management, dependency management, and script execution, while preserving functional correctness.
+
+**Rules:**
+- Never invoke system `python`, `python3`, `pip`, or `pip3` directly. If the interpreter itself is needed, run it via `uv run python ...`.
+- Never install Python packages into the system environment.
+- Prefer `uv run` for repo scripts, inline scripts, and module execution.
+- When converting an existing Python command to `uv`, preserve the original entrypoint, arguments, working directory, environment variables, stdin/stdout behavior, and required Python version.
+- Prefer `uv run python path/to/script.py` for script files, `uv run python - <<'PY'` for inline snippets, and `uv run -m <module>` for module-style commands.
+- Use `uv add`, `uv remove`, and `uv sync` to manage project dependencies.
+- Use `uv run --with <package>` or `uvx <tool>` for temporary or one-off tools instead of touching the system environment.
+- If a documented or scripted Python workflow currently uses direct Python or pip invocation, convert it to the equivalent `uv` workflow before running it.
+- Do not trade correctness for tooling purity: choose the `uv` invocation that faithfully reproduces the intended behavior.
+
 ## Commands
 
 ### Make targets (recommended)

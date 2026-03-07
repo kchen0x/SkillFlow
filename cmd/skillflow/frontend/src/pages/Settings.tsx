@@ -5,6 +5,7 @@ import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
 import { type Theme } from '../hooks/useTheme'
 import { useLanguage } from '../contexts/LanguageContext'
+import type { TranslationKey } from '../i18n'
 
 type Tab = 'tools' | 'cloud' | 'general' | 'network'
 type ProxyMode = 'none' | 'system' | 'manual'
@@ -29,6 +30,47 @@ type ThemeOption = {
   description: string
   icon: ReactNode
   preview: ThemePreviewPalette
+}
+
+const CLOUD_PROVIDER_LABEL_KEYS: Record<string, TranslationKey> = {
+  aliyun: 'settings.cloudProviderAliyun',
+  tencent: 'settings.cloudProviderTencent',
+  huawei: 'settings.cloudProviderHuawei',
+  git: 'settings.cloudProviderGit',
+}
+
+const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
+  aliyun: {
+    access_key_id: 'settings.cloudFieldAccessKeyId',
+    access_key_secret: 'settings.cloudFieldAccessKeySecret',
+    endpoint: 'settings.cloudFieldEndpoint',
+  },
+  tencent: {
+    secret_id: 'settings.cloudFieldSecretId',
+    secret_key: 'settings.cloudFieldSecretKey',
+    bucket_url: 'settings.cloudFieldBucketUrl',
+  },
+  huawei: {
+    access_key: 'settings.cloudFieldAccessKey',
+    secret_key: 'settings.cloudFieldSecretKey',
+    endpoint: 'settings.cloudFieldEndpoint',
+  },
+  git: {
+    repo_url: 'settings.cloudFieldRepoUrl',
+    branch: 'settings.cloudFieldBranch',
+    username: 'settings.cloudFieldUsernameOptional',
+    token: 'settings.cloudFieldTokenOptional',
+  },
+}
+
+function getCloudProviderDisplayName(name: string, t: (key: TranslationKey) => string) {
+  const key = CLOUD_PROVIDER_LABEL_KEYS[name]
+  return key ? t(key) : name
+}
+
+function getCloudFieldLabel(providerName: string | undefined, fieldKey: string, fallback: string, t: (key: TranslationKey) => string) {
+  const key = providerName ? CLOUD_FIELD_LABEL_KEYS[providerName]?.[fieldKey] : undefined
+  return key ? t(key) : fallback
 }
 
 function ThemeOptionCard({ option, active, onSelect }: { option: ThemeOption; active: boolean; onSelect: (theme: Theme) => void }) {
@@ -565,7 +607,7 @@ export default function SettingsPage() {
                     border: '1px solid var(--border-base)',
                   }}
                 >
-                  {p.name}
+                  {getCloudProviderDisplayName(p.name, t)}
                 </button>
               ))}
             </div>
@@ -585,7 +627,7 @@ export default function SettingsPage() {
               )}
               {selectedProvider.fields.map((f: any) => (
                 <div key={f.key}>
-                  <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{f.label}</p>
+                  <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{getCloudFieldLabel(cfg.cloud?.provider, f.key, f.label, t)}</p>
                   <input
                     type={f.secret ? 'password' : 'text'}
                     placeholder={f.placeholder ?? ''}

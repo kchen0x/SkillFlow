@@ -146,7 +146,7 @@ type StarSkill struct {
     RepoURL  string
     RepoName string
     Source   string
-    Imported bool     // 是否已在"我的 Skills"中
+    Imported bool     // 是否已在"我的skills"中
 }
 ```
 
@@ -297,7 +297,7 @@ type CloudProvider interface {
 frontend/src/
   App.tsx              ← BrowserRouter + 侧边栏布局 + 路由定义
   pages/               ← 每个路由对应一个文件
-    Dashboard.tsx      ← 我的 Skills 列表（分类、搜索、拖拽）
+    Dashboard.tsx      ← 我的skills 列表（分类、搜索、拖拽）
     SyncPush.tsx       ← 推送 Skills 到外部工具
     SyncPull.tsx       ← 从外部工具拉取 Skills
     StarredRepos.tsx   ← 浏览和导入收藏仓库的 Skills

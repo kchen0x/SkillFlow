@@ -12,10 +12,14 @@ import SyncSkillCard from '../components/SyncSkillCard'
 import { ArrowUpFromLine, CheckSquare, FolderPlus, Square, X } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
 import AnimatedDialog from '../components/ui/AnimatedDialog'
+import SkillListControls from '../components/SkillListControls'
+import { useLanguage } from '../contexts/LanguageContext'
+import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 
 type Scope = 'auto' | 'manual'
 
 export default function SyncPush() {
+  const { t } = useLanguage()
   const [tools, setTools] = useState<any[]>([])
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [categories, setCategories] = useState<string[]>([])
@@ -28,6 +32,8 @@ export default function SyncPush() {
   const [done, setDone] = useState(false)
   const [missingDirs, setMissingDirs] = useState<{ name: string; dir: string }[]>([])
   const [pendingPush, setPendingPush] = useState(false)
+  const [search, setSearch] = useState('')
+  const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
 
   useEffect(() => {
     Promise.all([GetEnabledTools(), ListSkills(), ListCategories()]).then(([t, s, c]) => {
@@ -42,19 +48,24 @@ export default function SyncPush() {
     [skills, selectedCategory],
   )
 
+  const visibleSkills = useMemo(
+    () => filterAndSortSkills(filteredSkills, search, sortOrder, skill => skill.Name ?? ''),
+    [filteredSkills, search, sortOrder],
+  )
+
   const pushIDs = useMemo(() => {
     if (scope === 'manual') return Array.from(selectedSkills)
-    return filteredSkills.map((skill: any) => skill.ID)
-  }, [filteredSkills, scope, selectedSkills])
+    return visibleSkills.map((skill: any) => skill.ID)
+  }, [scope, selectedSkills, visibleSkills])
 
   const pushCount = pushIDs.length
-  const allManualSelected = filteredSkills.length > 0 && selectedSkills.size === filteredSkills.length
+  const allManualSelected = visibleSkills.length > 0 && visibleSkills.every((skill: any) => selectedSkills.has(skill.ID))
 
   const scopeLabel = scope === 'manual'
-    ? `手动选择 ${selectedSkills.size}/${filteredSkills.length}`
+    ? t('syncPush.scopeManual', { count: selectedSkills.size })
     : selectedCategory === null
-      ? `全部 Skills (${filteredSkills.length})`
-      : `分类「${selectedCategory}」(${filteredSkills.length})`
+      ? t('syncPush.scopeAll', { count: visibleSkills.length })
+      : t('syncPush.scopeCategory', { cat: selectedCategory ?? '', count: visibleSkills.length })
 
   const doPush = async () => {
     setPushing(true)
@@ -104,11 +115,16 @@ export default function SyncPush() {
   }
 
   const toggleAllManual = () => {
-    if (allManualSelected) {
-      setSelectedSkills(new Set())
-      return
-    }
-    setSelectedSkills(new Set(filteredSkills.map((skill: any) => skill.ID)))
+    const visibleIDs = visibleSkills.map((skill: any) => skill.ID)
+    setSelectedSkills(prev => {
+      const next = new Set(prev)
+      if (visibleIDs.every(id => next.has(id))) {
+        visibleIDs.forEach(id => next.delete(id))
+      } else {
+        visibleIDs.forEach(id => next.add(id))
+      }
+      return next
+    })
   }
 
   const setAutoScope = () => {
@@ -118,7 +134,7 @@ export default function SyncPush() {
 
   const setManualScope = () => {
     setScope('manual')
-    setSelectedSkills(new Set(filteredSkills.map((skill: any) => skill.ID)))
+    setSelectedSkills(new Set(visibleSkills.map((skill: any) => skill.ID)))
   }
 
   const getNavStyle = (isActive: boolean) => isActive ? {
@@ -142,18 +158,27 @@ export default function SyncPush() {
     border: '1px solid var(--border-base)',
   }
 
+  useEffect(() => {
+    if (scope !== 'manual') return
+    const visibleIDs = new Set(visibleSkills.map((skill: any) => skill.ID))
+    setSelectedSkills(prev => {
+      const next = new Set([...prev].filter(id => visibleIDs.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [scope, visibleSkills])
+
   return (
     <div className="flex h-full overflow-hidden">
       <div className="w-48 shrink-0 p-3 flex flex-col gap-0.5" style={{ borderRight: '1px solid var(--border-base)' }}>
         <div className="px-3 py-1.5 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
-          推送范围
+          {t('syncPush.pushRange')}
         </div>
         <button
           onClick={() => setSelectedCategory(null)}
           className="px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
           style={getNavStyle(selectedCategory === null)}
         >
-          全部
+          {t('common.all')}
         </button>
         {categories.map(category => (
           <button
@@ -171,11 +196,11 @@ export default function SyncPush() {
         <div className="px-6 py-4 flex flex-col gap-4" style={{ borderBottom: '1px solid var(--border-base)' }}>
           <div className="flex items-center gap-2 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
             <ArrowUpFromLine size={18} />
-            推送到工具
+            {t('syncPush.title')}
           </div>
 
           <section>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>目标工具</p>
+            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('syncPush.targetTool')}</p>
             <div className="flex flex-wrap gap-2">
               {tools.map(tool => (
                 <button
@@ -200,6 +225,15 @@ export default function SyncPush() {
             </div>
           </section>
 
+          <SkillListControls
+            search={search}
+            onSearchChange={setSearch}
+            sortOrder={sortOrder}
+            onSortOrderChange={setSortOrder}
+            placeholder={t('syncPush.searchPlaceholder')}
+            resultLabel={t('common.showingNSkills', { count: visibleSkills.length })}
+          />
+
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <button
@@ -207,14 +241,14 @@ export default function SyncPush() {
                 className="px-3 py-1.5 rounded-lg text-sm transition-all duration-200"
                 style={getScopeButtonStyle(scope === 'auto')}
               >
-                {selectedCategory === null ? '推送全部' : '推送当前分类'}
+                {selectedCategory === null ? t('syncPush.pushAll') : t('syncPush.pushCategory')}
               </button>
               <button
                 onClick={setManualScope}
                 className="px-3 py-1.5 rounded-lg text-sm transition-all duration-200"
                 style={getScopeButtonStyle(scope === 'manual')}
               >
-                手动选择 Skill
+                {t('syncPush.manualSelect')}
               </button>
             </div>
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{scopeLabel}</p>
@@ -230,10 +264,10 @@ export default function SyncPush() {
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
               >
                 {allManualSelected ? <CheckSquare size={14} /> : <Square size={14} />}
-                {allManualSelected ? '取消全选' : '全选当前列表'}
+                {allManualSelected ? t('common.deselectAll') : t('syncPush.selectAllList')}
               </button>
               <span style={{ color: 'var(--text-muted)' }}>
-                当前可选 {filteredSkills.length} 个 Skill
+                {t('syncPush.nSkillsVisible', { count: visibleSkills.length })}
               </span>
             </div>
           )}
@@ -241,7 +275,7 @@ export default function SyncPush() {
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredSkills.map((skill: any) => (
+            {visibleSkills.map((skill: any) => (
               <SyncSkillCard
                 key={skill.ID}
                 id={skill.ID}
@@ -256,10 +290,10 @@ export default function SyncPush() {
             ))}
           </div>
 
-          {filteredSkills.length === 0 && (
+          {visibleSkills.length === 0 && (
             <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
-              <p className="text-sm">当前范围内没有 Skill</p>
-              <p className="text-xs mt-1">选择"全部"或切换到其他分类后再试</p>
+              <p className="text-sm">{t('syncPush.empty')}</p>
+              <p className="text-xs mt-1">{t('syncPush.emptyHint')}</p>
             </div>
           )}
         </div>
@@ -270,9 +304,9 @@ export default function SyncPush() {
             disabled={pushing || selectedTools.size === 0 || pushCount === 0}
             className="btn-primary px-6 py-2 rounded-lg text-sm"
           >
-            {pushing ? '推送中...' : `开始推送 (${pushCount})`}
+            {pushing ? t('syncPush.pushing') : t('syncPush.startPush', { count: pushCount })}
           </button>
-          {done && <span className="text-sm" style={{ color: 'var(--color-success)' }}>推送完成</span>}
+          {done && <span className="text-sm" style={{ color: 'var(--color-success)' }}>{t('syncPush.done')}</span>}
         </div>
       </div>
 
@@ -292,7 +326,7 @@ export default function SyncPush() {
       <AnimatedDialog open={pendingPush} width="w-[460px]" zIndex={50}>
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <FolderPlus size={16} /> 目录不存在
+            <FolderPlus size={16} /> {t('syncPush.mkdirTitle')}
           </h3>
           <button
             onClick={() => { setMissingDirs([]); setPendingPush(false) }}
@@ -301,7 +335,7 @@ export default function SyncPush() {
             <X size={16} />
           </button>
         </div>
-        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>以下推送目录尚未创建，是否自动创建后继续推送？</p>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>{t('syncPush.mkdirDesc')}</p>
         <ul className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
           {missingDirs.map(dir => (
             <li
@@ -316,13 +350,13 @@ export default function SyncPush() {
         </ul>
         <div className="flex gap-3">
           <button onClick={confirmMkdirAndPush} className="btn-primary flex-1 py-2 rounded-lg text-sm">
-            创建并推送
+            {t('syncPush.createAndPush')}
           </button>
           <button
             onClick={() => { setMissingDirs([]); setPendingPush(false) }}
             className="btn-secondary flex-1 py-2 rounded-lg text-sm"
           >
-            取消
+            {t('common.cancel')}
           </button>
         </div>
       </AnimatedDialog>

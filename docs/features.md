@@ -21,6 +21,7 @@
 10. [Shared Dialogs](#10-shared-dialogs)
 11. [Backend Events](#11-backend-events)
 12. [App Update Dialog](#12-app-update-dialog)
+13. [My Tools](#13-my-tools)
 
 ---
 
@@ -31,15 +32,17 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 | Route | Icon | Label |
 |-------|------|-------|
 | `/` | Package | My Skills |
+| `/tools` | Wrench | My Tools |
 | `/sync/push` | ArrowUpFromLine | Push to Tools |
 | `/sync/pull` | ArrowDownToLine | Pull from Tools |
 | `/starred` | Star | Starred Repos |
 | `/backup` | Cloud | Cloud Backup |
 | `/settings` | Settings | Settings |
 
-- Active route: highlighted with cyan glow background (`var(--accent-glow)`) and cyan border accent.
+- Active route: highlighted with a subtle theme-tinted surface, soft border, and restrained elevation shadow.
 - Inactive routes: gray text with hover highlight.
-- Top-right of sidebar: **Sun/Moon** theme toggle button; switches between Dark and Light modes immediately.
+- Top-right of sidebar: **Languages** shortcut button; toggles immediately between **Chinese** and **English**, and persists the preference to `localStorage`.
+- Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light**.
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
 - Window close button behavior: clicking the top-left close button hides the main window and keeps the app running in background.
 - macOS tray behavior: the app creates a monochrome status icon in the menu-bar status area on startup; after the main window is hidden, the Dock icon is removed and only the menu-bar icon remains. Use native single-click to open a menu with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`.
@@ -56,6 +59,7 @@ Central library for managing your skill collection.
 | Control | Action |
 |---------|--------|
 | **Search input** | Wide search field for real-time case-insensitive filter by skill name; the toolbar wraps on narrower window widths so controls stay visible |
+| **Sort toggle** | Two-button toggle for alphabetical order by skill name: **A-Z** or **Z-A** |
 | **Update** (RefreshCw) | Calls backend `CheckUpdates()`; marks updated skills with a red dot |
 | **Batch Delete** (CheckSquare) | Toggles multi-select mode |
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
@@ -99,7 +103,7 @@ Copies skills from your library to external tool directories.
 
 - Uses a two-column layout similar to My Skills.
 - Left sidebar shows category filters: **All** plus every existing category.
-- Right side shows the tool selector, push mode controls, and a skill-card grid for the current category scope.
+- Right side shows the tool selector, search + A-Z/Z-A sort controls, push mode controls, and a skill-card grid for the current category scope.
 
 ### Tool Selection
 
@@ -142,7 +146,7 @@ Imports skills from external tool directories into your library.
 
 - Uses the same two-column shell as Push to Tools.
 - Left sidebar lists all categories and controls the import target category.
-- Right side contains the source-tool selector, scan feedback, selectable skill grid, and bottom action bar.
+- Right side contains the source-tool selector, scan feedback, search + A-Z/Z-A sort controls, selectable skill grid, and bottom action bar.
 
 ### Tool Selection
 
@@ -157,8 +161,10 @@ Imports skills from external tool directories into your library.
 ### Skill Grid
 
 - Appears after a successful scan.
+- Search field filters the scanned skill list by name in real time.
+- Two-button sort toggle switches between **A-Z** and **Z-A** ordering by skill name.
 - Each card shows whether the skill is already imported (green "Imported" badge).
-- Select individual skills or use "Select All / Deselect All".
+- Select individual skills or use "Select All / Deselect All" for the currently visible list.
 
 ### Bottom Bar
 
@@ -183,7 +189,9 @@ Browse and import skills directly from watched Git repositories without installi
 
 | Button | Action |
 |--------|--------|
-| **Batch Import** (CheckSquare) | Enters select mode |
+| **Search input** | Visible in flat view and repo detail view; filters the current skill grid by name |
+| **Sort toggle** | Visible in flat view and repo detail view; switches the current skill grid between **A-Z** and **Z-A** |
+| **Batch Import** (CheckSquare) | Enters select mode when a skill grid is visible |
 | **Update All** (RefreshCw) | `UpdateAllStarredRepos()` — clones/pulls all repos in parallel; icon spins while syncing |
 | **Add Repo** (Plus, indigo) | Opens "Add Repo" dialog |
 
@@ -360,7 +368,8 @@ For each built-in or custom tool:
 
 | Control | Description |
 |---------|-------------|
-| **Appearance theme** | Toggle between **Dark** (default, deep space blue + cyan accent) and **Light** (sky blue) themes; persisted to `localStorage`; takes effect immediately without restart |
+| **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
+| **Appearance theme** | Three visual presets shown as preview cards: **Dark** (default, refined graphite with muted mist-blue accents), **Young** (a softened paper-blue evolution of the previous sky-blue Light palette), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
 | **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button that opens at the current path or nearest existing parent |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
 | **Log level buttons** | Toggle runtime log level between `debug`, `info`, and `error` (default: `error`); takes effect after saving settings |
@@ -576,6 +585,35 @@ GitHub Actions builds inject the tag name at compile time:
 wails build -ldflags "-X main.Version=${{ github.ref_name }}"
 ```
 The startup check is skipped when `Version == "dev"` (local development).
+
+---
+
+## 13. My Tools
+
+Browse the skills currently present inside each enabled tool.
+
+### Layout
+
+- Left sidebar lists enabled tools.
+- Main area shows one toolbar plus two skill-card sections: **Push Path** and **Scan Path**.
+
+### Toolbar
+
+| Control | Description |
+|---------|-------------|
+| **Search input** | Filters both Push Path and Scan Path skill cards by name in real time |
+| **Sort toggle** | Switches both sections between **A-Z** and **Z-A** ordering by skill name |
+| **Batch Delete** | Available when the visible Push Path list is non-empty; enters select mode |
+
+### Push Path Section
+
+- Shows deletable tool-local skills under the configured push directory.
+- In select mode, **Select All / Deselect All** applies to the currently visible filtered Push Path cards only.
+
+### Scan Path Section
+
+- Shows read-only skills discovered only from scan directories.
+- Shares the same search and sort controls as Push Path.
 
 ---
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ListSkills, ListCategories, MoveSkillCategory,
@@ -10,14 +10,19 @@ import CategoryPanel from '../components/CategoryPanel'
 import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
 import GitHubInstallDialog from '../components/GitHubInstallDialog'
-import { Github, FolderOpen, RefreshCw, Search, Trash2, CheckSquare } from 'lucide-react'
+import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare } from 'lucide-react'
 import { gridContainerVariants, cardVariants } from '../lib/motionVariants'
+import SkillListControls from '../components/SkillListControls'
+import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
+import { useLanguage } from '../contexts/LanguageContext'
 
 export default function Dashboard() {
+  const { t } = useLanguage()
   const [skills, setSkills] = useState<any[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
   const [showGitHub, setShowGitHub] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [draggingSkillID, setDraggingSkillID] = useState<string | null>(null)
@@ -41,11 +46,15 @@ export default function Dashboard() {
     EventsOn('update.available', load)
   }, [load])
 
-  const filtered = skills.filter(sk => {
-    const matchCat = selectedCat === null || sk.Category === selectedCat
-    const matchSearch = !search || sk.Name.toLowerCase().includes(search.toLowerCase())
-    return matchCat && matchSearch
-  })
+  const filtered = useMemo(
+    () => filterAndSortSkills(
+      skills.filter(sk => selectedCat === null || sk.Category === selectedCat),
+      search,
+      sortOrder,
+      sk => sk.Name ?? '',
+    ),
+    [skills, selectedCat, search, sortOrder],
+  )
 
   const skillCounts = skills.reduce((acc, sk) => {
     const category = sk.Category || 'Default'
@@ -110,11 +119,16 @@ export default function Dashboard() {
   }
 
   const toggleSelectAll = () => {
-    if (selectedIDs.size === filtered.length) {
-      setSelectedIDs(new Set())
-    } else {
-      setSelectedIDs(new Set(filtered.map(sk => sk.ID)))
-    }
+    const filteredIDs = filtered.map(sk => sk.ID)
+    setSelectedIDs(prev => {
+      const next = new Set(prev)
+      if (filteredIDs.every(id => next.has(id))) {
+        filteredIDs.forEach(id => next.delete(id))
+      } else {
+        filteredIDs.forEach(id => next.add(id))
+      }
+      return next
+    })
   }
 
   const handleBatchDelete = async () => {
@@ -125,7 +139,16 @@ export default function Dashboard() {
     load()
   }
 
-  const allSelected = filtered.length > 0 && selectedIDs.size === filtered.length
+  useEffect(() => {
+    if (!selectMode) return
+    const visibleIDs = new Set(filtered.map(sk => sk.ID))
+    setSelectedIDs(prev => {
+      const next = new Set([...prev].filter(id => visibleIDs.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [filtered, selectMode])
+
+  const allSelected = filtered.length > 0 && filtered.every(sk => selectedIDs.has(sk.ID))
 
   const clearHover = () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
@@ -159,8 +182,8 @@ export default function Dashboard() {
     >
       {dragOver && (
         <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none"
-          style={{ background: 'var(--accent-glow)' }}>
-          <p className="text-lg font-medium" style={{ color: 'var(--accent-primary)' }}>松开以导入 Skill</p>
+          style={{ background: 'var(--active-surface)', backdropFilter: 'blur(6px)' }}>
+          <p className="text-lg font-medium" style={{ color: 'var(--active-text)' }}>{t('dashboard.dropToImport')}</p>
         </div>
       )}
 
@@ -181,14 +204,14 @@ export default function Dashboard() {
           className="flex flex-wrap items-center gap-3 px-6 py-4"
           style={{ borderBottom: '1px solid var(--border-base)' }}
         >
-          <div className="relative flex-1 min-w-[260px] max-w-[520px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="搜索 Skills..."
-              className="input-base pl-10"
-            />
-          </div>
+          <SkillListControls
+            search={search}
+            onSearchChange={setSearch}
+            sortOrder={sortOrder}
+            onSortOrderChange={setSortOrder}
+            placeholder={t('dashboard.searchPlaceholder')}
+            resultLabel={t('common.showingNSkills', { count: filtered.length })}
+          />
 
           {selectMode ? (
             <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -200,7 +223,7 @@ export default function Dashboard() {
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
               >
                 <CheckSquare size={14} />
-                {allSelected ? '取消全选' : '全选'}
+                {allSelected ? t('common.deselectAll') : t('common.selectAll')}
               </button>
               <button
                 onClick={handleBatchDelete}
@@ -208,7 +231,7 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 style={{ backgroundColor: 'var(--color-error)', color: 'white' }}
               >
-                <Trash2 size={14} /> 删除 {selectedIDs.size > 0 ? `(${selectedIDs.size})` : ''}
+                <Trash2 size={14} /> {t('common.delete')} {selectedIDs.size > 0 ? `(${selectedIDs.size})` : ''}
               </button>
               <button
                 onClick={toggleSelectMode}
@@ -217,15 +240,15 @@ export default function Dashboard() {
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               {[
-                { icon: <RefreshCw size={14} />, label: '更新', onClick: () => CheckUpdates() },
-                { icon: <CheckSquare size={14} />, label: '批删', onClick: toggleSelectMode },
-                { icon: <FolderOpen size={14} />, label: '导入', onClick: handleImportButton },
+                { icon: <RefreshCw size={14} />, label: t('dashboard.update'), onClick: () => CheckUpdates() },
+                { icon: <CheckSquare size={14} />, label: t('dashboard.batchDelete'), onClick: toggleSelectMode },
+                { icon: <FolderOpen size={14} />, label: t('dashboard.import'), onClick: handleImportButton },
               ].map(btn => (
                 <button
                   key={btn.label}
@@ -242,7 +265,7 @@ export default function Dashboard() {
                 onClick={() => setShowGitHub(true)}
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap"
               >
-                <Github size={14} /> 远程安装
+                <Github size={14} /> {t('dashboard.remoteInstall')}
               </button>
             </div>
           )}
@@ -281,8 +304,8 @@ export default function Dashboard() {
           </motion.div>
           {filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
-              <p className="text-sm">没有找到 Skills</p>
-              <p className="text-xs mt-1">从远程仓库安装或拖拽文件夹到此处</p>
+              <p className="text-sm">{t('dashboard.empty')}</p>
+              <p className="text-xs mt-1">{t('dashboard.emptyHint')}</p>
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AlertCircle, Plus } from 'lucide-react'
 import ContextMenu from './ContextMenu'
 import { CreateCategory, RenameCategory, DeleteCategory } from '../../wailsjs/go/main/App'
+import { useLanguage } from '../contexts/LanguageContext'
 import AnimatedDialog from './ui/AnimatedDialog'
 
 interface Props {
@@ -20,6 +21,7 @@ const defaultCategoryName = 'Default'
 export default function CategoryPanel({
   categories, skillCounts, selected, draggingSkillId, onSelect, onCategoryDragStateChange, onDrop, onRefresh,
 }: Props) {
+  const { t } = useLanguage()
   const [menu, setMenu] = useState<{ x: number; y: number; cat: string } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
@@ -42,8 +44,8 @@ export default function CategoryPanel({
       if (selected === cat) onSelect(null)
       onRefresh()
     } catch (e: any) {
-      const msg = String(e?.message ?? e ?? '删除分类失败')
-      if (msg.includes('先清空')) {
+      const msg = String(e?.message ?? e ?? t('category.deleteFailed'))
+      if (msg.includes('先清空') || /clear/i.test(msg)) {
         setDeleteBlocked({ cat, count })
         return
       }
@@ -76,16 +78,16 @@ export default function CategoryPanel({
 
   const getCategoryStyle = (isActive: boolean, isDragTarget: boolean) => {
     if (isDragTarget) return {
-      background: 'var(--accent-glow)',
-      color: 'var(--accent-primary)',
-      border: '1px solid var(--border-accent)',
-      boxShadow: 'var(--glow-accent-sm)',
+      background: 'var(--active-surface)',
+      color: 'var(--active-text)',
+      border: '1px solid var(--active-border)',
+      boxShadow: 'var(--active-shadow)',
     }
     if (isActive) return {
-      background: 'var(--accent-glow)',
-      color: 'var(--accent-primary)',
-      border: '1px solid var(--border-accent)',
-      boxShadow: 'var(--glow-accent-sm)',
+      background: 'var(--active-surface)',
+      color: 'var(--active-text)',
+      border: '1px solid var(--active-border)',
+      boxShadow: 'var(--active-shadow)',
     }
     return {
       color: 'var(--text-muted)',
@@ -98,7 +100,6 @@ export default function CategoryPanel({
       className="w-48 flex-shrink-0 p-3 flex flex-col gap-0.5"
       style={{ borderRight: '1px solid var(--border-base)' }}
     >
-      {/* All */}
       <div
         onClick={() => onSelect(null)}
         onDragEnter={e => handleDragOver(e, '')}
@@ -119,9 +120,8 @@ export default function CategoryPanel({
             e.currentTarget.style.color = 'var(--text-muted)'
           }
         }}
-      >全部</div>
+      >{t('category.all')}</div>
 
-      {/* Categories */}
       {categories.map(cat => (
         renaming === cat
           ? <input
@@ -166,7 +166,6 @@ export default function CategoryPanel({
             >{cat}</div>
       ))}
 
-      {/* New category input */}
       {creating
         ? <input
             autoFocus value={createName}
@@ -188,17 +187,16 @@ export default function CategoryPanel({
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
             onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
           >
-            <Plus size={14} /> 新建分类
+            <Plus size={14} /> {t('category.newCategory')}
           </button>
       }
 
-      {/* Context menu */}
       {menu && (
         <ContextMenu
           x={menu.x} y={menu.y}
           items={[
-            { label: '重命名', onClick: () => { setRenaming(menu.cat); setNewName(menu.cat) } },
-            { label: '删除', onClick: async () => { await handleDeleteCategory(menu.cat) }, danger: true },
+            { label: t('category.rename'), onClick: () => { setRenaming(menu.cat); setNewName(menu.cat) } },
+            { label: t('category.delete'), onClick: async () => { await handleDeleteCategory(menu.cat) }, danger: true },
           ]}
           onClose={() => setMenu(null)}
         />
@@ -206,25 +204,25 @@ export default function CategoryPanel({
 
       <AnimatedDialog open={deleteBlocked !== null} onClose={() => setDeleteBlocked(null)} width="w-[420px]" zIndex={50}>
         <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-warning)' }}>
-          <AlertCircle size={16} /> 无法删除分类
+          <AlertCircle size={16} /> {t('category.cannotDelete')}
         </h3>
         <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-          分类「<span className="font-medium" style={{ color: 'var(--text-primary)' }}>{deleteBlocked?.cat}</span>」下
-          {(deleteBlocked?.count ?? 0) > 0 ? `还有 ${deleteBlocked?.count} 个 Skill，` : '还有 Skill，'}
-          请先清空该分类后再删除。
+          {(deleteBlocked?.count ?? 0) > 0
+            ? t('category.hasSkills', { cat: deleteBlocked?.cat ?? '', count: deleteBlocked?.count ?? 0 })
+            : t('category.hasSkillsGeneric', { cat: deleteBlocked?.cat ?? '' })}
         </p>
         <button onClick={() => setDeleteBlocked(null)} className="btn-secondary w-full py-2 rounded-lg text-sm">
-          我知道了
+          {t('common.gotIt')}
         </button>
       </AnimatedDialog>
 
       <AnimatedDialog open={deleteError !== null} onClose={() => setDeleteError(null)} width="w-[420px]" zIndex={50}>
         <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-error)' }}>
-          <AlertCircle size={16} /> 删除失败
+          <AlertCircle size={16} /> {t('category.deleteFailed')}
         </h3>
         <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>{deleteError}</p>
         <button onClick={() => setDeleteError(null)} className="btn-secondary w-full py-2 rounded-lg text-sm">
-          关闭
+          {t('common.close')}
         </button>
       </AnimatedDialog>
     </div>

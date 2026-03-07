@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -16,9 +16,13 @@ import {
 import SyncSkillCard from '../components/SyncSkillCard'
 import { ToolIcon } from '../config/toolIcons'
 import AnimatedDialog from '../components/ui/AnimatedDialog'
+import SkillListControls from '../components/SkillListControls'
 import { toastVariants } from '../lib/motionVariants'
+import { useLanguage } from '../contexts/LanguageContext'
+import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 
 export default function StarredRepos() {
+  const { t } = useLanguage()
   const { repoEncoded } = useParams()
   const navigate = useNavigate()
   const currentRepo = repoEncoded ? decodeURIComponent(repoEncoded) : null
@@ -55,6 +59,8 @@ export default function StarredRepos() {
   const [authPassword, setAuthPassword] = useState('')
   const [authError, setAuthError] = useState('')
   const [authAdding, setAuthAdding] = useState(false)
+  const [search, setSearch] = useState('')
+  const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
 
   const loadRepos = async () => {
     const r = await ListStarredRepos()
@@ -95,7 +101,7 @@ export default function StarredRepos() {
       setShowAdd(false); setAddUrl('')
       await Promise.all([loadRepos(), loadAllSkills()])
     } catch (e: any) {
-      const msg = String(e?.message ?? e ?? '添加失败')
+      const msg = String(e?.message ?? e ?? t('starred.addFailed'))
       if (msg.startsWith('AUTH_SSH:')) {
         setShowAdd(false)
         setShowSshErrorDialog(true)
@@ -117,7 +123,7 @@ export default function StarredRepos() {
       setShowAdd(false); setAddUrl('')
       await Promise.all([loadRepos(), loadAllSkills()])
     } catch (e: any) {
-      setAuthError(String(e?.message ?? e ?? '认证失败'))
+      setAuthError(String(e?.message ?? e ?? t('starred.authFailed')))
     } finally { setAuthAdding(false) }
   }
 
@@ -157,7 +163,6 @@ export default function StarredRepos() {
   const handleBatchImport = async () => {
     setImporting(true)
     try {
-      const skills = currentRepo ? repoSkills : allSkills
       const byRepo = new Map<string, string[]>()
       for (const path of selectedPaths) {
         const sk = skills.find((s: any) => s.path === path)
@@ -193,7 +198,7 @@ export default function StarredRepos() {
         setSelectedPaths(new Set())
         const count = paths.length
         const toolCount = toolNames.length
-        setPushSuccessMsg(`已成功推送 ${count} 个 Skill 到 ${toolCount} 个工具`)
+        setPushSuccessMsg(t('starred.successMsg', { count, toolCount }))
         setTimeout(() => setPushSuccessMsg(''), 3000)
       }
     } catch (e: any) {
@@ -229,7 +234,7 @@ export default function StarredRepos() {
       setSelectMode(false)
       setSelectedPaths(new Set())
       setPushConflicts([])
-      setPushSuccessMsg(`已成功推送 ${paths.length} 个 Skill 到 ${toolNames.length} 个工具`)
+      setPushSuccessMsg(t('starred.successMsg', { count: paths.length, toolCount: toolNames.length }))
       setTimeout(() => setPushSuccessMsg(''), 3000)
     } catch (e: any) {
       console.error('Force push failed:', e)
@@ -244,7 +249,18 @@ export default function StarredRepos() {
     })
   }
 
-  const skills = currentRepo ? repoSkills : allSkills
+  const filteredRepoSkills = useMemo(
+    () => filterAndSortSkills(repoSkills, search, sortOrder, skill => skill.name ?? ''),
+    [repoSkills, search, sortOrder],
+  )
+
+  const filteredAllSkills = useMemo(
+    () => filterAndSortSkills(allSkills, search, sortOrder, skill => skill.name ?? ''),
+    [allSkills, search, sortOrder],
+  )
+
+  const skillGridVisible = !!currentRepo || view === 'flat'
+  const skills = currentRepo ? filteredRepoSkills : filteredAllSkills
 
   const toolBtnStyle = (active: boolean) => active ? {
     background: 'var(--accent-glow)',
@@ -256,6 +272,22 @@ export default function StarredRepos() {
     color: 'var(--text-secondary)',
     border: '1px solid var(--border-base)',
   }
+
+  useEffect(() => {
+    if (!selectMode || !skillGridVisible) return
+    const visiblePaths = new Set(skills.map((skill: any) => skill.path))
+    setSelectedPaths(prev => {
+      const next = new Set([...prev].filter(path => visiblePaths.has(path)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [selectMode, skillGridVisible, skills])
+
+  useEffect(() => {
+    if (!skillGridVisible && selectMode) {
+      setSelectMode(false)
+      setSelectedPaths(new Set())
+    }
+  }, [skillGridVisible, selectMode])
 
   return (
     <div className="flex flex-col h-full">
@@ -296,10 +328,22 @@ export default function StarredRepos() {
           </button>
         ) : (
           <h2 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Star size={14} /> 仓库收藏
+            <Star size={14} /> {t('starred.title')}
           </h2>
         )}
-        <div className="flex-1" />
+        {skillGridVisible ? (
+          <SkillListControls
+            search={search}
+            onSearchChange={setSearch}
+            sortOrder={sortOrder}
+            onSortOrderChange={setSortOrder}
+            placeholder={currentRepo ? t('starred.searchCurrentRepo') : t('starred.searchAllRepos')}
+            resultLabel={t('common.showingNSkills', { count: skills.length })}
+            searchClassName="max-w-[420px]"
+          />
+        ) : (
+          <div className="flex-1" />
+        )}
         {selectMode ? (
           <>
             <button
@@ -309,7 +353,7 @@ export default function StarredRepos() {
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
             >
-              <CheckSquare size={14} />{selectedPaths.size === skills.length ? '取消全选' : '全选'}
+              <CheckSquare size={14} />{selectedPaths.size === skills.length ? t('common.deselectAll') : t('common.selectAll')}
             </button>
             <button
               onClick={() => { setSelectedTools(new Set()); setShowPushToolDialog(true) }}
@@ -317,14 +361,14 @@ export default function StarredRepos() {
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:opacity-40 transition-colors"
               style={{ background: 'rgba(52,211,153,0.2)', color: 'var(--color-success)', border: '1px solid rgba(52,211,153,0.4)' }}
             >
-              <ArrowUpToLine size={14} /> 推送到工具 {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
+              <ArrowUpToLine size={14} /> {t('starred.pushToToolsCount')} {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
             </button>
             <button
               onClick={() => setShowImportDialog(true)}
               disabled={selectedPaths.size === 0}
               className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:opacity-40"
             >
-              <Download size={14} /> 导入到我的Skills {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
+              <Download size={14} /> {t('starred.importToMySkills')} {selectedPaths.size > 0 ? `(${selectedPaths.size})` : ''}
             </button>
             <button
               onClick={() => { setSelectMode(false); setSelectedPaths(new Set()) }}
@@ -332,13 +376,13 @@ export default function StarredRepos() {
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
-            >取消</button>
+            >{t('common.cancel')}</button>
           </>
         ) : (
           <>
             {!currentRepo && (
               <>
-                {[['folder', '文件夹', <Folder size={14} />], ['flat', '平铺', <LayoutGrid size={14} />]].map(([v, label, icon]) => (
+                {[['folder', t('starred.folder'), <Folder size={14} />], ['flat', t('starred.flat'), <LayoutGrid size={14} />]].map(([v, label, icon]) => (
                   <button
                     key={v as string}
                     onClick={() => setView(v as 'folder' | 'flat')}
@@ -357,15 +401,17 @@ export default function StarredRepos() {
                 ))}
               </>
             )}
-            <button
-              onClick={() => setSelectMode(true)}
+            {skillGridVisible && (
+              <button
+                onClick={() => setSelectMode(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
             >
-              <CheckSquare size={14} /> 批量导入
-            </button>
+              <CheckSquare size={14} /> {t('starred.batchImport')}
+              </button>
+            )}
             <button
               onClick={handleUpdateAll}
               disabled={syncing}
@@ -374,14 +420,14 @@ export default function StarredRepos() {
               onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
               onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
             >
-              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> 全部更新
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {t('starred.updateAll')}
             </button>
             {!currentRepo && (
               <button
                 onClick={() => setShowAdd(true)}
                 className="btn-primary flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg"
               >
-                <Plus size={14} /> 添加仓库
+                <Plus size={14} /> {t('starred.addRepo')}
               </button>
             )}
           </>
@@ -391,14 +437,14 @@ export default function StarredRepos() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {currentRepo ? (
-          <SkillGrid skills={repoSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
+          <SkillGrid skills={filteredRepoSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
         ) : view === 'folder' ? (
           <RepoGrid repos={repos}
             onEnter={url => navigate(`/starred/${encodeURIComponent(url)}`)}
             onUpdate={handleUpdateOne}
             onRemove={handleRemove} />
         ) : (
-          <SkillGrid skills={allSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
+          <SkillGrid skills={filteredAllSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
         )}
       </div>
 
@@ -406,7 +452,7 @@ export default function StarredRepos() {
       <AnimatedDialog open={showAdd} onClose={() => { setShowAdd(false); setAddError('') }} width="w-[460px]">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Star size={16} /> 添加远程仓库
+            <Star size={16} /> {t('starred.addRepoTitle')}
           </h3>
           <button onClick={() => { setShowAdd(false); setAddError('') }} style={{ color: 'var(--text-muted)' }}>
             <X size={16} />
@@ -417,7 +463,7 @@ export default function StarredRepos() {
             value={addUrl}
             onChange={e => setAddUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !adding && addUrl && handleAddRepo()}
-            placeholder="https://host/owner/repo.git 或 git@host:owner/repo.git"
+            placeholder={t('starred.urlPlaceholder')}
             className="input-base flex-1"
           />
           <button
@@ -425,10 +471,10 @@ export default function StarredRepos() {
             disabled={adding || !addUrl}
             className="btn-primary px-4 py-2 rounded-lg text-sm min-w-[72px]"
           >
-            {adding ? '克隆中...' : '添加'}
+            {adding ? t('starred.cloning') : t('starred.addBtn')}
           </button>
         </div>
-        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>首次添加会 git clone 仓库，可能需要一些时间</p>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>{t('starred.addHint')}</p>
         {addError && (
           <div
             className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm"
@@ -442,7 +488,7 @@ export default function StarredRepos() {
 
       {/* Import to My Skills dialog */}
       <AnimatedDialog open={showImportDialog} onClose={() => setShowImportDialog(false)} width="w-[380px]">
-        <h3 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>选择导入分类</h3>
+        <h3 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>{t('starred.selectCategory')}</h3>
         <select
           value={importCategory}
           onChange={e => setImportCategory(e.target.value)}
@@ -456,9 +502,9 @@ export default function StarredRepos() {
             disabled={importing}
             className="btn-primary flex-1 py-2 rounded-lg text-sm"
           >
-            {importing ? '导入中...' : `导入 ${selectedPaths.size} 个`}
+            {importing ? t('starred.importing') : t('starred.importN', { count: selectedPaths.size })}
           </button>
-          <button onClick={() => setShowImportDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
+          <button onClick={() => setShowImportDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">{t('common.cancel')}</button>
         </div>
       </AnimatedDialog>
 
@@ -466,13 +512,13 @@ export default function StarredRepos() {
       <AnimatedDialog open={showMkdirDialog} onClose={() => { setShowMkdirDialog(false); setMissingDirs([]) }} width="w-[460px]" zIndex={60}>
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <FolderPlus size={16} /> 目录不存在
+            <FolderPlus size={16} /> {t('starred.mkdirTitle')}
           </h3>
           <button onClick={() => { setShowMkdirDialog(false); setMissingDirs([]) }} style={{ color: 'var(--text-muted)' }}>
             <X size={16} />
           </button>
         </div>
-        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>以下推送目录尚未创建，是否自动创建后继续推送？</p>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>{t('starred.mkdirDesc')}</p>
         <ul className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
           {missingDirs.map(d => (
             <li key={d.name} className="text-sm rounded-lg px-3 py-2" style={{ background: 'var(--bg-surface)' }}>
@@ -482,8 +528,8 @@ export default function StarredRepos() {
           ))}
         </ul>
         <div className="flex gap-3">
-          <button onClick={confirmMkdirAndPush} className="btn-primary flex-1 py-2 rounded-lg text-sm">创建并推送</button>
-          <button onClick={() => { setShowMkdirDialog(false); setMissingDirs([]) }} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
+          <button onClick={confirmMkdirAndPush} className="btn-primary flex-1 py-2 rounded-lg text-sm">{t('starred.createAndPush')}</button>
+          <button onClick={() => { setShowMkdirDialog(false); setMissingDirs([]) }} className="btn-secondary flex-1 py-2 rounded-lg text-sm">{t('common.cancel')}</button>
         </div>
       </AnimatedDialog>
 
@@ -491,13 +537,13 @@ export default function StarredRepos() {
       <AnimatedDialog open={showPushToolDialog} onClose={() => setShowPushToolDialog(false)} width="w-[420px]">
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <ArrowUpToLine size={16} /> 推送到工具
+            <ArrowUpToLine size={16} /> {t('starred.pushToTools')}
           </h3>
           <button onClick={() => setShowPushToolDialog(false)} style={{ color: 'var(--text-muted)' }}><X size={16} /></button>
         </div>
-        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>将 Skill 直接复制到工具目录，无需导入到「我的Skills」</p>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>{t('starred.pushDialogDesc')}</p>
         {tools.length === 0 ? (
-          <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>没有可用的工具，请在设置中启用工具</p>
+          <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>{t('starred.noTools')}</p>
         ) : (
           <div className="flex flex-wrap gap-2 mb-4">
             {tools.map((t: any) => (
@@ -519,9 +565,9 @@ export default function StarredRepos() {
             disabled={pushingToTools || selectedTools.size === 0 || tools.length === 0}
             className="btn-primary flex-1 py-2 rounded-lg text-sm"
           >
-            {pushingToTools ? '推送中...' : `推送到 ${selectedTools.size} 个工具`}
+            {pushingToTools ? t('starred.pushingToTools') : t('starred.pushToNTools', { count: selectedTools.size })}
           </button>
-          <button onClick={() => setShowPushToolDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
+          <button onClick={() => setShowPushToolDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">{t('common.cancel')}</button>
         </div>
       </AnimatedDialog>
 
@@ -529,16 +575,16 @@ export default function StarredRepos() {
       <AnimatedDialog open={showHttpAuthDialog} onClose={() => setShowHttpAuthDialog(false)} width="w-[460px]">
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Lock size={16} /> 需要认证
+            <Lock size={16} /> {t('starred.authTitle')}
           </h3>
           <button onClick={() => setShowHttpAuthDialog(false)} style={{ color: 'var(--text-muted)' }}><X size={16} /></button>
         </div>
-        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>仓库需要用户名和密码（或 Access Token）才能访问</p>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>{t('starred.authDesc')}</p>
         <div className="space-y-2 mb-4">
           <input
             value={authUsername}
             onChange={e => setAuthUsername(e.target.value)}
-            placeholder="用户名"
+            placeholder={t('starred.username')}
             className="input-base"
           />
           <input
@@ -546,7 +592,7 @@ export default function StarredRepos() {
             value={authPassword}
             onChange={e => setAuthPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !authAdding && handleAuthRetry()}
-            placeholder="密码 / Access Token"
+            placeholder={t('starred.password')}
             className="input-base"
           />
         </div>
@@ -561,33 +607,33 @@ export default function StarredRepos() {
         )}
         <div className="flex gap-3">
           <button onClick={handleAuthRetry} disabled={authAdding} className="btn-primary flex-1 py-2 rounded-lg text-sm">
-            {authAdding ? '连接中...' : '确认'}
+            {authAdding ? t('starred.connecting') : t('common.confirm')}
           </button>
-          <button onClick={() => setShowHttpAuthDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">取消</button>
+          <button onClick={() => setShowHttpAuthDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">{t('common.cancel')}</button>
         </div>
       </AnimatedDialog>
 
       {/* SSH auth error dialog */}
       <AnimatedDialog open={showSshErrorDialog} onClose={() => setShowSshErrorDialog(false)} width="w-[460px]">
         <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-warning)' }}>
-          <KeyRound size={16} /> SSH 认证失败
+          <KeyRound size={16} /> {t('starred.sshTitle')}
         </h3>
-        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>无法使用 SSH 访问远程仓库，请检查以下配置：</p>
+        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>{t('starred.sshDesc')}</p>
         <ul className="text-sm space-y-1.5 list-disc list-inside mb-4" style={{ color: 'var(--text-muted)' }}>
-          <li>SSH 密钥是否已生成（<code style={{ color: 'var(--text-secondary)' }}>ssh-keygen</code>）</li>
-          <li>公钥是否已添加到 GitHub / GitLab 等远程仓库</li>
-          <li>SSH Agent 是否正在运行（<code style={{ color: 'var(--text-secondary)' }}>ssh-add</code>）</li>
-          <li>可尝试改用 HTTPS 协议克隆</li>
+          <li>{t('starred.sshCheckKeygen')}（<code style={{ color: 'var(--text-secondary)' }}>ssh-keygen</code>）</li>
+          <li>{t('starred.sshCheckPubkey')}</li>
+          <li>{t('starred.sshCheckAgent')}（<code style={{ color: 'var(--text-secondary)' }}>ssh-add</code>）</li>
+          <li>{t('starred.sshCheckHttps')}</li>
         </ul>
-        <button onClick={() => setShowSshErrorDialog(false)} className="btn-secondary w-full py-2 rounded-lg text-sm">关闭</button>
+        <button onClick={() => setShowSshErrorDialog(false)} className="btn-secondary w-full py-2 rounded-lg text-sm">{t('common.close')}</button>
       </AnimatedDialog>
 
       {/* Push conflict dialog */}
       <AnimatedDialog open={showPushConflictDialog} onClose={() => setShowPushConflictDialog(false)} width="w-[420px]">
         <h3 className="font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--color-warning)' }}>
-          <AlertCircle size={16} /> 发现冲突
+          <AlertCircle size={16} /> {t('starred.conflictsTitle')}
         </h3>
-        <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>以下 Skill 在目标工具目录中已存在：</p>
+        <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('starred.conflictsDesc')}</p>
         <ul className="space-y-1 mb-4 max-h-40 overflow-y-auto">
           {pushConflicts.map(c => (
             <li key={c} className="text-sm px-3 py-1.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>{c}</li>
@@ -598,11 +644,11 @@ export default function StarredRepos() {
             onClick={handlePushToToolsForce}
             className="flex-1 py-2 rounded-lg text-sm text-white transition-colors"
             style={{ background: 'var(--color-warning)' }}
-          >覆盖全部</button>
+          >{t('starred.overwriteAll')}</button>
           <button
             onClick={() => { setShowPushConflictDialog(false); setSelectMode(false); setSelectedPaths(new Set()); setPushConflicts([]) }}
             className="btn-secondary flex-1 py-2 rounded-lg text-sm"
-          >跳过冲突</button>
+          >{t('starred.skipConflicts')}</button>
         </div>
       </AnimatedDialog>
     </div>
@@ -615,12 +661,13 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
   onUpdate: (url: string) => void
   onRemove: (url: string) => void
 }) {
+  const { t } = useLanguage()
   if (repos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
         <Star size={32} className="mb-2 opacity-30" />
-        <p className="text-sm">还没有收藏的仓库</p>
-        <p className="text-xs mt-1">点击「添加仓库」开始收藏</p>
+        <p className="text-sm">{t('starred.emptyTitle')}</p>
+        <p className="text-xs mt-1">{t('starred.emptyHint')}</p>
       </div>
     )
   }
@@ -641,7 +688,7 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
                 style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
-                title="在浏览器中打开"
+                title={t('starred.openInBrowser')}
               >
                 <ExternalLink size={12} />
               </button>
@@ -651,7 +698,7 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
                 style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
-                title="更新"
+                title={t('starred.updateBtn')}
               >
                 <RefreshCw size={12} />
               </button>
@@ -661,7 +708,7 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
                 style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-error)' }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
-                title="删除收藏"
+                title={t('starred.removeStarred')}
               >
                 <Trash2 size={12} />
               </button>
@@ -674,8 +721,8 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
               <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={r.source || r.url}>{r.source || r.url}</p>
               <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
                 {r.lastSync && r.lastSync !== '0001-01-01T00:00:00Z'
-                  ? `同步于 ${new Date(r.lastSync).toLocaleString()}`
-                  : '未同步'}
+                  ? `${t('starred.syncAt')} ${new Date(r.lastSync).toLocaleString()}`
+                  : t('starred.notSynced')}
               </p>
             </>
           )}
@@ -692,10 +739,11 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
   onToggle: (path: string) => void
   showRepo?: boolean
 }) {
+  const { t } = useLanguage()
   if (skills.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
-        <p className="text-sm">没有找到 Skills</p>
+        <p className="text-sm">{t('starred.noSkills')}</p>
       </div>
     )
   }

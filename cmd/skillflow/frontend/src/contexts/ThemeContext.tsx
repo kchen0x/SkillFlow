@@ -3,18 +3,20 @@ import { Theme, useTheme } from '../hooks/useTheme'
 
 interface ThemeContextValue {
   theme: Theme
-  toggleTheme: () => void
+  setTheme: (theme: Theme) => void
+  cycleTheme: () => void
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: 'dark',
-  toggleTheme: () => {},
+  setTheme: () => {},
+  cycleTheme: () => {},
 })
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { theme, toggleTheme } = useTheme()
+  const { theme, setTheme, cycleTheme } = useTheme()
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme: (nextTheme) => setTheme(nextTheme), cycleTheme }}>
       {children}
     </ThemeContext.Provider>
   )
