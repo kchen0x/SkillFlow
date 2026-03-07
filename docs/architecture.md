@@ -23,7 +23,7 @@ SkillFlow is a **Wails v2** desktop app (Go 1.23, Wails v2.11.0). The Go backend
 - **Wails bindings are auto-generated** — after adding/removing exported methods on `App`, run `wails generate module` to update `frontend/wailsjs/go/main/App.{js,d.ts}`
 - **`package main` files at root** — `app.go`, `adapters.go`, `providers.go`, `events.go` are all `package main` alongside `main.go` because Wails requires the app struct in the same package as `main`
 - **No REST API** — direct Wails method bindings; faster and simpler
-- **UUID-based skills** — skills are identified by UUID, metadata stored in JSON sidecars
+- **Installed skill instances are UUID-based, but cross-module identity must use a stable logical key** — see [Unified Skill Identity & State Model](#unified-skill-identity--state-model)
 - **Filesystem adapters** — all built-in tools share the same `FilesystemAdapter` pattern
 - **GitHub as source of truth** — update checker polls GitHub API, not local timestamps
 
@@ -46,7 +46,7 @@ SkillFlow is a **Wails v2** desktop app (Go 1.23, Wails v2.11.0). The Go backend
     <cached-repo-dirs>/
 ```
 
-Skills are identified by UUID. The `meta/` directory is always `filepath.Join(filepath.Dir(root), "meta")`.
+Installed skill instances are identified by UUID. Cross-module correlation must follow the logical-key rules in [Unified Skill Identity & State Model](#unified-skill-identity--state-model). The `meta/` directory is always `filepath.Join(filepath.Dir(root), "meta")`.
 
 ---
 
@@ -91,6 +91,76 @@ const (
     SourceManual SourceType = "manual"
 )
 ```
+
+## Unified Skill Identity & State Model
+
+This section is normative for all future work that touches skill cards, import/install/push/pull flows, starred repos, tool scans, or update badges.
+
+### Identity layers
+
+SkillFlow must distinguish between two different identities:
+
+- **Instance identity** — `Skill.ID` identifies one installed copy in **My Skills**. This is the correct key for CRUD operations on installed items such as delete, move category, rename category membership, and manual update.
+- **Logical identity** — a stable cross-module identity that answers: “is this the same skill shown on Dashboard, Starred Repos, Tool Skills, Sync Pull, and Sync Push?”
+
+`Name` and absolute `Path` are display or location metadata only. They must not be treated as the primary cross-module identity.
+
+### Logical key rules
+
+- **Git-backed skills** must use a logical key derived from normalized repository source plus repository subpath:
+  - format: `git:<repo-source>#<subpath>`
+  - `repo-source` is the canonical host/path form such as `github.com/owner/repo`
+  - `<subpath>` is the forward-slash relative path inside the repo such as `skills/my-skill`
+- **Non-git skills** should use a stable content-derived key, e.g. `content:<hash>`, so the same skill can still be recognized across tool scans and local imports.
+- **Temporary fallback heuristics** are allowed only when no stable logical key can be derived yet, and those heuristics must be treated as weak matches.
+
+### Module mapping
+
+| Module / page | Primary entity | Identity that drives behavior |
+|---------------|----------------|-------------------------------|
+| Dashboard / My Skills | installed `Skill` | `Skill.ID` for instance actions; logical key for cross-module correlation |
+| Sync Push | installed `Skill` | `Skill.ID` for selection; logical key for pushed-state resolution |
+| GitHub scan/install | remote candidate | logical key derived from repo source + subpath |
+| Starred Repos | `StarSkill` | logical key derived from repo source + subpath |
+| Tool Skills | tool-local candidate / aggregate | logical key for dedupe and status; path only for open/delete within that tool |
+| Sync Pull | tool-local candidate | logical key for import/conflict detection |
+
+### Unified status semantics
+
+- **installed** — at least one installed instance exists in My Skills for the logical key.
+- **imported** — external-source wording for `installed`; when viewing GitHub, Starred Repos, or Tool scans, “imported” means “already installed into My Skills”.
+- **pushed** — the logical skill is present in a tool’s configured `PushDir`. This means SkillFlow can regard it as already pushed to that tool.
+- **seenInToolScan** — the logical skill is detected in one of a tool’s configured `ScanDirs`. This means the skill is visible in the tool ecosystem, but not necessarily managed by SkillFlow or present in `PushDir`.
+- **updatable** — at least one installed git-backed instance has a newer remote commit than its installed `SourceSHA`.
+
+### Status rules
+
+- `pushed` is narrower than “exists somewhere in the tool”; it refers specifically to the configured push target.
+- `seenInToolScan` is observational. It helps distinguish “the tool already has this skill” from “SkillFlow already pushed this skill”.
+- A skill may have both `pushed=true` and `seenInToolScan=true` when the push directory is also scanned, or when the same logical skill exists in both places.
+- A skill with `seenInToolScan=true` and `pushed=false` should generally be shown as “already detected in tool”, not “already pushed”.
+
+### Conflict and dedupe rules
+
+- Cross-module dedupe must prefer logical key equality.
+- Same-name items from different repos must be treated as different skills when their logical keys differ.
+- Same-path items are not automatically the same skill unless they resolve to the same logical key.
+- Name-only matching is acceptable only as a last-resort compatibility fallback and must never overwrite a stronger logical-key match.
+
+### Update detection rules
+
+- Only git-backed installed skills with a stable repo source and subpath participate in remote update checks.
+- Update eligibility must be keyed by the same logical source used for install/import correlation.
+- Remote update detection compares the installed `SourceSHA` with the newest remote commit SHA for the same repo subpath.
+- `LastCheckedAt` should be updated on every completed check attempt, not only when an update is found.
+- `LatestSHA` should be cleared when a fresh check confirms that the installed `SourceSHA` is already current.
+- Update badges and “Update” actions must be derived from the unified status model rather than page-local heuristics.
+
+### Implementation guidance
+
+- The backend should own cross-module skill correlation and expose normalized statuses to the frontend.
+- Frontend pages should not independently decide “same skill”, “already imported”, or “already pushed” from `Name` or `Path` alone.
+- Any future catalog / aggregate layer should group all module-specific representations under one logical skill record and keep installed instances as child references.
 
 ### AppConfig (`core/config/model.go`)
 

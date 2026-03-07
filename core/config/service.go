@@ -9,12 +9,13 @@ import (
 // sharedConfig is stored in config.json and safe to sync across platforms.
 // It contains no file system paths.
 type sharedConfig struct {
-	DefaultCategory string             `json:"defaultCategory"`
-	LogLevel        string             `json:"logLevel"`
-	Tools           []sharedToolConfig `json:"tools"`
-	Cloud           CloudConfig        `json:"cloud"`
-	Proxy           ProxyConfig        `json:"proxy"`
-	SkippedUpdateVersion string        `json:"skippedUpdateVersion,omitempty"`
+	DefaultCategory      string             `json:"defaultCategory"`
+	LogLevel             string             `json:"logLevel"`
+	RepoScanMaxDepth     int                `json:"repoScanMaxDepth"`
+	Tools                []sharedToolConfig `json:"tools"`
+	Cloud                CloudConfig        `json:"cloud"`
+	Proxy                ProxyConfig        `json:"proxy"`
+	SkippedUpdateVersion string             `json:"skippedUpdateVersion,omitempty"`
 }
 
 // sharedToolConfig stores only the platform-agnostic settings for a built-in tool.
@@ -90,6 +91,7 @@ func (s *Service) Save(cfg AppConfig) error {
 		return err
 	}
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
+	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
 	if err := s.saveShared(s.splitShared(cfg)); err != nil {
 		return err
 	}
@@ -175,10 +177,11 @@ func (s *Service) defaultShared() sharedConfig {
 		tools = append(tools, sharedToolConfig{Name: name, Enabled: true})
 	}
 	return sharedConfig{
-		DefaultCategory: "Default",
-		LogLevel:        DefaultLogLevel,
-		Tools:           tools,
-		Cloud:           CloudConfig{RemotePath: "skillflow/"},
+		DefaultCategory:  "Default",
+		LogLevel:         DefaultLogLevel,
+		RepoScanMaxDepth: DefaultRepoScanMaxDepth,
+		Tools:            tools,
+		Cloud:            CloudConfig{RemotePath: "skillflow/"},
 	}
 }
 
@@ -239,12 +242,13 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 	}
 
 	return AppConfig{
-		SkillsStorageDir: local.SkillsStorageDir,
-		DefaultCategory:  shared.DefaultCategory,
-		LogLevel:         NormalizeLogLevel(shared.LogLevel),
-		Tools:            tools,
-		Cloud:            shared.Cloud,
-		Proxy:            shared.Proxy,
+		SkillsStorageDir:     local.SkillsStorageDir,
+		DefaultCategory:      shared.DefaultCategory,
+		LogLevel:             NormalizeLogLevel(shared.LogLevel),
+		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
+		Tools:                tools,
+		Cloud:                shared.Cloud,
+		Proxy:                shared.Proxy,
 		SkippedUpdateVersion: shared.SkippedUpdateVersion,
 	}
 }
@@ -258,11 +262,12 @@ func (s *Service) splitShared(cfg AppConfig) sharedConfig {
 		}
 	}
 	return sharedConfig{
-		DefaultCategory: cfg.DefaultCategory,
-		LogLevel:        NormalizeLogLevel(cfg.LogLevel),
-		Tools:           tools,
-		Cloud:           cfg.Cloud,
-		Proxy:           cfg.Proxy,
+		DefaultCategory:      cfg.DefaultCategory,
+		LogLevel:             NormalizeLogLevel(cfg.LogLevel),
+		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+		Tools:                tools,
+		Cloud:                cfg.Cloud,
+		Proxy:                cfg.Proxy,
 		SkippedUpdateVersion: cfg.SkippedUpdateVersion,
 	}
 }

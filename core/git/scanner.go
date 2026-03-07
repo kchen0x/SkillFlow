@@ -4,52 +4,116 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// scanDir scans a single directory for subdirs containing skill.md.
-// subPathPrefix is prepended to the subdir name to form SubPath (e.g. "skills/").
-func scanDir(root, subPathPrefix, repoURL, repoName, source string) ([]StarSkill, error) {
-	entries, err := os.ReadDir(root)
+const defaultMaxRecursiveScanDepth = 5
+
+// scanTree walks a directory tree and returns every directory that contains a
+// skill.md file (case-insensitive). Once a directory is identified as a skill,
+// the walk stops descending into that subtree.
+func scanTree(repoDir, dir, repoURL, repoName, source string, depth, maxDepth int) ([]StarSkill, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
 	}
+
+	if hasSkillMd(entries) {
+		rel, err := filepath.Rel(repoDir, dir)
+		if err != nil {
+			return nil, err
+		}
+		return []StarSkill{{
+			Name:     filepath.Base(dir),
+			Path:     dir,
+			SubPath:  filepath.ToSlash(rel),
+			RepoURL:  repoURL,
+			RepoName: repoName,
+			Source:   source,
+		}}, nil
+	}
+	if depth >= maxDepth {
+		return nil, nil
+	}
+
 	var result []StarSkill
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() || shouldSkipScanDir(e.Name()) {
 			continue
 		}
-		skillDir := filepath.Join(root, e.Name())
-		if _, err := os.Stat(filepath.Join(skillDir, "skill.md")); err == nil {
-			result = append(result, StarSkill{
-				Name:     e.Name(),
-				Path:     skillDir,
-				SubPath:  subPathPrefix + e.Name(),
-				RepoURL:  repoURL,
-				RepoName: repoName,
-				Source:   source,
-			})
+		skills, err := scanTree(repoDir, filepath.Join(dir, e.Name()), repoURL, repoName, source, depth+1, maxDepth)
+		if err != nil {
+			return nil, err
 		}
+		result = append(result, skills...)
 	}
 	return result, nil
 }
 
-// ScanSkills looks for skill directories (subdirs containing skill.md) in the
-// given repo clone. It first checks <repoDir>/skills/; if no skills are found
-// there, it falls back to scanning <repoDir>/ directly (for repos whose root IS
-// the skills collection, e.g. host/owner/skills.
+func hasSkillMd(entries []os.DirEntry) bool {
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.EqualFold(e.Name(), "skill.md") {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldSkipScanDir(name string) bool {
+	return strings.HasPrefix(name, ".")
+}
+
+// ScanSkills looks for skill directories anywhere inside the given repo clone
+// using the default recursive depth limit.
 func ScanSkills(repoDir, repoURL, repoName, source string) ([]StarSkill, error) {
-	// Try <repoDir>/skills/ first.
-	result, err := scanDir(filepath.Join(repoDir, "skills"), "skills/", repoURL, repoName, source)
+	return ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source, defaultMaxRecursiveScanDepth)
+}
+
+// ScanSkillsWithMaxDepth looks for skill directories anywhere inside the given
+// repo clone. It scans recursively, supports skill.md in any casing, stops
+// descending once a directory is identified as a skill, and bounds recursion
+// depth to protect against pathological nested trees.
+func ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source string, maxDepth int) ([]StarSkill, error) {
+	if maxDepth < 0 {
+		maxDepth = 0
+	}
+	entries, err := os.ReadDir(repoDir)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	if len(result) > 0 {
-		return result, nil
+
+	var roots []string
+	skillsRoot := filepath.Join(repoDir, "skills")
+	if info, err := os.Stat(skillsRoot); err == nil && info.IsDir() {
+		roots = append(roots, skillsRoot)
+	}
+	for _, e := range entries {
+		if !e.IsDir() || shouldSkipScanDir(e.Name()) {
+			continue
+		}
+		dir := filepath.Join(repoDir, e.Name())
+		if dir == skillsRoot {
+			continue
+		}
+		roots = append(roots, dir)
 	}
 
-	// Fallback: scan repo root directly.
-	return scanDir(repoDir, "", repoURL, repoName, source)
+	var result []StarSkill
+	for _, root := range roots {
+		skills, err := scanTree(repoDir, root, repoURL, repoName, source, 0, maxDepth)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, skills...)
+	}
+	return result, nil
 }

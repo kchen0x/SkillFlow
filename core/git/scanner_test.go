@@ -77,3 +77,71 @@ func TestScanSkillsRootFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestScanSkillsNestedPluginSkills(t *testing.T) {
+	dir := t.TempDir()
+	pluginSkillDir := filepath.Join(dir, "plugins", "shinerio-note-plugin", "skills", "embed-mindmap")
+	if err := os.MkdirAll(pluginSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir plugin skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginSkillDir, "SKILL.md"), []byte("# embed-mindmap"), 0644); err != nil {
+		t.Fatalf("write plugin skill: %v", err)
+	}
+
+	topSkillDir := filepath.Join(dir, "skills", "top-level")
+	if err := os.MkdirAll(topSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir top-level skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(topSkillDir, "skill.md"), []byte("# top-level"), 0644); err != nil {
+		t.Fatalf("write top-level skill: %v", err)
+	}
+
+	skills, err := ScanSkills(dir, "https://github.com/shinerio/shinerio-marketplace", "shinerio/shinerio-marketplace", "github.com/shinerio/shinerio-marketplace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 2 {
+		t.Fatalf("expected 2, got %d: %+v", len(skills), skills)
+	}
+
+	got := map[string]string{}
+	for _, sk := range skills {
+		got[sk.Name] = sk.SubPath
+	}
+	if got["embed-mindmap"] != "plugins/shinerio-note-plugin/skills/embed-mindmap" {
+		t.Fatalf("nested plugin skill missing or wrong subpath: %+v", got)
+	}
+	if got["top-level"] != "skills/top-level" {
+		t.Fatalf("top-level skill missing or wrong subpath: %+v", got)
+	}
+}
+
+func TestScanSkillsRespectsMaxDepth(t *testing.T) {
+	dir := t.TempDir()
+	deepSkillDir := filepath.Join(dir, "plugins", "shinerio-note-plugin", "skills", "embed-mindmap")
+	if err := os.MkdirAll(deepSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir deep skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(deepSkillDir, "skill.md"), []byte("# embed-mindmap"), 0644); err != nil {
+		t.Fatalf("write deep skill: %v", err)
+	}
+
+	shallowSkillDir := filepath.Join(dir, "skills", "top-level")
+	if err := os.MkdirAll(shallowSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir shallow skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(shallowSkillDir, "skill.md"), []byte("# top-level"), 0644); err != nil {
+		t.Fatalf("write shallow skill: %v", err)
+	}
+
+	skills, err := ScanSkillsWithMaxDepth(dir, "https://github.com/shinerio/shinerio-marketplace", "shinerio/shinerio-marketplace", "github.com/shinerio/shinerio-marketplace", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill with depth limit 2, got %d: %+v", len(skills), skills)
+	}
+	if skills[0].Name != "top-level" || skills[0].SubPath != "skills/top-level" {
+		t.Fatalf("unexpected shallow result: %+v", skills[0])
+	}
+}

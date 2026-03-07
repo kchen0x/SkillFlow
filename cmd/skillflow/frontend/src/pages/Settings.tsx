@@ -63,6 +63,20 @@ const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
   },
 }
 
+const defaultRepoScanMaxDepth = 5
+const minRepoScanMaxDepth = 1
+const maxRepoScanMaxDepth = 20
+
+function clampRepoScanMaxDepth(value: number) {
+  if (!Number.isFinite(value) || value < minRepoScanMaxDepth) {
+    return defaultRepoScanMaxDepth
+  }
+  if (value > maxRepoScanMaxDepth) {
+    return maxRepoScanMaxDepth
+  }
+  return value
+}
+
 function getCloudProviderDisplayName(name: string, t: (key: TranslationKey) => string) {
   const key = CLOUD_PROVIDER_LABEL_KEYS[name]
   return key ? t(key) : name
@@ -766,6 +780,21 @@ export default function SettingsPage() {
                 <FolderOpen size={16} />
               </button>
             </div>
+          </div>
+          <div>
+            <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.repoScanMaxDepth')}</p>
+            <input
+              type="number"
+              min={minRepoScanMaxDepth}
+              max={maxRepoScanMaxDepth}
+              value={cfg.repoScanMaxDepth ?? defaultRepoScanMaxDepth}
+              onChange={e => setCfg((p: any) => ({
+                ...p,
+                repoScanMaxDepth: clampRepoScanMaxDepth(parseInt(e.target.value, 10)),
+              }))}
+              className="input-base w-32"
+            />
+            <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.repoScanMaxDepthHint')}</p>
           </div>
           <div>
             <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.defaultCategory')}</p>

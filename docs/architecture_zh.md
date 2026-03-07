@@ -23,7 +23,7 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
 - **Wails 绑定为自动生成** — 在 `App` 上增删导出方法后，需运行 `wails generate module` 更新 `frontend/wailsjs/go/main/App.{js,d.ts}`
 - **根目录下的 `package main` 文件** — `app.go`、`adapters.go`、`providers.go`、`events.go` 均与 `main.go` 同属 `package main`，因为 Wails 要求 App 结构体与 `main` 位于同一包
 - **无 REST API** — 直接使用 Wails 方法绑定，更快更简洁
-- **基于 UUID 的 Skill 标识** — Skill 以 UUID 标识，元数据存储在 JSON 附属文件中
+- **已安装 Skill 实例使用 UUID，但跨模块关联必须使用稳定的逻辑主键** — 见下文的[统一的 Skill 身份与状态模型](#统一的-skill-身份与状态模型)
 - **文件系统适配器** — 所有内置工具共享同一 `FilesystemAdapter` 模式
 - **以 GitHub 为数据来源** — 更新检测器轮询 GitHub API，而非本地时间戳
 
@@ -46,7 +46,7 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
     <cached-repo-dirs>/
 ```
 
-Skill 以 UUID 标识。`meta/` 目录始终为 `filepath.Join(filepath.Dir(root), "meta")`。
+已安装的 Skill 实例以 UUID 标识。跨模块关联必须遵循下文[统一的 Skill 身份与状态模型](#统一的-skill-身份与状态模型)中的逻辑主键规则。`meta/` 目录始终为 `filepath.Join(filepath.Dir(root), "meta")`。
 
 ---
 
@@ -91,6 +91,76 @@ const (
     SourceManual SourceType = "manual"
 )
 ```
+
+## 统一的 Skill 身份与状态模型
+
+本节对所有后续涉及 skill 卡片、导入/安装/推送/拉取流程、收藏仓库、工具扫描或更新徽标的改动都具有约束力。
+
+### 身份分层
+
+SkillFlow 必须区分两类身份：
+
+- **实例身份** — `Skill.ID` 标识“我的 skills”中的某一份已安装副本。删除、移动分类、实例级更新等安装实例操作应使用它。
+- **逻辑身份** — 稳定的跨模块身份，用来回答“Dashboard、Starred Repos、Tool Skills、Sync Pull、Sync Push 中显示的是不是同一个 skill”。
+
+`Name` 和绝对 `Path` 只是展示信息或位置信息，不能作为跨模块主身份键。
+
+### 逻辑主键规则
+
+- **Git 来源 skill** 必须使用“规范化仓库来源 + 仓库内子路径”生成逻辑主键：
+  - 格式：`git:<repo-source>#<subpath>`
+  - `repo-source` 为规范化后的 host/path，例如 `github.com/owner/repo`
+  - `<subpath>` 为仓库内使用正斜杠的相对路径，例如 `skills/my-skill`
+- **非 Git skill** 应使用稳定的内容型主键，例如 `content:<hash>`，这样在工具扫描和本地导入时也能识别为同一个 skill。
+- **临时兜底启发式** 仅可在尚无法生成稳定逻辑主键时使用，并且必须视为弱匹配。
+
+### 模块映射
+
+| 模块 / 页面 | 主要实体 | 驱动行为的身份 |
+|-------------|----------|----------------|
+| Dashboard / 我的 Skills | 已安装 `Skill` | 实例操作使用 `Skill.ID`；跨模块关联使用逻辑主键 |
+| Sync Push | 已安装 `Skill` | 选择使用 `Skill.ID`；推送状态解析使用逻辑主键 |
+| GitHub 扫描/安装 | 远端候选项 | 使用 repo source + subpath 派生的逻辑主键 |
+| Starred Repos | `StarSkill` | 使用 repo source + subpath 派生的逻辑主键 |
+| Tool Skills | 工具侧候选项 / 聚合项 | 去重与状态使用逻辑主键；仅在该工具内的打开/删除使用 path |
+| Sync Pull | 工具侧候选项 | 导入与冲突检测使用逻辑主键 |
+
+### 统一状态语义
+
+- **installed** — 该逻辑主键在“我的 skills”中至少存在一个已安装实例。
+- **imported** — 外部来源页面对 `installed` 的文案别名；在 GitHub、Starred Repos、Tool 扫描视图中，“已导入”表示“已经安装进我的 skills”。
+- **pushed** — 该逻辑 skill 已存在于某工具配置的 `PushDir` 中，可视为已经推送到该工具。
+- **seenInToolScan** — 该逻辑 skill 已在某工具配置的 `ScanDirs` 中被扫描到，表示该 skill 已出现在工具生态中，但不一定由 SkillFlow 管理，也不一定在 `PushDir` 中。
+- **updatable** — 至少有一个已安装的 Git skill 实例，其远端最新提交与本地 `SourceSHA` 不一致。
+
+### 状态规则
+
+- `pushed` 比“工具里某处存在”更窄，它特指配置的推送目标中存在。
+- `seenInToolScan` 是观察型状态，用来区分“工具里已经有这个 skill”和“SkillFlow 已经把它推过去了”。
+- 当推送目录也被扫描，或同一个逻辑 skill 同时存在于 push/scan 两处时，`pushed=true` 与 `seenInToolScan=true` 可以同时成立。
+- 当 `seenInToolScan=true` 且 `pushed=false` 时，界面通常应表达为“工具中已检测到”，而不是“已推送”。
+
+### 冲突与去重规则
+
+- 跨模块去重必须优先使用逻辑主键相等。
+- 不同仓库中的同名项，只要逻辑主键不同，就必须视为不同 skill。
+- 相同路径不自动代表同一个 skill，除非它们能解析为同一个逻辑主键。
+- 基于名称的匹配只能作为最后的兼容性兜底，且不能覆盖更强的逻辑主键匹配。
+
+### 更新检测规则
+
+- 只有具备稳定 repo source 和 subpath 的已安装 Git skill 才参与远端更新检测。
+- 更新资格必须使用与安装/导入关联相同的逻辑来源键。
+- 远端更新检测通过比较本地 `SourceSHA` 与同一 repo subpath 的最新远端 commit SHA。
+- `LastCheckedAt` 应在每次完成检查后更新，而不是仅在发现更新时更新。
+- 当最新检查确认本地 `SourceSHA` 已是最新时，应清空 `LatestSHA`。
+- 更新徽标与“更新”动作必须来源于统一状态模型，而不是页面私有的启发式判断。
+
+### 实现指导
+
+- 跨模块的 skill 关联应由后端统一负责，并向前端暴露规范化后的状态。
+- 前端页面不应再基于 `Name` 或 `Path` 独自判断“是不是同一个 skill”“是否已导入”或“是否已推送”。
+- 后续若引入 catalog / aggregate 层，应将各模块中的不同表示统一归并到同一个逻辑 skill 记录下，并把已安装实例作为其子引用。
 
 ### AppConfig（`core/config/model.go`）
 

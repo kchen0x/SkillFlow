@@ -606,7 +606,7 @@ func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 	if err != nil {
 		return nil, err
 	}
-	starSkills, err := coregit.ScanSkills(cacheDir, repoURL, repoName, repoSource)
+	starSkills, err := coregit.ScanSkillsWithMaxDepth(cacheDir, repoURL, repoName, repoSource, a.repoScanMaxDepth())
 	if err != nil {
 		return nil, err
 	}
@@ -971,6 +971,14 @@ func getAdapter(t config.ToolConfig) toolsync.ToolAdapter {
 	return toolsync.NewFilesystemAdapter(t.Name, t.PushDir)
 }
 
+func (a *App) repoScanMaxDepth() int {
+	cfg, err := a.config.Load()
+	if err != nil {
+		return config.DefaultRepoScanMaxDepth
+	}
+	return config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
+}
+
 // --- Config ---
 
 func (a *App) GetConfig() (config.AppConfig, error) {
@@ -980,18 +988,21 @@ func (a *App) GetConfig() (config.AppConfig, error) {
 	}
 	cfg.DefaultCategory = defaultCategoryName
 	cfg.LogLevel = config.NormalizeLogLevel(cfg.LogLevel)
+	cfg.RepoScanMaxDepth = config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
 	return cfg, nil
 }
 
 func (a *App) SaveConfig(cfg config.AppConfig) error {
+	a.logInfof("save config requested")
 	cfg.DefaultCategory = defaultCategoryName
 	cfg.LogLevel = config.NormalizeLogLevel(cfg.LogLevel)
+	cfg.RepoScanMaxDepth = config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
 	if err := a.config.Save(cfg); err != nil {
 		a.logErrorf("save config failed: %v", err)
 		return err
 	}
 	a.setLoggerLevel(cfg.LogLevel)
-	a.logInfof("config saved (logLevel=%s)", cfg.LogLevel)
+	a.logInfof("save config completed: logLevel=%s repoScanMaxDepth=%d", cfg.LogLevel, cfg.RepoScanMaxDepth)
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 	return nil
 }
@@ -1410,6 +1421,7 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 	if err != nil {
 		return nil, err
 	}
+	maxDepth := a.repoScanMaxDepth()
 	existing, _ := a.storage.ListAll()
 	importedNames := map[string]bool{}
 	for _, sk := range existing {
@@ -1421,7 +1433,7 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 		if source == "" {
 			source, _ = coregit.RepoSource(r.URL)
 		}
-		skills, _ := coregit.ScanSkills(r.LocalDir, r.URL, r.Name, source)
+		skills, _ := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
 		for i := range skills {
 			skills[i].Imported = importedNames[skills[i].Name]
 		}
@@ -1438,6 +1450,7 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 	if err != nil {
 		return nil, err
 	}
+	maxDepth := a.repoScanMaxDepth()
 	existing, _ := a.storage.ListAll()
 	importedNames := map[string]bool{}
 	for _, sk := range existing {
@@ -1451,7 +1464,7 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 		if source == "" {
 			source, _ = coregit.RepoSource(r.URL)
 		}
-		skills, err := coregit.ScanSkills(r.LocalDir, r.URL, r.Name, source)
+		skills, err := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
 		if err != nil {
 			return nil, err
 		}

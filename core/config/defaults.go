@@ -79,6 +79,7 @@ func DefaultConfig(dataDir string) AppConfig {
 		SkillsStorageDir: filepath.Join(dataDir, "skills"),
 		DefaultCategory:  "Default",
 		LogLevel:         DefaultLogLevel,
+		RepoScanMaxDepth: DefaultRepoScanMaxDepth,
 		Tools:            tools,
 		Cloud:            CloudConfig{RemotePath: "skillflow/"},
 	}

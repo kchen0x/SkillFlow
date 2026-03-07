@@ -229,12 +229,23 @@ SkillFlow is a Wails v2 desktop app (Go 1.23). The Go backend exposes methods di
 
 For comprehensive architecture docs, data models, and extension guides, see **[docs/architecture.md](docs/architecture.md)**.
 
+## Cross-Module Skill Identity Rule — MANDATORY
+
+Any change touching skill identity, install/import/push/pull state, starred repo correlation, tool scan correlation, or skill update badges **must** follow the **"Unified Skill Identity & State Model"** section in `docs/architecture.md` and `docs/architecture_zh.md`.
+
+- Distinguish **instance identity** (`Skill.ID`) from **logical identity** (stable cross-module key).
+- Do **not** use `Name` or absolute `Path` as the primary cross-module identity.
+- `imported` is the external-source wording for `installed`.
+- `pushed` means the logical skill exists in a tool's configured `PushDir`.
+- `seenInToolScan` means the logical skill was detected in a tool's configured `ScanDirs`; it does **not** imply SkillFlow previously pushed it.
+- Git-backed update detection must be keyed by normalized repo source + subpath, and compare installed `SourceSHA` against the latest remote SHA for that same logical source.
+
 ### Key Design Decisions
 
 - **`core/sync` import alias** — always import as `toolsync "github.com/shinerio/skillflow/core/sync"` (conflicts with stdlib `sync`)
 - **`package main` files in `cmd/skillflow/`** — `app.go`, `adapters.go`, `providers.go`, `events.go` are all `package main` alongside `main.go` in `cmd/skillflow/` because Wails requires the app struct in the same package as `main`
 - **Wails bindings are auto-generated** — after adding/removing exported methods on `App`, run `make generate` to update `cmd/skillflow/frontend/wailsjs/go/main/App.{js,d.ts}`; also manually add entries to `App.js` and `App.d.ts` if Wails CLI is unavailable
-- **UUID-based skills** — skills are identified by UUID, metadata stored in JSON sidecars under `meta/`
+- **Installed skill instances are UUID-based, but cross-module identity must use a stable logical key** — see `docs/architecture.md#unified-skill-identity--state-model`
 - **GitHub as source of truth** — update checker polls GitHub Commits API to compare SHA values
 - **`SkippedUpdateVersion` in AppConfig** — persists which app version the user chose to skip on startup; `checkAppUpdateOnStartup` respects this; `CheckAppUpdateAndNotify` (manual check) always notifies regardless
 

@@ -18,6 +18,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 	assert.NotEmpty(t, cfg.SkillsStorageDir)
 	assert.Equal(t, "Default", cfg.DefaultCategory)
 	assert.Equal(t, config.DefaultLogLevel, cfg.LogLevel)
+	assert.Equal(t, config.DefaultRepoScanMaxDepth, cfg.RepoScanMaxDepth)
 	assert.NotEmpty(t, cfg.Tools)
 }
 
@@ -26,6 +27,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
 	cfg.DefaultCategory = "MyCategory"
+	cfg.RepoScanMaxDepth = 7
 	cfg.SkippedUpdateVersion = "v1.2.3"
 	err := svc.Save(cfg)
 	require.NoError(t, err)
@@ -33,6 +35,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	loaded, err := svc.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "MyCategory", loaded.DefaultCategory)
+	assert.Equal(t, 7, loaded.RepoScanMaxDepth)
 	assert.Equal(t, "v1.2.3", loaded.SkippedUpdateVersion)
 }
 
@@ -68,6 +71,25 @@ func TestSaveAndLoadConfigNormalizesLogLevel(t *testing.T) {
 	loaded, err := svc.Load()
 	require.NoError(t, err)
 	assert.Equal(t, config.DefaultLogLevel, loaded.LogLevel)
+}
+
+func TestSaveAndLoadConfigNormalizesRepoScanMaxDepth(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.RepoScanMaxDepth = 999
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, config.MaxRepoScanMaxDepth, loaded.RepoScanMaxDepth)
+
+	cfg.RepoScanMaxDepth = 0
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err = svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, config.DefaultRepoScanMaxDepth, loaded.RepoScanMaxDepth)
 }
 
 func TestConfigFileCreatedOnFirstLoad(t *testing.T) {

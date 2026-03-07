@@ -38,6 +38,7 @@ type AppConfig struct {
 	SkillsStorageDir     string       `json:"skillsStorageDir"`
 	DefaultCategory      string       `json:"defaultCategory"`
 	LogLevel             string       `json:"logLevel"` // "debug" | "info" | "error"
+	RepoScanMaxDepth     int          `json:"repoScanMaxDepth"`
 	Tools                []ToolConfig `json:"tools"`
 	Cloud                CloudConfig  `json:"cloud"`
 	Proxy                ProxyConfig  `json:"proxy"`
@@ -45,10 +46,13 @@ type AppConfig struct {
 }
 
 const (
-	LogLevelDebug   = "debug"
-	LogLevelInfo    = "info"
-	LogLevelError   = "error"
-	DefaultLogLevel = LogLevelError
+	LogLevelDebug           = "debug"
+	LogLevelInfo            = "info"
+	LogLevelError           = "error"
+	DefaultLogLevel         = LogLevelError
+	DefaultRepoScanMaxDepth = 5
+	MinRepoScanMaxDepth     = 1
+	MaxRepoScanMaxDepth     = 20
 )
 
 func NormalizeLogLevel(level string) string {
@@ -60,4 +64,14 @@ func NormalizeLogLevel(level string) string {
 	default:
 		return DefaultLogLevel
 	}
+}
+
+func NormalizeRepoScanMaxDepth(depth int) int {
+	if depth < MinRepoScanMaxDepth {
+		return DefaultRepoScanMaxDepth
+	}
+	if depth > MaxRepoScanMaxDepth {
+		return MaxRepoScanMaxDepth
+	}
+	return depth
 }

@@ -81,6 +81,7 @@ export namespace config {
 	    skillsStorageDir: string;
 	    defaultCategory: string;
 	    logLevel: string;
+	    repoScanMaxDepth: number;
 	    tools: ToolConfig[];
 	    cloud: CloudConfig;
 	    proxy: ProxyConfig;
@@ -95,6 +96,7 @@ export namespace config {
 	        this.skillsStorageDir = source["skillsStorageDir"];
 	        this.defaultCategory = source["defaultCategory"];
 	        this.logLevel = source["logLevel"];
+	        this.repoScanMaxDepth = source["repoScanMaxDepth"];
 	        this.tools = this.convertValues(source["tools"], ToolConfig);
 	        this.cloud = this.convertValues(source["cloud"], CloudConfig);
 	        this.proxy = this.convertValues(source["proxy"], ProxyConfig);

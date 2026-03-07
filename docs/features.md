@@ -178,6 +178,9 @@ Imports skills from external tool directories into your library.
 
 Browse and import skills directly from watched Git repositories without installing them into your library first.
 
+- Repo scanning is recursive across the full clone, so nested skill folders such as `plugins/<plugin>/skills/<name>` are included; `skill.md` matching is case-insensitive.
+- Recursive repo scanning is bounded by the configurable **Remote Repo Recursive Scan Depth** setting in **Settings → General** (default `5`, saved range `1-20`).
+
 ### View Modes
 
 | Mode | Icon | Description |
@@ -371,6 +374,7 @@ For each built-in or custom tool:
 | **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
 | **Appearance theme** | Three visual presets shown as preview cards: **Dark** (default, refined graphite with muted mist-blue accents), **Young** (a softened paper-blue evolution of the previous sky-blue Light palette), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
 | **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button that opens at the current path or nearest existing parent |
+| **Remote repo recursive scan depth** | Maximum recursion depth used when scanning starred repos and GitHub-install repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
 | **Log level buttons** | Toggle runtime log level between `debug`, `info`, and `error` (default: `error`); takes effect after saving settings |
 | **Open log directory** | One-click open the local log folder in system file manager; missing targets fall back to the nearest existing parent directory |
@@ -477,6 +481,8 @@ Opened from Dashboard toolbar.
 | **"Install n Skills"** button | `InstallFromGitHub(url, selected, category)` |
 
 - Info text: "First scan clones the repo; subsequent scans auto-pull."
+- Candidate discovery is recursive across the cloned repo, so nested layouts such as `plugins/<plugin>/skills/<name>` are also listed; `skill.md` matching is case-insensitive.
+- Recursive candidate discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Separate error alerts for scan errors and install errors.
 
 ### 10.3 Missing Directory Dialog
