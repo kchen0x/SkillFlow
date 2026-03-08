@@ -1,12 +1,58 @@
 import { useEffect, useState } from 'react'
-import { BackupNow, ListCloudFiles, RestoreFromCloud, GetConfig } from '../../wailsjs/go/main/App'
+import { BackupNow, GetConfig, GetLastBackupChanges, RestoreFromCloud } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import { Cloud, Upload, Download, RefreshCw } from 'lucide-react'
+import { Cloud, Download, RefreshCw, Upload } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
+
+type BackupChange = {
+  path: string
+  size: number
+  action: string
+}
+
+function normalizeChanges(input: any): BackupChange[] {
+  return (input ?? [])
+    .map((item: any) => {
+      const path = item?.path ?? item?.Path ?? ''
+      const rawSize = item?.size ?? item?.Size ?? 0
+      const size = typeof rawSize === 'number' ? rawSize : Number(rawSize) || 0
+      const action = item?.action ?? item?.Action ?? ''
+      return { path, size, action }
+    })
+    .filter((item: BackupChange) => item.path !== '')
+}
+
+function parseCompletedPayload(data: string): BackupChange[] {
+  try {
+    const payload = JSON.parse(data)
+    return normalizeChanges(payload?.files ?? payload?.Files ?? [])
+  } catch {
+    return []
+  }
+}
+
+function actionTone(action: string) {
+  if (action === 'deleted') {
+    return {
+      color: 'var(--color-error)',
+      background: 'rgba(248,113,113,0.12)',
+    }
+  }
+  if (action === 'added') {
+    return {
+      color: 'var(--color-success)',
+      background: 'rgba(74,222,128,0.12)',
+    }
+  }
+  return {
+    color: 'var(--accent-primary)',
+    background: 'rgba(99,102,241,0.12)',
+  }
+}
 
 export default function Backup() {
   const { t } = useLanguage()
-  const [files, setFiles] = useState<Array<{ path: string; size: number }>>([])
+  const [files, setFiles] = useState<BackupChange[]>([])
   const [resultStatus, setResultStatus] = useState<'idle' | 'done' | 'error'>('idle')
   const [pushing, setPushing] = useState(false)
   const [pulling, setPulling] = useState(false)
@@ -14,33 +60,34 @@ export default function Backup() {
   const [cloudEnabled, setCloudEnabled] = useState(false)
   const [isGit, setIsGit] = useState(false)
 
+  const loadLastChanges = async () => {
+    const result = await GetLastBackupChanges()
+    setFiles(normalizeChanges(result))
+  }
+
   useEffect(() => {
     GetConfig().then(cfg => {
       setCloudEnabled(cfg?.cloud?.enabled ?? false)
       setIsGit(cfg?.cloud?.provider === 'git')
     })
+    loadLastChanges()
 
     EventsOn('backup.progress', (data: string) => {
       try { setCurrentFile(JSON.parse(data).currentFile ?? '') } catch {}
     })
-    EventsOn('backup.completed', () => { setResultStatus('done'); loadFiles() })
+    EventsOn('backup.completed', (data: string) => {
+      setResultStatus('done')
+      setFiles(parseCompletedPayload(data))
+      setCurrentFile('')
+    })
     EventsOn('backup.failed', () => setResultStatus('error'))
-    EventsOn('git.sync.completed', () => { setResultStatus('done'); loadFiles() })
+    EventsOn('git.sync.completed', (data: string) => {
+      setResultStatus('done')
+      setFiles(parseCompletedPayload(data))
+      setCurrentFile('')
+    })
     EventsOn('git.sync.failed', () => setResultStatus('error'))
   }, [])
-
-  const loadFiles = async () => {
-    const f = await ListCloudFiles()
-    const normalized = (f ?? [])
-      .map((item: any) => {
-        const path = item?.path ?? item?.Path ?? ''
-        const rawSize = item?.size ?? item?.Size ?? 0
-        const size = typeof rawSize === 'number' ? rawSize : Number(rawSize) || 0
-        return { path, size }
-      })
-      .filter((item: { path: string }) => item.path !== '')
-    setFiles(normalized)
-  }
 
   return (
     <div className="p-8 max-w-2xl">
@@ -66,6 +113,7 @@ export default function Backup() {
           onClick={async () => {
             setPushing(true)
             setResultStatus('idle')
+            setCurrentFile('')
             try {
               await BackupNow()
             } catch {
@@ -86,7 +134,6 @@ export default function Backup() {
             setResultStatus('idle')
             try {
               await RestoreFromCloud()
-              loadFiles()
             } catch {
               setResultStatus('error')
             } finally {
@@ -100,7 +147,7 @@ export default function Backup() {
           {pulling ? t('backup.pulling') : (isGit ? t('backup.pullRemote') : t('backup.restore'))}
         </button>
         <button
-          onClick={loadFiles}
+          onClick={loadLastChanges}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors"
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
@@ -124,24 +171,45 @@ export default function Backup() {
       {files.length > 0 && (
         <div>
           <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-            {(isGit ? t('backup.gitFiles') : t('backup.cloudFiles'))}（{files.length}）
+            {isGit ? t('backup.gitChanges') : t('backup.cloudChanges')} ({files.length})
           </p>
           <div
             className="max-h-96 overflow-y-auto rounded-xl divide-y"
             style={{ border: '1px solid var(--border-base)', borderColor: 'var(--border-base)' }}
           >
-            {files.map((f, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between px-4 py-2.5 text-sm"
-                style={{ borderColor: 'var(--border-base)' }}
-              >
-                <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{f.path}</span>
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{(f.size / 1024).toFixed(1)} KB</span>
-              </div>
-            ))}
+            {files.map((f, i) => {
+              const tone = actionTone(f.action)
+              return (
+                <div
+                  key={`${f.path}-${f.action}-${i}`}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+                  style={{ borderColor: 'var(--border-base)' }}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.08em]"
+                      style={tone}
+                    >
+                      {t(`backup.action.${f.action || 'modified'}` as any)}
+                    </span>
+                    <span className="min-w-0 truncate font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {f.path}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {f.action === 'deleted' ? t('backup.deleted') : `${(f.size / 1024).toFixed(1)} KB`}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
+      )}
+
+      {resultStatus === 'done' && files.length === 0 && (
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          {t('backup.noChanges')}
+        </p>
       )}
     </div>
   )

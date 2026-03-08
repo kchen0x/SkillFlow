@@ -13,6 +13,7 @@ type RemoteFile struct {
 	Path  string `json:"path"`
 	Size  int64  `json:"size"`
 	IsDir bool   `json:"isDir"`
+	Action string `json:"action,omitempty"`
 }
 
 type CloudProvider interface {

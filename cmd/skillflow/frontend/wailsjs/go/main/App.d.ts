@@ -56,6 +56,8 @@ export function GetEnabledTools():Promise<Array<config.ToolConfig>>;
 
 export function GetGitConflictPending():Promise<boolean>;
 
+export function GetLastBackupChanges():Promise<Array<backup.RemoteFile>>;
+
 export function GetLogDir():Promise<string>;
 
 export function GetSkillMeta(arg1:string):Promise<skill.SkillMeta>;

@@ -98,6 +98,10 @@ export function GetGitConflictPending() {
   return window['go']['main']['App']['GetGitConflictPending']();
 }
 
+export function GetLastBackupChanges() {
+  return window['go']['main']['App']['GetLastBackupChanges']();
+}
+
 export function GetLogDir() {
   return window['go']['main']['App']['GetLogDir']();
 }
