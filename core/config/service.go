@@ -481,6 +481,10 @@ func normalizeCloudProviderConfig(provider string, profile CloudProviderConfig) 
 		Credentials: cloneStringMap(profile.Credentials),
 	}
 	switch strings.TrimSpace(provider) {
+	case "aws":
+		normalized = normalizeAWSCloudProviderConfig(normalized)
+	case "azure":
+		normalized = normalizeAzureCloudProviderConfig(normalized)
 	case "tencent":
 		normalized = normalizeTencentCloudProviderConfig(normalized)
 	}
@@ -500,6 +504,46 @@ func normalizeTencentCloudProviderConfig(profile CloudProviderConfig) CloudProvi
 		delete(credentials, "endpoint")
 	}
 	delete(credentials, "bucket_url")
+
+	if len(credentials) == 0 {
+		profile.Credentials = nil
+		return profile
+	}
+	profile.Credentials = credentials
+	return profile
+}
+
+func normalizeAWSCloudProviderConfig(profile CloudProviderConfig) CloudProviderConfig {
+	credentials := cloneStringMap(profile.Credentials)
+
+	if region := strings.TrimSpace(credentials["region"]); region != "" {
+		credentials["region"] = region
+	} else {
+		delete(credentials, "region")
+	}
+
+	if len(credentials) == 0 {
+		profile.Credentials = nil
+		return profile
+	}
+	profile.Credentials = credentials
+	return profile
+}
+
+func normalizeAzureCloudProviderConfig(profile CloudProviderConfig) CloudProviderConfig {
+	credentials := cloneStringMap(profile.Credentials)
+
+	if accountName := strings.TrimSpace(credentials["account_name"]); accountName != "" {
+		credentials["account_name"] = accountName
+	} else {
+		delete(credentials, "account_name")
+	}
+
+	if serviceURL := normalizeConfigHostLikeValue(credentials["service_url"]); serviceURL != "" {
+		credentials["service_url"] = serviceURL
+	} else {
+		delete(credentials, "service_url")
+	}
 
 	if len(credentials) == 0 {
 		profile.Credentials = nil
@@ -810,7 +854,7 @@ func isZeroProxyConfig(proxy ProxyConfig) bool {
 
 func isSharedCloudCredentialKey(key string) bool {
 	switch key {
-	case "endpoint", "repo_url", "branch", "username":
+	case "endpoint", "repo_url", "branch", "username", "region", "account_name", "service_url":
 		return true
 	default:
 		return false

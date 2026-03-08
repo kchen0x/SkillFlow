@@ -54,6 +54,9 @@ type StatusOption = {
 
 const CLOUD_PROVIDER_LABEL_KEYS: Record<string, TranslationKey> = {
   aliyun: 'settings.cloudProviderAliyun',
+  aws: 'settings.cloudProviderAws',
+  google: 'settings.cloudProviderGoogle',
+  azure: 'settings.cloudProviderAzure',
   tencent: 'settings.cloudProviderTencent',
   huawei: 'settings.cloudProviderHuawei',
   git: 'settings.cloudProviderGit',
@@ -65,14 +68,27 @@ const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
     access_key_secret: 'settings.cloudFieldAccessKeySecret',
     endpoint: 'settings.cloudFieldEndpoint',
   },
+  aws: {
+    access_key_id: 'settings.cloudFieldAccessKeyId',
+    secret_access_key: 'settings.cloudFieldSecretAccessKey',
+    region: 'settings.cloudFieldRegion',
+  },
+  google: {
+    service_account_json: 'settings.cloudFieldServiceAccountJson',
+  },
+  azure: {
+    account_name: 'settings.cloudFieldAccountName',
+    account_key: 'settings.cloudFieldAccountKey',
+    service_url: 'settings.cloudFieldServiceUrl',
+  },
   tencent: {
     secret_id: 'settings.cloudFieldSecretId',
     secret_key: 'settings.cloudFieldSecretKey',
     endpoint: 'settings.cloudFieldEndpoint',
   },
   huawei: {
-    access_key: 'settings.cloudFieldAccessKey',
-    secret_key: 'settings.cloudFieldSecretKey',
+    access_key_id: 'settings.cloudFieldAccessKeyId',
+    secret_access_key: 'settings.cloudFieldSecretAccessKey',
     endpoint: 'settings.cloudFieldEndpoint',
   },
   git: {

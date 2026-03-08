@@ -5,6 +5,14 @@
 > 本文档列举了 SkillFlow 的每一项功能、按钮、交互细节和 UX 设计。
 > **每当功能增删改时，必须同步更新本文件。**
 
+## 云备份新增服务商
+
+- 对象存储在原有阿里云 OSS、腾讯云 COS、华为云 OBS 之外，新增 AWS S3、Azure Blob Storage、Google Cloud Storage。
+- AWS S3 使用 `bucket + region`。
+- Azure Blob Storage 使用 `container`（即设置页里的 bucket 字段）+ `account name` + `account key`，并支持可选 `service URL`。
+- Google Cloud Storage 使用 `bucket + Service Account JSON`，该凭据也可以填写为本地密钥文件路径。
+- `region`、`account_name`、`service_url` 会作为可同步连接字段保存在 `config.json`；`account key` 和 `Service Account JSON` 等敏感凭据仍只保存在 `config_local.json`。
+
 ---
 
 ## 目录
@@ -508,7 +516,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 
 | 元素 | 说明 |
 |------|------|
-| **状态条** | 将来源徽章与其他并存状态（例如可更新 + 已推送工具图标）统一放在一块可换行的头部区域中 |
+| **状态条** | 将来源徽章与其他并存状态（例如可更新 + 已推送工具图标）统一收纳在卡片头部的单行紧凑区域中 |
 | **Skill 名称** | 最多显示两行；保留操作按钮所需间距 |
 | **打开目录按钮**（FolderOpenDot，右上角） | `OpenPath(skill.path)` — 在系统文件管理器中打开目录；仅悬停时可见 |
 | **选择复选框**（左上角） | 仅多选模式下可见 |
@@ -521,8 +529,8 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 
 | 元素 | 说明 |
 |------|------|
-| **状态条** | 同时显示来源徽章与当前页面允许展示的状态（例如“已导入 / 可更新 / 已推送工具”） |
-| **已推送工具指示器** | 用小尺寸工具品牌图标显示哪些工具的 `PushDir` 已包含该逻辑 skill；过多时折叠为省略号，并可悬浮查看完整列表 |
+| **状态条** | 同时显示来源徽章与当前页面允许展示的状态（例如“已导入 / 可更新 / 已推送工具”），并保持在同一条紧凑头部区域内 |
+| **已推送工具指示器** | 用小尺寸工具品牌图标显示哪些工具的 `PushDir` 已包含该逻辑 skill；不再额外显示箭头前缀，过多时折叠为紧凑计数徽章，并可悬浮查看完整列表 |
 | **Skill 名称** | 最多显示两行 |
 | **副标题** | 分类名或仓库名 |
 | **复制按钮**（悬停） | 剪贴板操作同主面板卡片 |

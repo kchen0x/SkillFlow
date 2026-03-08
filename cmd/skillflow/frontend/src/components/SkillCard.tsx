@@ -202,14 +202,15 @@ export default function SkillCard({
           </button>
         )}
 
-        <div className={`mb-2 flex items-start gap-2 ${selectMode ? 'pl-5' : ''}`}>
+        <div className={`mb-2 flex items-center gap-2 ${selectMode ? 'pl-5' : ''}`}>
           {skill.source === 'github'
-            ? <Github size={14} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />
-            : <FolderOpen size={14} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />}
+            ? <Github size={14} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
+            : <FolderOpen size={14} style={{ color: 'var(--text-muted)' }} className="shrink-0" />}
           <SkillStatusStrip
             className="min-w-0 flex-1 pr-14"
             badges={badges}
             pushedTools={showPushedTools ? (skill.pushedTools ?? []) : []}
+            singleLine
           />
         </div>
         <p

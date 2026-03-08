@@ -4,6 +4,13 @@
 
 本文档面向贡献者，涵盖内部架构、包设计、数据模型和扩展指南。
 
+## 新增云 Provider 说明
+
+- `core/backup` 现已包含 AWS S3、Azure Blob Storage、Google Cloud Storage 三个新增 provider，实现方式与现有对象存储 provider 一样，统一遵循 `CloudProvider` 接口。
+- `registerProviders()` 现在会在启动时一并注册 Aliyun、AWS、Azure、Google、Tencent、Huawei 与 Git provider。
+- `CloudConfig.Provider` 的可选值已扩展为 `aliyun`、`aws`、`azure`、`google`、`tencent`、`huawei`、`git`。
+- 可同步连接字段新增 `region`、`account_name`、`service_url`；敏感字段如 `account_key`、`service_account_json` 仍只落在 `config_local.json`。
+
 ---
 
 ## 概述

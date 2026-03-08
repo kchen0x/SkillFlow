@@ -61,7 +61,7 @@ Installed skill instances are identified by UUID. Cross-module correlation must 
 | `core/notify` | `Hub` (buffered channel pub/sub), `EventType` constants |
 | `core/install` | `Installer` interface, `GitHubInstaller` (scan/download/SHA), `LocalInstaller` |
 | `core/sync` | `ToolAdapter` interface, `FilesystemAdapter` (shared by all built-in tools) |
-| `core/backup` | `CloudProvider` interface, Aliyun/Tencent/Huawei implementations |
+| `core/backup` | `CloudProvider` interface, Aliyun/AWS/Azure/Google/Tencent/Huawei/Git implementations |
 | `core/update` | `Checker` (GitHub Commits API SHA comparison) |
 | `core/registry` | Global maps for Installer/ToolAdapter/CloudProvider — registered at startup |
 | `core/git` | Git clone/update, repo scanning for skills, starred repo storage |
@@ -182,7 +182,7 @@ type ToolConfig struct {
 }
 
 type CloudConfig struct {
-    Provider    string            // "aliyun", "tencent", "huawei", "git"
+    Provider    string            // "aliyun", "aws", "azure", "google", "tencent", "huawei", "git"
     Enabled     bool
     BucketName  string
     RemotePath  string            // normalized backup prefix, always ending in "skillflow/"
@@ -255,7 +255,7 @@ type StarSkill struct {
 2. Initialize `config.Service`, load config
 3. Create `skill.Storage` with configured `SkillsStorageDir`
 4. Call `registerAdapters()` (5 built-in tools → `FilesystemAdapter`)
-5. Call `registerProviders()` (Aliyun, Tencent, Huawei)
+5. Call `registerProviders()` (Aliyun, AWS, Azure, Google, Tencent, Huawei, Git)
 6. Start `forwardEvents(ctx, hub)` goroutine — subscribes to Hub, emits each event via `runtime.EventsEmit`
 7. Start `checkUpdatesOnStartup()` goroutine — scan skills for GitHub updates
 8. Start `updateStarredReposOnStartup()` goroutine — sync starred repos
