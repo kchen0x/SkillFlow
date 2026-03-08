@@ -109,3 +109,15 @@ func NormalizeCloudRemotePath(path string) string {
 	}
 	return strings.Join(parts, "/") + "/"
 }
+
+func NormalizeProxyConfig(proxy ProxyConfig) ProxyConfig {
+	mode := ProxyMode(strings.ToLower(strings.TrimSpace(string(proxy.Mode))))
+	switch mode {
+	case ProxyModeSystem, ProxyModeManual:
+		proxy.Mode = mode
+	default:
+		proxy.Mode = ProxyModeNone
+	}
+	proxy.URL = strings.TrimSpace(proxy.URL)
+	return proxy
+}

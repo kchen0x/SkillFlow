@@ -570,11 +570,11 @@ export default function SettingsPage() {
   }
 
   const setProxyMode = (mode: ProxyMode) => {
-    setCfg((prev: any) => ({ ...prev, proxy: { ...prev.proxy, Mode: mode } }))
+    setCfg((prev: any) => ({ ...prev, proxy: { ...prev.proxy, mode } }))
   }
 
   const setProxyURL = (url: string) => {
-    setCfg((prev: any) => ({ ...prev, proxy: { ...prev.proxy, URL: url } }))
+    setCfg((prev: any) => ({ ...prev, proxy: { ...prev.proxy, url } }))
   }
 
   const pickDir = async (onPick: (path: string) => void, currentPath = '') => {
@@ -583,7 +583,7 @@ export default function SettingsPage() {
   }
 
   const selectedProvider = providers.find((p: any) => p.name === cfg?.cloud?.provider)
-  const proxyMode: ProxyMode = (cfg?.proxy?.Mode as ProxyMode) || 'none'
+  const proxyMode: ProxyMode = (cfg?.proxy?.mode as ProxyMode) || 'none'
   const cloudRemotePathInput = getCloudRemotePathInputValue(cfg?.cloud?.remotePath)
   const cloudBackupPreviewPath = buildCloudBackupPreviewPath(cfg?.cloud?.bucketName, cfg?.cloud?.remotePath, t('settings.remotePathBucketPlaceholder'))
   const statusVisibility = normalizeSkillStatusVisibility(cfg?.skillStatusVisibility)
@@ -1159,7 +1159,7 @@ export default function SettingsPage() {
             <div>
               <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.proxyUrl')}</p>
               <input
-                value={cfg.proxy?.URL ?? ''}
+                value={cfg.proxy?.url ?? ''}
                 onChange={e => setProxyURL(e.target.value)}
                 placeholder="http://127.0.0.1:7890"
                 className="input-base font-mono"

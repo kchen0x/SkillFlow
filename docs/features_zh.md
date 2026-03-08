@@ -387,7 +387,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 - **对象存储自定义前缀** — 对象存储服务商允许用户填写父级 `remotePath`；SkillFlow 最终总是写入 `<存储桶>/<remotePath>/skillflow/`（若父级路径为空，则为 `<存储桶>/skillflow/`）。
 - **云服务商独立配置档案** — 每个云服务商都会保留自己独立的存储桶、路径和凭据配置；在设置中切换服务商时，会恢复该服务商上次保存的表单值，而不会覆盖其他服务商的配置。
 - **同步路径可移植** — `meta/*.json`、`star_repos.json` 等同步元数据中的本地路径会以同步根目录下的正斜杠相对路径保存，确保 macOS 与 Windows 间恢复后仍能正确定位。
-- **本地路径配置隔离** — `config_local.json` 保存机器相关的文件系统路径，例如应用目录外的 `SkillsStorageDir` 以及工具 `ScanDirs` / `PushDir`；该文件不参与备份和 git 同步。
+- **本地路径配置隔离** — `config_local.json` 保存机器相关的文件系统路径与代理设置，例如应用目录外的 `SkillsStorageDir`、工具 `ScanDirs` / `PushDir` 以及代理配置；该文件不参与备份和 git 同步。
 - **云端敏感凭据仅本地保存** — Access Key ID、Secret Key、访问令牌等敏感云凭据只会写入 `config_local.json` 中按服务商分组的本地配置；可同步的 `config.json` 仅保留云服务商、存储桶、远端路径、Endpoint、仓库地址、分支等非敏感配置。
 - **Git 备份兼容处理** — 当 Git 备份以父目录作为工作树时，SkillFlow 会自动迁移旧的 `skills/.git` 嵌套元数据，避免真实 Skill 文件被当作嵌套仓库而无法跟踪。
 
@@ -479,7 +479,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 - 单文件最大 **1MB**。
 - 当 `skillflow.log` 达到上限后会滚动，并覆盖较旧的备份日志文件。
 
-### 网络标签页
+### 代理标签页
 
 所有远程操作（仓库扫描、GitHub 安装、更新检查）的代理设置：
 
@@ -489,7 +489,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 | **使用系统代理** | 读取 `HTTP_PROXY` / `HTTPS_PROXY` 环境变量 |
 | **手动配置** | 自定义代理地址（http://、https://、socks5://） |
 
-选择"手动配置"后出现 URL 输入框，并显示支持的格式说明。
+选择"手动配置"后出现 URL 输入框，并显示支持的格式说明。代理设置保存在 `config_local.json` 中，因此重启后会恢复，且不会参与备份或 git 同步。
 
 ### 保存按钮
 

@@ -29,6 +29,10 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	cfg := config.DefaultConfig(dir)
 	cfg.DefaultCategory = "MyCategory"
 	cfg.RepoScanMaxDepth = 7
+	cfg.Proxy = config.ProxyConfig{
+		Mode: config.ProxyModeManual,
+		URL:  "http://127.0.0.1:7890",
+	}
 	cfg.SkippedUpdateVersion = "v1.2.3"
 	err := svc.Save(cfg)
 	require.NoError(t, err)
@@ -37,6 +41,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "MyCategory", loaded.DefaultCategory)
 	assert.Equal(t, 7, loaded.RepoScanMaxDepth)
+	assert.Equal(t, cfg.Proxy, loaded.Proxy)
 	assert.Equal(t, "v1.2.3", loaded.SkippedUpdateVersion)
 }
 
@@ -189,6 +194,33 @@ func TestSaveCreatesLocalConfigWithPaths(t *testing.T) {
 	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(localData), "skillsStorageDir")
+}
+
+func TestProxyStoredOnlyInLocalConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Proxy = config.ProxyConfig{
+		Mode: config.ProxyModeManual,
+		URL:  "http://127.0.0.1:7890",
+	}
+
+	require.NoError(t, svc.Save(cfg))
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(sharedData), `"proxy"`)
+	assert.NotContains(t, string(sharedData), "127.0.0.1:7890")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"proxy"`)
+	assert.Contains(t, string(localData), `"mode": "manual"`)
+	assert.Contains(t, string(localData), `"url": "http://127.0.0.1:7890"`)
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, cfg.Proxy, loaded.Proxy)
 }
 
 func TestCloudSensitiveCredentialsStoredOnlyInLocalConfig(t *testing.T) {
@@ -347,6 +379,7 @@ func TestLoadMigratesCloudSecretsOutOfSharedConfig(t *testing.T) {
 	assert.Contains(t, string(sharedData), "repo_url")
 	assert.Contains(t, string(sharedData), "branch")
 	assert.Contains(t, string(sharedData), "username")
+	assert.NotContains(t, string(sharedData), `"proxy"`)
 	assert.NotContains(t, string(sharedData), "secret-token")
 	assert.NotContains(t, string(sharedData), `"token"`)
 
@@ -354,11 +387,49 @@ func TestLoadMigratesCloudSecretsOutOfSharedConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(localData), "cloudCredentialsByProvider")
 	assert.Contains(t, string(localData), `"git"`)
+	assert.Contains(t, string(localData), `"proxy"`)
 	assert.Contains(t, string(localData), "secret-token")
 	assert.NotContains(t, string(localData), "repo_url")
 	assert.NotContains(t, string(localData), "branch")
 	assert.NotContains(t, string(localData), "username")
 	assert.Contains(t, string(localData), "skillsStorageDir")
+}
+
+func TestLoadMigratesProxyOutOfSharedConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	shared := `{
+	  "defaultCategory": "Default",
+	  "logLevel": "info",
+	  "repoScanMaxDepth": 5,
+	  "tools": [],
+	  "proxy": {
+	    "mode": "manual",
+	    "url": "http://127.0.0.1:7890"
+	  }
+	}`
+	local := `{
+	  "skillsStorageDir": "` + filepath.ToSlash(filepath.Join(dir, "skills")) + `",
+	  "tools": []
+	}`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(shared), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(local), 0644))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, config.ProxyModeManual, loaded.Proxy.Mode)
+	assert.Equal(t, "http://127.0.0.1:7890", loaded.Proxy.URL)
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(sharedData), `"proxy"`)
+	assert.NotContains(t, string(sharedData), "127.0.0.1:7890")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"proxy"`)
+	assert.Contains(t, string(localData), `"mode": "manual"`)
+	assert.Contains(t, string(localData), `"url": "http://127.0.0.1:7890"`)
 }
 
 func TestMigrationFromLegacyConfig(t *testing.T) {

@@ -387,7 +387,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - **Custom object-storage prefix** — object storage providers let the user choose a parent `remotePath`; SkillFlow always writes under `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
 - **Provider-specific cloud profiles** — each cloud provider keeps its own bucket/path/credential set; switching providers in Settings restores that provider's saved values instead of overwriting another provider's form state.
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json` and `star_repos.json`) are stored as forward-slash relative paths under the synchronized root, so restores continue to work across macOS and Windows.
-- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as external `SkillsStorageDir` values and tool `ScanDirs` / `PushDir`; it is excluded from backup and git sync.
+- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as external `SkillsStorageDir` values, tool `ScanDirs` / `PushDir`, and proxy settings; it is excluded from backup and git sync.
 - **Local-only cloud secrets** — sensitive cloud credentials (for example access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as provider, bucket name, remote path, endpoint, repo URL, or branch.
 - **Git backup compatibility** — when Git backup uses a parent directory as the working tree, SkillFlow automatically moves any legacy nested `skills/.git` metadata aside so actual skill files remain trackable.
 
@@ -479,7 +479,7 @@ Log files are stored under the app log directory, with rolling limits:
 - Each file is capped at **1MB**.
 - When `skillflow.log` reaches the limit, it rotates and overwrites the older backup file.
 
-### Network Tab
+### Proxy Tab
 
 Proxy settings for all remote operations (repo scan, GitHub install, update check):
 
@@ -489,7 +489,7 @@ Proxy settings for all remote operations (repo scan, GitHub install, update chec
 | **System proxy** | Reads `HTTP_PROXY` / `HTTPS_PROXY` environment variables |
 | **Manual** | Custom proxy URL (http://, https://, socks5://) |
 
-When Manual is selected, a URL input appears with format hint.
+When Manual is selected, a URL input appears with format hint. Proxy settings are persisted in `config_local.json`, so manual proxy values survive restart and are not included in backup/git sync.
 
 ### Save Button
 

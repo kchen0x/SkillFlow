@@ -19,9 +19,10 @@ type sharedConfig struct {
 	Tools                 []sharedToolConfig             `json:"tools"`
 	Cloud                 sharedCloudState               `json:"cloud"`
 	CloudProfiles         map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
-	Proxy                 ProxyConfig                    `json:"proxy"`
 	SkippedUpdateVersion  string                         `json:"skippedUpdateVersion,omitempty"`
 	legacyCloudMigrated   bool                           `json:"-"`
+	legacyProxyMigrated   bool                           `json:"-"`
+	legacyProxy           ProxyConfig                    `json:"-"`
 }
 
 type sharedCloudState struct {
@@ -43,6 +44,7 @@ type localConfig struct {
 	Tools                      []localToolConfig            `json:"tools"`
 	CloudCredentialsByProvider map[string]map[string]string `json:"cloudCredentialsByProvider,omitempty"`
 	CloudCredentials           map[string]string            `json:"cloudCredentials,omitempty"`
+	Proxy                      ProxyConfig                  `json:"proxy"`
 }
 
 // localToolConfig holds path settings for one tool.
@@ -124,6 +126,7 @@ func (s *Service) Save(cfg AppConfig) error {
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
 	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
 	cfg.SkillStatusVisibility = NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility)
+	cfg.Proxy = NormalizeProxyConfig(cfg.Proxy)
 
 	shared, err := s.loadShared()
 	if err != nil {
@@ -188,7 +191,8 @@ func (s *Service) loadShared() (sharedConfig, error) {
 	sc.CloudProfiles = normalizeCloudProfiles(sc.CloudProfiles)
 
 	var legacy struct {
-		Cloud CloudConfig `json:"cloud"`
+		Cloud CloudConfig  `json:"cloud"`
+		Proxy *ProxyConfig `json:"proxy"`
 	}
 	if err := json.Unmarshal(data, &legacy); err == nil {
 		provider := strings.TrimSpace(legacy.Cloud.Provider)
@@ -202,6 +206,10 @@ func (s *Service) loadShared() (sharedConfig, error) {
 				}
 				sc.legacyCloudMigrated = true
 			}
+		}
+		if legacy.Proxy != nil {
+			sc.legacyProxy = NormalizeProxyConfig(*legacy.Proxy)
+			sc.legacyProxyMigrated = true
 		}
 	}
 
@@ -221,6 +229,7 @@ func (s *Service) loadLocal() localConfig {
 		lc.SkillsStorageDir = filepath.Join(s.dataDir, "skills")
 	}
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
+	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
 	return lc
 }
 
@@ -239,6 +248,7 @@ func (s *Service) saveShared(sc sharedConfig) error {
 func (s *Service) saveLocal(lc localConfig) error {
 	lc.CloudCredentials = nil
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
+	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
 	data, err := json.MarshalIndent(lc, "", "  ")
 	if err != nil {
 		return err
@@ -272,6 +282,7 @@ func (s *Service) defaultLocal() localConfig {
 	return localConfig{
 		SkillsStorageDir: filepath.Join(s.dataDir, "skills"),
 		Tools:            tools,
+		Proxy:            ProxyConfig{Mode: ProxyModeNone},
 	}
 }
 
@@ -323,7 +334,7 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		Tools:                 tools,
 		Cloud:                 buildRuntimeCloudConfig(shared.Cloud, cloudProfiles),
 		CloudProfiles:         cloudProfiles,
-		Proxy:                 shared.Proxy,
+		Proxy:                 NormalizeProxyConfig(local.Proxy),
 		SkippedUpdateVersion:  shared.SkippedUpdateVersion,
 	}
 }
@@ -345,7 +356,6 @@ func (s *Service) splitShared(cfg AppConfig) sharedConfig {
 		Tools:                 tools,
 		Cloud:                 sharedCloudState{Provider: strings.TrimSpace(cfg.Cloud.Provider), Enabled: cfg.Cloud.Enabled, SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes},
 		CloudProfiles:         splitSharedCloudProfiles(profiles),
-		Proxy:                 cfg.Proxy,
 		SkippedUpdateVersion:  cfg.SkippedUpdateVersion,
 	}
 }
@@ -367,11 +377,19 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 		SkillsStorageDir:           cfg.SkillsStorageDir,
 		Tools:                      tools,
 		CloudCredentialsByProvider: splitLocalCloudCredentialsByProvider(profiles),
+		Proxy:                      NormalizeProxyConfig(cfg.Proxy),
 	}
 }
 
 func (s *Service) migrateCloudStorage(shared *sharedConfig, local *localConfig) bool {
 	changed := shared.legacyCloudMigrated
+
+	if shared.legacyProxyMigrated {
+		if isZeroProxyConfig(local.Proxy) {
+			local.Proxy = NormalizeProxyConfig(shared.legacyProxy)
+		}
+		changed = true
+	}
 
 	normalizedSharedProfiles := normalizeCloudProfiles(shared.CloudProfiles)
 	if !cloudProfilesEqual(shared.CloudProfiles, normalizedSharedProfiles) {
@@ -782,6 +800,12 @@ func credentialMapsEqual(left, right map[string]string) bool {
 		}
 	}
 	return true
+}
+
+func isZeroProxyConfig(proxy ProxyConfig) bool {
+	mode := ProxyMode(strings.ToLower(strings.TrimSpace(string(proxy.Mode))))
+	url := strings.TrimSpace(proxy.URL)
+	return url == "" && (mode == "" || mode == ProxyModeNone)
 }
 
 func isSharedCloudCredentialKey(key string) bool {

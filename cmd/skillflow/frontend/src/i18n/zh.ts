@@ -234,7 +234,7 @@ export const zh = {
   'settings.tabTools': '工具路径',
   'settings.tabCloud': '云存储',
   'settings.tabGeneral': '通用',
-  'settings.tabNetwork': '网络',
+  'settings.tabNetwork': '代理',
   'settings.toolEnabled': '启用',
   'settings.pushPath': '推送路径（仅 1 个）',
   'settings.scanPaths': '扫描路径（可多个）',

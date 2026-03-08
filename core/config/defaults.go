@@ -83,5 +83,6 @@ func DefaultConfig(dataDir string) AppConfig {
 		SkillStatusVisibility: DefaultSkillStatusVisibility(),
 		Tools:                 tools,
 		Cloud:                 CloudConfig{RemotePath: DefaultCloudRemotePath},
+		Proxy:                 ProxyConfig{Mode: ProxyModeNone},
 	}
 }

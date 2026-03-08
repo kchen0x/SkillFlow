@@ -28,7 +28,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
 | **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
 | **Desktop Shell** | Fixed sidebar with the branded SkillFlow title, app icon, quick language/theme toggles, and feedback entry |
-| **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, configurable local/remote scan depth, per-page card-status visibility, local-only path settings kept out of sync, and a `Ctrl+S` / `Cmd+S` save shortcut on the Settings page; folder pickers reopen at the current location |
+| **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, configurable local/remote scan depth, per-page card-status visibility, and local-only path/proxy settings kept out of sync, plus a `Ctrl+S` / `Cmd+S` save shortcut on the Settings page; folder pickers reopen at the current location |
 | **Bilingual UI** | Switch the frontend instantly between Chinese and English from the sidebar or Settings; language preference is stored locally |
 | **Dark / Young / Light Themes** | Switch between a refined graphite Dark theme, a softened paper-blue Young theme evolved from the legacy Light palette, and a new Messor-inspired Light theme; persisted across restarts |
 
@@ -55,7 +55,7 @@ my-skill/
 Configure in **Settings → Cloud Storage**.
 
 - Sync-safe settings and metadata live under the app data directory and use relative paths for cross-platform restore.
-- Local-only filesystem paths (such as `SkillsStorageDir` and tool scan/push directories) live in `config_local.json` and are excluded from backup/sync.
+- Local-only filesystem paths and proxy settings (such as `SkillsStorageDir`, tool scan/push directories, and manual proxy URLs) live in `config_local.json` and are excluded from backup/sync.
 - Sensitive cloud credentials (such as access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as bucket, endpoint, repo URL, and branch.
 - Reusable prompts are synced alongside skills under `prompts/<category>/<name>/system.md`, so Git backup and object storage keep the same prompt library on every device.
 - Object storage providers support a custom parent `remotePath`; the final backup prefix is always rendered and stored as `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).

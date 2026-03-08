@@ -234,7 +234,7 @@ export const en = {
   'settings.tabTools': 'Tool Paths',
   'settings.tabCloud': 'Cloud Storage',
   'settings.tabGeneral': 'General',
-  'settings.tabNetwork': 'Network',
+  'settings.tabNetwork': 'Proxy',
   'settings.toolEnabled': 'Enable',
   'settings.pushPath': 'Push Path (single)',
   'settings.scanPaths': 'Scan Paths (multiple)',
