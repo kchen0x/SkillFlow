@@ -11,14 +11,20 @@ import (
 )
 
 type StarStorage struct {
-	path    string
-	dataDir string
-	mu      sync.Mutex
+	path            string
+	dataDir         string
+	builtinRepoURLs []string
+	mu              sync.Mutex
 }
 
 func NewStarStorage(path string) *StarStorage {
+	return NewStarStorageWithBuiltins(path, nil)
+}
+
+func NewStarStorageWithBuiltins(path string, builtinRepoURLs []string) *StarStorage {
 	cleanPath := filepath.Clean(path)
-	return &StarStorage{path: cleanPath, dataDir: filepath.Dir(cleanPath)}
+	builtins := append([]string(nil), builtinRepoURLs...)
+	return &StarStorage{path: cleanPath, dataDir: filepath.Dir(cleanPath), builtinRepoURLs: builtins}
 }
 
 func (s *StarStorage) Load() ([]StarredRepo, error) {
@@ -26,7 +32,17 @@ func (s *StarStorage) Load() ([]StarredRepo, error) {
 	defer s.mu.Unlock()
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		if len(s.builtinRepoURLs) == 0 {
+			return nil, nil
+		}
+		repos, buildErr := s.buildBuiltinReposLocked()
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		if err := s.saveLocked(repos); err != nil {
+			return nil, err
+		}
+		return repos, nil
 	}
 	if err != nil {
 		return nil, err
@@ -107,4 +123,25 @@ func (s *StarStorage) derivedLocalDir(repoURL string) string {
 		return ""
 	}
 	return dir
+}
+
+func (s *StarStorage) buildBuiltinReposLocked() ([]StarredRepo, error) {
+	repos := make([]StarredRepo, 0, len(s.builtinRepoURLs))
+	for _, repoURL := range s.builtinRepoURLs {
+		name, err := ParseRepoName(repoURL)
+		if err != nil {
+			return nil, err
+		}
+		source, err := RepoSource(repoURL)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, StarredRepo{
+			URL:      repoURL,
+			Name:     name,
+			Source:   source,
+			LocalDir: s.derivedLocalDir(repoURL),
+		})
+	}
+	return repos, nil
 }

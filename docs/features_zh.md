@@ -257,6 +257,15 @@ SourceSHA = LatestSHA -> 清除更新标记
 - **删除**（Trash2 图标，悬停变红） — 从收藏列表中移除。
 - 卡片下方显示最后同步时间及同步错误信息。
 
+### 内置起始仓库初始化
+
+- 仅在 `star_repos.json` 尚不存在时（设备/配置的首次初始化）才会注入内置起始仓库。
+- 当前内置起始仓库：
+  - `https://github.com/anthropics/skills.git`
+  - `https://github.com/ComposioHQ/awesome-claude-skills.git`
+  - `https://github.com/affaan-m/everything-claude-code.git`
+- 一旦用户删除内置仓库，持久化列表即为唯一事实来源；后续启动不会再自动把该仓库加回。
+
 ### 仓库详情视图（钻取）
 
 - 顶部面包屑返回按钮（ChevronLeft）回到仓库列表。

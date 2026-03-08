@@ -50,6 +50,12 @@ type App struct {
 
 const defaultCategoryName = "Default"
 
+var builtinStarredRepoURLs = []string{
+	"https://github.com/anthropics/skills.git",
+	"https://github.com/ComposioHQ/awesome-claude-skills.git",
+	"https://github.com/affaan-m/everything-claude-code.git",
+}
+
 func normalizeCategoryName(name string) string {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" || strings.EqualFold(trimmed, defaultCategoryName) {
@@ -75,7 +81,7 @@ func (a *App) startup(ctx context.Context) {
 	a.logInfof("application startup, version=%s, dataDir=%s", Version, dataDir)
 	a.storage = skill.NewStorage(cfg.SkillsStorageDir)
 	a.cacheDir = filepath.Join(dataDir, "cache")
-	a.starStorage = coregit.NewStarStorage(filepath.Join(dataDir, "star_repos.json"))
+	a.starStorage = coregit.NewStarStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
 	registerAdapters()
 	registerProviders()
 	go forwardEvents(ctx, a.hub)
