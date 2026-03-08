@@ -22,8 +22,8 @@
   --accent-glow: rgba(167, 183, 207, 0.1);
   --accent-glow-strong: rgba(167, 183, 207, 0.18);
 
-  --btn-primary-bg: #7f93b6;
-  --btn-primary-hover: #7183a3;
+  --btn-primary-bg: #6f8fd6;
+  --btn-primary-hover: #82a0e6;
 
   --border-base: rgba(255, 255, 255, 0.07);
   --border-surface: rgba(255, 255, 255, 0.1);
@@ -48,10 +48,10 @@
   --brand-color: #f2f5fa;
   --brand-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
   --shell-divider: rgba(186, 197, 214, 0.18);
-  --active-surface: rgba(167, 183, 207, 0.1);
-  --active-text: #edf1f7;
-  --active-border: rgba(167, 183, 207, 0.18);
-  --active-shadow: 0 10px 24px rgba(8, 12, 18, 0.22);
+  --active-surface: linear-gradient(135deg, rgba(132, 162, 232, 0.34) 0%, rgba(100, 126, 186, 0.3) 100%);
+  --active-text: #f7fbff;
+  --active-border: rgba(255, 255, 255, 0.72);
+  --active-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 0 3px rgba(137, 169, 238, 0.12), 0 16px 32px rgba(20, 28, 44, 0.34), 0 0 24px rgba(137, 169, 238, 0.22);
 }
 
 [data-theme="young"] {
@@ -225,11 +225,15 @@ body {
   .btn-primary {
     @apply rounded-lg px-4 py-2 text-sm font-medium text-white transition-all duration-200 active:scale-[0.97];
     background-color: var(--btn-primary-bg);
+    border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 78%, white 22%);
+    box-shadow: 0 10px 22px color-mix(in srgb, var(--btn-primary-bg) 28%, transparent);
+    text-shadow: 0 1px 0 rgba(10, 14, 24, 0.18);
   }
 
   .btn-primary:hover:not(:disabled) {
     background-color: var(--btn-primary-hover);
     box-shadow: var(--glow-btn);
+    transform: translateY(-1px);
   }
 
   .btn-primary:disabled {
@@ -247,5 +251,14 @@ body {
     background-color: var(--bg-hover);
     border-color: var(--border-surface);
     color: var(--text-primary);
+    transform: translateY(-1px);
   }
+
+  .btn-primary:focus-visible,
+  .btn-secondary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-base) 45%, transparent),
+      0 0 0 4px color-mix(in srgb, var(--accent-primary) 48%, transparent);
+  }
+
 }

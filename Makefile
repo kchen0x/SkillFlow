@@ -1,11 +1,14 @@
 # Detect OS and set appropriate path
 ifeq ($(OS),Windows_NT)
-    WAILS := $(shell where wails 2>/dev/null || echo $(USERPROFILE)/go/bin/wails.exe)
+    SHELL := cmd.exe
+    .SHELLFLAGS := /C
+    WAILS := $(shell where wails.exe 2>nul || echo $(USERPROFILE)\go\bin\wails.exe)
 else
     WAILS := $(shell which wails 2>/dev/null || echo $(HOME)/go/bin/wails)
 endif
 
 APP_DIR := cmd/skillflow
+APP_DIR_WIN := $(subst /,\,$(APP_DIR))
 
 .PHONY: all dev build test tidy generate install-frontend clean help
 
@@ -43,9 +46,9 @@ install-frontend:
 ## clean: Remove build artifacts
 clean:
 ifeq ($(OS),Windows_NT)
-	if exist $(APP_DIR)\build\bin rmdir /s /q $(APP_DIR)\build\bin
-	if exist $(APP_DIR)\frontend\dist rmdir /s /q $(APP_DIR)\frontend\dist
-	if exist $(APP_DIR)\frontend\package.json.md5 del /f /q $(APP_DIR)\frontend\package.json.md5
+	if exist "$(APP_DIR_WIN)\build\bin" rmdir /s /q "$(APP_DIR_WIN)\build\bin"
+	if exist "$(APP_DIR_WIN)\frontend\dist" rmdir /s /q "$(APP_DIR_WIN)\frontend\dist"
+	if exist "$(APP_DIR_WIN)\frontend\package.json.md5" del /f /q "$(APP_DIR_WIN)\frontend\package.json.md5"
 else
 	rm -rf $(APP_DIR)/build/bin
 	rm -rf $(APP_DIR)/frontend/dist

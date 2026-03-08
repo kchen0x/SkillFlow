@@ -67,6 +67,10 @@ type Service struct {
 	localConfigPath string
 }
 
+type LocalRuntimeConfig struct {
+	SkillsStorageDir string
+}
+
 func NewService(dataDir string) *Service {
 	return &Service{
 		dataDir:         dataDir,
@@ -77,6 +81,15 @@ func NewService(dataDir string) *Service {
 
 // LocalConfigPath returns the path to the local (non-synced) config file.
 func (s *Service) LocalConfigPath() string { return s.localConfigPath }
+
+// LoadLocalRuntimeConfig returns the local-only settings that remain readable
+// even when synced files like config.json are temporarily conflicted.
+func (s *Service) LoadLocalRuntimeConfig() LocalRuntimeConfig {
+	local := s.loadLocal()
+	return LocalRuntimeConfig{
+		SkillsStorageDir: local.SkillsStorageDir,
+	}
+}
 
 func (s *Service) Load() (AppConfig, error) {
 	s.maybeMigrate()

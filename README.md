@@ -23,12 +23,12 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones with one click; candidate status badges follow the configurable per-page card-visibility policy, and same-name candidates stay distinct by normalized repo source + subpath |
 | **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; each page exposes only the statuses relevant to that workflow, and pushed tools are rendered as compact icon lists with hover-to-reveal full tool sets |
 | **Starred Repos** | Watch Git repos and recursively browse/import nested repo skills without adding them to your library first; repo skill cards show imported and pushed-tool state with imported correlation keyed by normalized repo source + subpath, and builtin starter repos (`anthropics/skills`, `ComposioHQ/awesome-claude-skills`, `affaan-m/everything-claude-code`) are seeded only on first initialization (won't be re-added after user deletion) |
-| **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo, with a custom object-storage remote path preview, provider-specific saved profiles, and local-only sensitive credentials |
+| **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo, with a custom object-storage remote path preview, provider-specific saved profiles, local-only sensitive credentials, and a manual Git-conflict folder shortcut |
 | **Update Checker** | Detects new commits for installed GitHub-sourced skills by normalized repo source + subpath, clears stale update markers when already current, and supports one-click instance updates |
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
 | **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
 | **Desktop Shell** | Fixed sidebar with the branded SkillFlow title, app icon, quick language/theme toggles, and feedback entry |
-| **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, configurable local/remote scan depth, per-page card-status visibility, and local-only path settings kept out of sync; folder pickers reopen at the current location |
+| **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, configurable local/remote scan depth, per-page card-status visibility, local-only path settings kept out of sync, and a `Ctrl+S` / `Cmd+S` save shortcut on the Settings page; folder pickers reopen at the current location |
 | **Bilingual UI** | Switch the frontend instantly between Chinese and English from the sidebar or Settings; language preference is stored locally |
 | **Dark / Young / Light Themes** | Switch between a refined graphite Dark theme, a softened paper-blue Young theme evolved from the legacy Light palette, and a new Messor-inspired Light theme; persisted across restarts |
 
@@ -60,6 +60,7 @@ Configure in **Settings → Cloud Storage**.
 - Reusable prompts are synced alongside skills under `prompts/<category>/<name>/system.md`, so Git backup and object storage keep the same prompt library on every device.
 - Object storage providers support a custom parent `remotePath`; the final backup prefix is always rendered and stored as `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
 - Each cloud provider keeps its own saved bucket/path/credential profile, so switching providers in Settings does not overwrite another provider's values.
+- Git sync conflicts can be resolved by keeping local, keeping remote, or opening the backup folder for manual fixes.
 - Aliyun OSS, Tencent COS, and Huawei OBS share the same bucket + endpoint configuration model. For Tencent COS, the bucket always comes from the dedicated bucket field, while the endpoint field can store either a plain endpoint host or a full bucket host/URL and is preserved as entered.
 - App data directory:
   - macOS: `~/Library/Application Support/SkillFlow/`

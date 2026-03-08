@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { GetConfig, SaveConfig, ListCloudProviders, AddCustomTool, RemoveCustomTool, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir } from '../../wailsjs/go/main/App'
 import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star, Github } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
@@ -380,6 +380,8 @@ export default function SettingsPage() {
   const [logDir, setLogDir] = useState('')
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateResult, setUpdateResult] = useState<string | null>(null)
+  const cfgRef = useRef<any>(null)
+  const savingRef = useRef(false)
 
   const themeOptions: ThemeOption[] = [
     {
@@ -450,6 +452,11 @@ export default function SettingsPage() {
     })
   }, [])
 
+  useEffect(() => {
+    cfgRef.current = cfg
+    savingRef.current = saving
+  }, [cfg, saving])
+
   const checkUpdate = async () => {
     setCheckingUpdate(true)
     setUpdateResult(null)
@@ -467,17 +474,46 @@ export default function SettingsPage() {
     }
   }
 
-  const save = async () => {
+  const save = useCallback(async () => {
+    const currentCfg = cfgRef.current
+    if (!currentCfg || savingRef.current) return
+
+    savingRef.current = true
     setSaving(true)
-    const nextCfg = syncActiveCloudProfile({
-      ...cfg,
-      skillStatusVisibility: normalizeSkillStatusVisibility(cfg?.skillStatusVisibility),
-    })
-    await SaveConfig(nextCfg)
-    setCfg(nextCfg)
-    syncFromConfig(nextCfg)
-    setSaving(false)
-  }
+    try {
+      const nextCfg = syncActiveCloudProfile({
+        ...currentCfg,
+        skillStatusVisibility: normalizeSkillStatusVisibility(currentCfg?.skillStatusVisibility),
+      })
+      await SaveConfig(nextCfg)
+      setCfg(nextCfg)
+      syncFromConfig(nextCfg)
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }, [syncFromConfig])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase()
+      const isSaveShortcut = (event.ctrlKey || event.metaKey)
+        && !event.altKey
+        && !event.shiftKey
+        && (event.code === 'KeyS' || key === 's')
+
+      if (!isSaveShortcut || event.defaultPrevented || event.isComposing) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      void save()
+    }
+
+    document.addEventListener('keydown', handleKeyDown, true)
+    return () => document.removeEventListener('keydown', handleKeyDown, true)
+  }, [save])
 
   const updateActiveCloud = (patch: Record<string, any>) => {
     setCfg((prev: any) => syncActiveCloudProfile({

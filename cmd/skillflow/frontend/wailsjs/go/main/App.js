@@ -186,6 +186,10 @@ export function OpenFolderDialog(arg1) {
   return window['go']['main']['App']['OpenFolderDialog'](arg1);
 }
 
+export function OpenGitBackupDir() {
+  return window['go']['main']['App']['OpenGitBackupDir']();
+}
+
 export function OpenLogDir() {
   return window['go']['main']['App']['OpenLogDir']();
 }

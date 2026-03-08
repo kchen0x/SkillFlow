@@ -147,6 +147,7 @@ Copies skills from your library to external tool directories.
 
 - One toggle button per enabled tool (icon + name).
 - Multiple tools can be selected simultaneously.
+- Active category, tool, and scope buttons use a brighter theme-tinted background, a lighter border, and a clearer glow so selection remains obvious in dark mode without adding extra symbols.
 
 ### Sync Scope
 
@@ -194,6 +195,7 @@ Imports skills from external tool directories into your library.
 ### Tool Selection
 
 - Same toggle buttons as Push; selecting a different tool resets the scanned list.
+- The active import target category and selected source tool use the same brighter background, lighter border, and glow treatment as Push so the current choice stays visually distinct in dark mode.
 
 ### Scan
 
@@ -418,7 +420,8 @@ When the **git** provider is selected:
   - The dialog includes a conflict file list when available.
   - **"以本地为准"** (Keep Local) — aborts the merge, force-pushes local state to remote. Calls `ResolveGitConflict(true)`.
   - **"以远端为准"** (Use Remote) — aborts the merge, resets local to `origin/<branch>`. Calls `ResolveGitConflict(false)`.
-  - Both options reload app state from disk (skills/meta/config) and emit `git.sync.completed` on success.
+  - **"手动解决"** (Resolve Manually) — opens the Git backup root in the system file manager so the user can inspect and fix conflicted files directly.
+  - The keep-local and keep-remote actions both reload app state from disk (skills/meta/config) and emit `git.sync.completed` on success.
 - **State refresh after pull** — after successful startup pull or manual pull, app state is immediately reloaded from disk so changed `meta/` and config files take effect.
 - If a conflict is detected during startup (before the UI loads), it is stored as a pending flag and surfaced when the Backup page mounts (`GetGitConflictPending()`).
 
@@ -491,6 +494,7 @@ When Manual is selected, a URL input appears with format hint.
 ### Save Button
 
 - **"Save Settings"** — `SaveConfig(cfg)`; disabled while saving.
+- **Keyboard shortcut** — while the Settings page is open, `Ctrl+S` on Windows/Linux and `Cmd+S` on macOS trigger the same save action and suppress the browser/webview default save shortcut.
 
 ---
 

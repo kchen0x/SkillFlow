@@ -100,6 +100,8 @@ export function MoveSkillCategory(arg1:string,arg2:string):Promise<void>;
 
 export function OpenFolderDialog(arg1:string):Promise<string>;
 
+export function OpenGitBackupDir():Promise<void>;
+
 export function OpenLogDir():Promise<void>;
 
 export function OpenPath(arg1:string):Promise<void>;

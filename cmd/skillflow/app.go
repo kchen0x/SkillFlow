@@ -336,25 +336,26 @@ func (a *App) GetGitConflictPending() bool {
 // useLocal=true  → keep local changes, force-push to remote.
 // useLocal=false → discard local changes, reset to remote state.
 func (a *App) ResolveGitConflict(useLocal bool) error {
-	cfg, err := a.config.Load()
-	if err != nil {
-		return err
+	action := "use_remote"
+	if useLocal {
+		action = "use_local"
 	}
 	p, ok := registry.GetCloudProvider(backup.GitProviderName)
 	if !ok {
 		return fmt.Errorf("git provider 未注册")
 	}
-	if err := p.Init(cfg.Cloud.Credentials); err != nil {
-		return err
-	}
 	gitP := p.(*backup.GitProvider)
-	backupDir := a.backupRootDir(cfg)
+	localCfg := a.config.LoadLocalRuntimeConfig()
+	backupDir := a.backupRootDir(config.AppConfig{SkillsStorageDir: localCfg.SkillsStorageDir})
+	a.logInfof("git conflict resolution started: strategy=%s, backupDir=%s", action, backupDir)
+	var err error
 	if useLocal {
 		err = gitP.ResolveConflictUseLocal(backupDir)
 	} else {
 		err = gitP.ResolveConflictUseRemote(backupDir)
 	}
 	if err != nil {
+		a.logErrorf("git conflict resolution failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, err)
 		return err
 	}
 	a.gitConflictMu.Lock()
@@ -362,6 +363,7 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	a.gitConflictMu.Unlock()
 	a.reloadStateFromDisk()
 	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted})
+	a.logInfof("git conflict resolution completed: strategy=%s, backupDir=%s", action, backupDir)
 	return nil
 }
 

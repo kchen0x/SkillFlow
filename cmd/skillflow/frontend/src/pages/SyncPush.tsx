@@ -140,20 +140,20 @@ export default function SyncPush() {
   }
 
   const getNavStyle = (isActive: boolean) => isActive ? {
-    background: 'var(--accent-glow)',
-    color: 'var(--accent-primary)',
-    border: '1px solid var(--border-accent)',
-    boxShadow: 'var(--glow-accent-sm)',
+    background: 'var(--active-surface)',
+    color: 'var(--active-text)',
+    border: '1px solid var(--active-border)',
+    boxShadow: 'var(--active-shadow)',
   } : {
     color: 'var(--text-muted)',
     border: '1px solid transparent',
   }
 
   const getScopeButtonStyle = (isActive: boolean) => isActive ? {
-    background: 'var(--accent-glow)',
-    color: 'var(--accent-primary)',
-    border: '1px solid var(--border-accent)',
-    boxShadow: 'var(--glow-accent-sm)',
+    background: 'var(--active-surface)',
+    color: 'var(--active-text)',
+    border: '1px solid var(--active-border)',
+    boxShadow: 'var(--active-shadow)',
   } : {
     background: 'var(--bg-elevated)',
     color: 'var(--text-secondary)',
@@ -177,21 +177,24 @@ export default function SyncPush() {
         </div>
         <button
           onClick={() => setSelectedCategory(null)}
-          className="px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
+          className={`px-3 py-2 rounded-lg text-sm text-left transition-all duration-150 ${selectedCategory === null ? 'font-semibold -translate-y-px' : ''}`}
           style={getNavStyle(selectedCategory === null)}
         >
           {t('common.all')}
         </button>
-        {categories.map(category => (
-          <button
-            key={category}
-            onClick={() => setSelectedCategory(category)}
-            className="px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
-            style={getNavStyle(selectedCategory === category)}
-          >
-            {category}
-          </button>
-        ))}
+        {categories.map(category => {
+          const active = selectedCategory === category
+          return (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={`px-3 py-2 rounded-lg text-sm text-left transition-all duration-150 ${active ? 'font-semibold -translate-y-px' : ''}`}
+              style={getNavStyle(active)}
+            >
+              {category}
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -204,26 +207,29 @@ export default function SyncPush() {
           <section>
             <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('syncPush.targetTool')}</p>
             <div className="flex flex-wrap gap-2">
-              {tools.map(tool => (
-                <button
-                  key={tool.name}
-                  onClick={() => toggleTool(tool.name)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200"
-                  style={selectedTools.has(tool.name) ? {
-                    background: 'var(--accent-glow)',
-                    color: 'var(--accent-primary)',
-                    border: '1px solid var(--border-accent)',
-                    boxShadow: 'var(--glow-accent-sm)',
-                  } : {
-                    background: 'var(--bg-elevated)',
-                    color: 'var(--text-secondary)',
-                    border: '1px solid var(--border-base)',
-                  }}
-                >
-                  <ToolIcon name={tool.name} size={20} />
-                  {tool.name}
-                </button>
-              ))}
+              {tools.map(tool => {
+                const active = selectedTools.has(tool.name)
+                return (
+                  <button
+                    key={tool.name}
+                    onClick={() => toggleTool(tool.name)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${active ? 'font-semibold -translate-y-px' : ''}`}
+                    style={active ? {
+                      background: 'var(--active-surface)',
+                      color: 'var(--active-text)',
+                      border: '1px solid var(--active-border)',
+                      boxShadow: 'var(--active-shadow)',
+                    } : {
+                      background: 'var(--bg-elevated)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid var(--border-base)',
+                    }}
+                  >
+                    <ToolIcon name={tool.name} size={20} />
+                    <span>{tool.name}</span>
+                  </button>
+                )
+              })}
             </div>
           </section>
 
@@ -240,14 +246,14 @@ export default function SyncPush() {
             <div className="flex items-center gap-2">
               <button
                 onClick={setAutoScope}
-                className="px-3 py-1.5 rounded-lg text-sm transition-all duration-200"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${scope === 'auto' ? 'font-semibold -translate-y-px' : ''}`}
                 style={getScopeButtonStyle(scope === 'auto')}
               >
                 {selectedCategory === null ? t('syncPush.pushAll') : t('syncPush.pushCategory')}
               </button>
               <button
                 onClick={setManualScope}
-                className="px-3 py-1.5 rounded-lg text-sm transition-all duration-200"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${scope === 'manual' ? 'font-semibold -translate-y-px' : ''}`}
                 style={getScopeButtonStyle(scope === 'manual')}
               >
                 {t('syncPush.manualSelect')}

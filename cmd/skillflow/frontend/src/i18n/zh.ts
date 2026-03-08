@@ -56,6 +56,8 @@ export const zh = {
   'conflict.keepRemote': '以远端为准',
   'conflict.keepLocalDesc': '保留本地内容，强制推送到远端',
   'conflict.keepRemoteDesc': '丢弃本地冲突部分，恢复为远端内容',
+  'conflict.manual': '手动解决',
+  'conflict.manualDesc': '打开备份文件夹，方便你自己检查并处理 Git 冲突',
   'conflict.moreFiles': '... 还有 {count} 个文件',
   'dashboard.searchPlaceholder': '搜索 Skills...',
   'dashboard.update': '更新',

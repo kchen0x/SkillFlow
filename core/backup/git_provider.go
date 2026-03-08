@@ -123,6 +123,32 @@ func (p *GitProvider) isGitRepo(localDir string) bool {
 	return strings.TrimSpace(out) == "true"
 }
 
+func (p *GitProvider) ensureExistingRepo(localDir string) error {
+	if !p.isGitRepo(localDir) {
+		return fmt.Errorf("git repo not initialized: %s", localDir)
+	}
+	return nil
+}
+
+func (p *GitProvider) resolveRepoBranch(localDir string) (string, error) {
+	if out, err := p.run(localDir, "branch", "--show-current"); err == nil {
+		branch := strings.TrimSpace(out)
+		if branch != "" {
+			return branch, nil
+		}
+	}
+	if out, err := p.run(localDir, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+		branch := strings.TrimSpace(out)
+		if branch != "" && branch != "HEAD" {
+			return branch, nil
+		}
+	}
+	if p.branch != "" {
+		return p.branch, nil
+	}
+	return "", fmt.Errorf("git branch not found for repo: %s", localDir)
+}
+
 func isMissingRemoteRef(out string) bool {
 	lower := strings.ToLower(out)
 	return strings.Contains(lower, "couldn't find remote ref") ||
@@ -399,17 +425,21 @@ func (p *GitProvider) List(_ context.Context, _, _ string) ([]RemoteFile, error)
 
 // ResolveConflictUseLocal aborts the in-progress merge and force-pushes local state to remote.
 func (p *GitProvider) ResolveConflictUseLocal(localDir string) error {
-	if err := p.ensureRepo(localDir); err != nil {
+	if err := p.ensureExistingRepo(localDir); err != nil {
+		return err
+	}
+	branch, err := p.resolveRepoBranch(localDir)
+	if err != nil {
 		return err
 	}
 	p.run(localDir, "merge", "--abort") //nolint – may not be in merge state
 	// Ensure all local changes are committed before force-push
 	p.run(localDir, "add", "-A")                                               //nolint
 	p.run(localDir, "commit", "-m", "SkillFlow: resolve conflict (use local)") //nolint – may have nothing to commit
-	out, err := p.run(localDir, "push", "origin", "HEAD:"+p.branch, "--force-with-lease")
+	out, err := p.run(localDir, "push", "origin", "HEAD:"+branch, "--force-with-lease")
 	if err != nil {
 		// Fallback to force push when --force-with-lease fails
-		if out2, err2 := p.run(localDir, "push", "origin", "HEAD:"+p.branch, "--force"); err2 != nil {
+		if out2, err2 := p.run(localDir, "push", "origin", "HEAD:"+branch, "--force"); err2 != nil {
 			return fmt.Errorf("git push --force 失败: %s %s", out, out2)
 		}
 	}
@@ -418,14 +448,18 @@ func (p *GitProvider) ResolveConflictUseLocal(localDir string) error {
 
 // ResolveConflictUseRemote aborts the in-progress merge and resets local state to the remote branch.
 func (p *GitProvider) ResolveConflictUseRemote(localDir string) error {
-	if err := p.ensureRepo(localDir); err != nil {
+	if err := p.ensureExistingRepo(localDir); err != nil {
+		return err
+	}
+	branch, err := p.resolveRepoBranch(localDir)
+	if err != nil {
 		return err
 	}
 	p.run(localDir, "merge", "--abort") //nolint
-	if out, err := p.run(localDir, "fetch", "origin", p.branch); err != nil {
+	if out, err := p.run(localDir, "fetch", "origin", branch); err != nil {
 		return fmt.Errorf("git fetch 失败: %s", out)
 	}
-	if out, err := p.run(localDir, "reset", "--hard", "origin/"+p.branch); err != nil {
+	if out, err := p.run(localDir, "reset", "--hard", "origin/"+branch); err != nil {
 		return fmt.Errorf("git reset 失败: %s", out)
 	}
 	return nil

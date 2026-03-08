@@ -91,10 +91,10 @@ export default function SyncPull() {
   const allSelected = filteredScanned.length > 0 && filteredScanned.every((skill: any) => selected.has(skill.path))
 
   const getNavStyle = (isActive: boolean) => isActive ? {
-    background: 'var(--accent-glow)',
-    color: 'var(--accent-primary)',
-    border: '1px solid var(--border-accent)',
-    boxShadow: 'var(--glow-accent-sm)',
+    background: 'var(--active-surface)',
+    color: 'var(--active-text)',
+    border: '1px solid var(--active-border)',
+    boxShadow: 'var(--active-shadow)',
   } : {
     color: 'var(--text-muted)',
     border: '1px solid transparent',
@@ -114,16 +114,19 @@ export default function SyncPull() {
         <div className="px-3 py-1.5 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
           {t('syncPull.importCategory')}
         </div>
-        {categories.map(category => (
-          <button
-            key={category}
-            onClick={() => setTargetCategory(category)}
-            className="px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
-            style={getNavStyle(targetCategory === category)}
-          >
-            {category}
-          </button>
-        ))}
+        {categories.map(category => {
+          const active = targetCategory === category
+          return (
+            <button
+              key={category}
+              onClick={() => setTargetCategory(category)}
+              className={`px-3 py-2 rounded-lg text-sm text-left transition-all duration-150 ${active ? 'font-semibold -translate-y-px' : ''}`}
+              style={getNavStyle(active)}
+            >
+              {category}
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -136,33 +139,36 @@ export default function SyncPull() {
           <section>
             <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('syncPull.sourceTool')}</p>
             <div className="flex flex-wrap gap-2">
-              {tools.map(t => (
-                <button
-                  key={t.name}
-                  onClick={() => {
-                    setSelectedTool(t.name)
-                    setScanned([])
-                    setDone(false)
-                    setScanError('')
-                    setScannedOnce(false)
-                    scan(t.name)
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200"
-                  style={selectedTool === t.name ? {
-                    background: 'var(--accent-glow)',
-                    color: 'var(--accent-primary)',
-                    border: '1px solid var(--border-accent)',
-                    boxShadow: 'var(--glow-accent-sm)',
-                  } : {
-                    background: 'var(--bg-elevated)',
-                    color: 'var(--text-secondary)',
-                    border: '1px solid var(--border-base)',
-                  }}
-                >
-                  <ToolIcon name={t.name} size={20} />
-                  {t.name}
-                </button>
-              ))}
+              {tools.map(t => {
+                const active = selectedTool === t.name
+                return (
+                  <button
+                    key={t.name}
+                    onClick={() => {
+                      setSelectedTool(t.name)
+                      setScanned([])
+                      setDone(false)
+                      setScanError('')
+                      setScannedOnce(false)
+                      scan(t.name)
+                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${active ? 'font-semibold -translate-y-px' : ''}`}
+                    style={active ? {
+                      background: 'var(--active-surface)',
+                      color: 'var(--active-text)',
+                      border: '1px solid var(--active-border)',
+                      boxShadow: 'var(--active-shadow)',
+                    } : {
+                      background: 'var(--bg-elevated)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid var(--border-base)',
+                    }}
+                  >
+                    <ToolIcon name={t.name} size={20} />
+                    <span>{t.name}</span>
+                  </button>
+                )
+              })}
             </div>
           </section>
 

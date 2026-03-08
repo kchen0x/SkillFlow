@@ -1,18 +1,10 @@
-import { useState, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes, NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench, Palette, Languages, FileText } from 'lucide-react'
-import Dashboard from './pages/Dashboard'
-import SyncPush from './pages/SyncPush'
-import SyncPull from './pages/SyncPull'
-import Backup from './pages/Backup'
-import SettingsPage from './pages/Settings'
-import StarredRepos from './pages/StarredRepos'
-import ToolSkills from './pages/ToolSkills'
-import Prompts from './pages/Prompts'
+import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, FolderOpen, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench, Palette, Languages, FileText } from 'lucide-react'
 import wordmarkIcon from './assets/branding/skillflow-wordmark-icon.png'
 import { EventsOn } from '../wailsjs/runtime/runtime'
-import { DownloadAppUpdate, ApplyAppUpdate, GetGitConflictPending, ResolveGitConflict, OpenURL, SetSkippedUpdateVersion } from '../wailsjs/go/main/App'
+import { DownloadAppUpdate, ApplyAppUpdate, GetGitConflictPending, OpenGitBackupDir, ResolveGitConflict, OpenURL, SetSkippedUpdateVersion } from '../wailsjs/go/main/App'
 import { main } from '../wailsjs/go/models'
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext'
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
@@ -30,6 +22,14 @@ type GitConflictInfo = {
 }
 
 const feedbackIssueURL = 'https://github.com/shinerio/skillflow/issues/new/choose'
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const SyncPush = lazy(() => import('./pages/SyncPush'))
+const SyncPull = lazy(() => import('./pages/SyncPull'))
+const Backup = lazy(() => import('./pages/Backup'))
+const SettingsPage = lazy(() => import('./pages/Settings'))
+const StarredRepos = lazy(() => import('./pages/StarredRepos'))
+const ToolSkills = lazy(() => import('./pages/ToolSkills'))
+const Prompts = lazy(() => import('./pages/Prompts'))
 
 function parseConflictPayload(data: string): GitConflictInfo {
   try {
@@ -70,6 +70,15 @@ function AppContent() {
       setResolveError(String(e?.message ?? e ?? t('common.confirm')))
     } finally {
       setResolving(false)
+    }
+  }
+
+  const handleOpenBackupDir = async () => {
+    setResolveError('')
+    try {
+      await OpenGitBackupDir()
+    } catch (e: any) {
+      setResolveError(String(e?.message ?? e ?? t('common.confirm')))
     }
   }
 
@@ -123,7 +132,7 @@ function AppContent() {
       style={{ background: 'var(--app-shell)', color: 'var(--text-primary)' }}
     >
       {/* Git conflict dialog */}
-      <AnimatedDialog open={conflictOpen} width="w-[420px]" zIndex={50}>
+      <AnimatedDialog open={conflictOpen} width="w-[560px]" zIndex={50}>
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle size={18} style={{ color: 'var(--color-warning)' }} />
           <span className="font-semibold text-base">{t('conflict.title')}</span>
@@ -159,6 +168,7 @@ function AppContent() {
         <ul className="text-xs list-disc list-inside mb-6 space-y-1" style={{ color: 'var(--text-muted)' }}>
           <li><span className="font-medium" style={{ color: 'var(--text-primary)' }}>{t('conflict.keepLocal')}</span> — {t('conflict.keepLocalDesc')}</li>
           <li><span className="font-medium" style={{ color: 'var(--text-primary)' }}>{t('conflict.keepRemote')}</span> — {t('conflict.keepRemoteDesc')}</li>
+          <li><span className="font-medium" style={{ color: 'var(--text-primary)' }}>{t('conflict.manual')}</span> — {t('conflict.manualDesc')}</li>
         </ul>
         {resolveError && (
           <p
@@ -166,22 +176,30 @@ function AppContent() {
             style={{ color: 'var(--color-error)', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)' }}
           >{resolveError}</p>
         )}
-        <div className="flex gap-3 justify-end">
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={handleOpenBackupDir}
+            disabled={resolving}
+            className="btn-secondary flex w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm"
+          >
+            <FolderOpen size={13} />
+            <span className="truncate">{t('conflict.manual')}</span>
+          </button>
           <button
             onClick={() => handleResolve(false)}
             disabled={resolving}
-            className="btn-secondary flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg"
+            className="btn-secondary flex w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm"
           >
             {resolving ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
-            {t('conflict.keepRemote')}
+            <span className="truncate">{t('conflict.keepRemote')}</span>
           </button>
           <button
             onClick={() => handleResolve(true)}
             disabled={resolving}
-            className="btn-primary flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg"
+            className="btn-primary flex w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm"
           >
             {resolving ? <RefreshCw size={13} className="animate-spin" /> : <GitMerge size={13} />}
-            {t('conflict.keepLocal')}
+            <span className="truncate">{t('conflict.keepLocal')}</span>
           </button>
         </div>
       </AnimatedDialog>
@@ -287,6 +305,7 @@ function AppContent() {
 
 function AnimatedRoutes() {
   const location = useLocation()
+  const { t } = useLanguage()
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -297,17 +316,25 @@ function AnimatedRoutes() {
         exit="exit"
         className="h-full"
       >
-        <Routes location={location}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/sync/push" element={<SyncPush />} />
-          <Route path="/sync/pull" element={<SyncPull />} />
-          <Route path="/backup" element={<Backup />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/starred" element={<StarredRepos />} />
-          <Route path="/starred/:repoEncoded" element={<StarredRepos />} />
-          <Route path="/tools" element={<ToolSkills />} />
-          <Route path="/prompts" element={<Prompts />} />
-        </Routes>
+        <Suspense
+          fallback={(
+            <div className="flex h-full items-center justify-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              {t('common.loading')}
+            </div>
+          )}
+        >
+          <Routes location={location}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/sync/push" element={<SyncPush />} />
+            <Route path="/sync/pull" element={<SyncPull />} />
+            <Route path="/backup" element={<Backup />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/starred" element={<StarredRepos />} />
+            <Route path="/starred/:repoEncoded" element={<StarredRepos />} />
+            <Route path="/tools" element={<ToolSkills />} />
+            <Route path="/prompts" element={<Prompts />} />
+          </Routes>
+        </Suspense>
       </motion.div>
     </AnimatePresence>
   )

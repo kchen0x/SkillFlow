@@ -15,3 +15,6 @@
 /cmd/skillflow/frontend/dist/
 /cmd/skillflow/frontend/node_modules/
 /cmd/skillflow/frontend/package.json.md5
+
+.worktree
+.gocache/

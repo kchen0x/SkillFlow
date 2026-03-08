@@ -56,6 +56,8 @@ export const en = {
   'conflict.keepRemote': 'Keep Remote',
   'conflict.keepLocalDesc': 'Keep local content and force-push to remote',
   'conflict.keepRemoteDesc': 'Discard local changes and restore remote content',
+  'conflict.manual': 'Resolve Manually',
+  'conflict.manualDesc': 'Open the backup folder so you can inspect and fix the Git conflict yourself',
   'conflict.moreFiles': '... and {count} more files',
   'dashboard.searchPlaceholder': 'Search Skills...',
   'dashboard.update': 'Update',
