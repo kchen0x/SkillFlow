@@ -118,7 +118,7 @@ export default function SyncSkillCard({
         onClick={onToggle}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="card-base relative flex flex-col gap-2 p-3 cursor-pointer select-none group"
+        className="card-base relative flex flex-col gap-1.5 p-3 cursor-pointer select-none group"
         style={selected ? {
           background: 'var(--accent-glow)',
           borderColor: 'var(--border-accent)',
@@ -166,7 +166,7 @@ export default function SyncSkillCard({
           />
         </div>
 
-        <p className="min-h-[2.75rem] pr-5 text-sm font-medium leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>{name}</p>
+        <p className="min-h-[2.4rem] pr-5 text-sm font-medium leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>{name}</p>
 
         {subtitle && (
           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>

@@ -20,8 +20,10 @@ func main() {
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:             "SkillFlow",
-		Width:             1024,
-		Height:            768,
+		Width:             1360,
+		Height:            860,
+		MinWidth:          960,
+		MinHeight:         680,
 		HideWindowOnClose: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,

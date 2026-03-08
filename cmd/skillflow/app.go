@@ -114,6 +114,7 @@ func (a *App) proxyHTTPClient() *http.Client {
 }
 
 func (a *App) domReady(ctx context.Context) {
+	a.fitInitialWindowToScreen(ctx)
 	if err := setupTray(a); err != nil {
 		runtime.LogWarningf(ctx, "tray init failed: %v", err)
 	}

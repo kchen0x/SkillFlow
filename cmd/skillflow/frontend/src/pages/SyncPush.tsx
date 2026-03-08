@@ -171,7 +171,7 @@ export default function SyncPush() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="w-48 shrink-0 p-3 flex flex-col gap-0.5" style={{ borderRight: '1px solid var(--border-base)' }}>
+      <div className="w-44 shrink-0 p-3 flex flex-col gap-0.5" style={{ borderRight: '1px solid var(--border-base)' }}>
         <div className="px-3 py-1.5 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
           {t('syncPush.pushRange')}
         </div>
@@ -198,14 +198,14 @@ export default function SyncPush() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="px-6 py-4 flex flex-col gap-4" style={{ borderBottom: '1px solid var(--border-base)' }}>
+        <div className="px-5 py-3 flex flex-col gap-3" style={{ borderBottom: '1px solid var(--border-base)' }}>
           <div className="flex items-center gap-2 text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
             <ArrowUpFromLine size={18} />
             {t('syncPush.title')}
           </div>
 
           <section>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('syncPush.targetTool')}</p>
+            <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('syncPush.targetTool')}</p>
             <div className="flex flex-wrap gap-2">
               {tools.map(tool => {
                 const active = selectedTools.has(tool.name)
@@ -213,7 +213,7 @@ export default function SyncPush() {
                   <button
                     key={tool.name}
                     onClick={() => toggleTool(tool.name)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${active ? 'font-semibold -translate-y-px' : ''}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${active ? 'font-semibold -translate-y-px' : ''}`}
                     style={active ? {
                       background: 'var(--active-surface)',
                       color: 'var(--active-text)',
@@ -281,8 +281,8 @@ export default function SyncPush() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
             {visibleSkills.map((skill: any) => (
               <SyncSkillCard
                 key={skill.id}
@@ -308,7 +308,7 @@ export default function SyncPush() {
           )}
         </div>
 
-        <div className="px-6 py-4 shrink-0 flex items-center gap-4" style={{ borderTop: '1px solid var(--border-base)' }}>
+        <div className="px-5 py-3 shrink-0 flex items-center gap-4" style={{ borderTop: '1px solid var(--border-base)' }}>
           <button
             onClick={push}
             disabled={pushing || selectedTools.size === 0 || pushCount === 0}

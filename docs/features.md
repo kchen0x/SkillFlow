@@ -48,6 +48,7 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 - Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light**.
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
 - Window close button behavior: clicking the top-left close button hides the main window and keeps the app running in background.
+- Initial window sizing: on launch, SkillFlow sizes itself against the current display, opens with a larger desktop-friendly default, clamps to the available screen, and centers the window so workflow-heavy pages are more likely to show their full first screen without immediate resizing.
 - macOS tray behavior: the app creates a monochrome status icon in the menu-bar status area on startup; after the main window is hidden, the Dock icon is removed and only the menu-bar icon remains. Use native single-click to open a menu with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`.
 - Windows tray behavior: app remains in the system notification area with the app's own icon; click the tray icon to open a menu with `Show SkillFlow` and `Exit`.
 
@@ -142,6 +143,7 @@ Copies skills from your library to external tool directories.
 - Uses a two-column layout similar to My Skills.
 - Left sidebar shows category filters: **All** plus every existing category.
 - Right side shows the tool selector, search + A-Z/Z-A sort controls, push mode controls, and a skill-card grid for the current category scope.
+- Spacing is tuned so the adaptive startup window can usually show the header controls, the current skill grid, and the bottom push action together on common laptop/desktop displays before scrolling is needed.
 
 ### Tool Selection
 
