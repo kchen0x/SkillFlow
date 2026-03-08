@@ -360,7 +360,7 @@ When skills already exist in the target tool directory:
 
 ## 6. Cloud Backup
 
-Mirror your skill library to cloud storage. Two backend types are supported: **Object Storage** (Aliyun OSS, Tencent COS, Huawei OBS) and **Git Repository**.
+Mirror your skill library to cloud storage. Two backend types are supported: **Object Storage** (Aliyun OSS, AWS S3, Azure Blob Storage, Google Cloud Storage, Tencent COS, Huawei OBS) and **Git Repository**.
 
 ### Status
 
@@ -390,6 +390,11 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as external `SkillsStorageDir` values, tool `ScanDirs` / `PushDir`, and proxy settings; it is excluded from backup and git sync.
 - **Local-only cloud secrets** — sensitive cloud credentials (for example access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as provider, bucket name, remote path, endpoint, repo URL, or branch.
 - **Git backup compatibility** — when Git backup uses a parent directory as the working tree, SkillFlow automatically moves any legacy nested `skills/.git` metadata aside so actual skill files remain trackable.
+
+### Provider Coverage
+
+- Object storage now also supports AWS S3 (bucket + region), Azure Blob Storage (container + account name + optional service URL), and Google Cloud Storage (bucket + service-account JSON or local key file path), in addition to Aliyun OSS, Tencent COS, and Huawei OBS.
+- Sync-safe connection fields now include `region`, `account_name`, and `service_url` alongside existing endpoint / repo URL / branch settings. Sensitive values such as account keys and service-account JSON remain local-only in `config_local.json`.
 
 ### Auto-Backup
 
@@ -452,12 +457,13 @@ For each built-in or custom tool:
 
 | Control | Description |
 |---------|-------------|
-| **Provider buttons** | Select cloud provider: Aliyun OSS / Tencent COS / Huawei OBS / **git**. Each provider restores its own saved bucket/path/credential draft when selected |
+| **Provider buttons** | Select cloud provider: Aliyun OSS / AWS S3 / Azure Blob Storage / Google Cloud Storage / Tencent COS / Huawei OBS / **git**. Each provider restores its own saved bucket/path/credential draft when selected |
 | **Bucket name** | Object storage bucket name (hidden when git provider is selected) |
 | **Remote path** | Object storage parent path (optional). Users enter the parent folder only; SkillFlow always appends `/skillflow/` to build the final backup prefix |
 | **Final backup path preview** | Real-time rendered object-storage destination shown as `<bucket>/<remotePath>/skillflow/` so users can verify the exact remote backup location before saving |
 | **Credential fields** | Dynamically rendered from `RequiredCredentials()` — text or password inputs per provider. Sync-safe connection fields such as endpoint / repo URL / branch remain in `config.json`, while sensitive credentials such as access keys and tokens are stored only in `config_local.json`. Git fields: repo URL, branch, username, access token |
 | **Input normalization** | Aliyun OSS and Huawei OBS bucket fields accept either a plain bucket name or a common full bucket host/URL and normalize it automatically. Tencent COS uses the same bucket + endpoint model as the other object-storage providers. The bucket value always comes from the dedicated bucket field, while the endpoint field may contain either a plain endpoint host or a full bucket host/URL and is preserved as entered for display |
+| **Additional provider details** | AWS S3 trims the region field before saving. Azure Blob Storage uses the bucket field as the container name, stores account name and optional service URL as sync-safe fields, and defaults the service URL to `https://<account>.blob.core.windows.net/` when empty. Google Cloud Storage accepts either an inline service-account JSON string or a local key file path, and keeps that credential local-only in `config_local.json`. |
 | **Auto-sync interval** | Number input (minutes); 0 = sync only after mutations; positive value starts a background periodic timer |
 | **Enable auto backup toggle** | Turns on/off automatic post-mutation backups and the periodic timer |
 

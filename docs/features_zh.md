@@ -5,6 +5,14 @@
 > 本文档列举了 SkillFlow 的每一项功能、按钮、交互细节和 UX 设计。
 > **每当功能增删改时，必须同步更新本文件。**
 
+## 云备份新增服务商
+
+- 对象存储在原有阿里云 OSS、腾讯云 COS、华为云 OBS 之外，新增 AWS S3、Azure Blob Storage、Google Cloud Storage。
+- AWS S3 使用 `bucket + region`。
+- Azure Blob Storage 使用 `container`（即设置页里的 bucket 字段）+ `account name` + `account key`，并支持可选 `service URL`。
+- Google Cloud Storage 使用 `bucket + Service Account JSON`，该凭据也可以填写为本地密钥文件路径。
+- `region`、`account_name`、`service_url` 会作为可同步连接字段保存在 `config.json`；`account key` 和 `Service Account JSON` 等敏感凭据仍只保存在 `config_local.json`。
+
 ---
 
 ## 目录

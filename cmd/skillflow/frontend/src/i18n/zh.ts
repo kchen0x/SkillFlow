@@ -358,4 +358,13 @@ export const zh = {
   'skillTooltip.updatable': '可更新',
   'skillTooltip.installedAt': '安装时间',
   'skillTooltip.updatedAt': '更新时间',
+  'settings.cloudProviderAws': 'AWS S3',
+  'settings.cloudProviderGoogle': 'Google Cloud Storage',
+  'settings.cloudProviderAzure': 'Azure Blob Storage',
+  'settings.cloudFieldSecretAccessKey': 'Secret Access Key',
+  'settings.cloudFieldRegion': 'Region',
+  'settings.cloudFieldServiceAccountJson': 'Service Account JSON 或本地密钥文件路径',
+  'settings.cloudFieldAccountName': 'Account Name',
+  'settings.cloudFieldAccountKey': 'Account Key',
+  'settings.cloudFieldServiceUrl': 'Service URL',
 } as const

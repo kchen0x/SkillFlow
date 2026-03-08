@@ -70,6 +70,9 @@ my-skill/
 
 | 云服务商 | 必填字段 |
 |----------|---------|
+| AWS S3 | Access Key ID锛堜粎鏈湴锛夈€丼ecret Access Key锛堜粎鏈湴锛夈€丷egion锛堝悓姝ワ級 |
+| Azure Blob Storage | 瀛樺偍瀹瑰櫒鍚嶇О锛堝瓨鍌ㄦ《瀛楁锛屽悓姝ワ級銆丄ccount Name锛堝悓姝ワ級銆丄ccount Key锛堜粎鏈湴锛夈€丼ervice URL锛堝悓姝ワ紝鍙€夛級 |
+| Google Cloud Storage | Service Account JSON 鎴栨湰鍦板瘑閽ユ枃浠惰矾寰勶紙浠呮湰鍦帮級 |
 | 阿里云 OSS | Access Key ID（仅本地）、Access Key Secret（仅本地）、Endpoint（同步） |
 | 腾讯云 COS | SecretId（仅本地）、SecretKey（仅本地）、Endpoint（同步） |
 | 华为云 OBS | Access Key（仅本地）、Secret Key（仅本地）、Endpoint（同步） |
