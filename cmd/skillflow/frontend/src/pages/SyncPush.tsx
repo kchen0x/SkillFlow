@@ -27,7 +27,7 @@ export default function SyncPush() {
   const [skills, setSkills] = useState<any[]>([])
   const [scope, setScope] = useState<Scope>('auto')
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
-  const [conflicts, setConflicts] = useState<string[]>([])
+  const [conflicts, setConflicts] = useState<any[]>([])
   const [pushing, setPushing] = useState(false)
   const [done, setDone] = useState(false)
   const [missingDirs, setMissingDirs] = useState<{ name: string; dir: string }[]>([])
@@ -283,6 +283,7 @@ export default function SyncPush() {
                 subtitle={skill.Category || undefined}
                 source={skill.Source}
                 path={skill.Path}
+                updatable={!!skill.LatestSHA}
                 selected={scope === 'manual' && selectedSkills.has(skill.ID)}
                 showSelection={scope === 'manual'}
                 onToggle={() => toggleSkill(skill.ID)}
@@ -313,12 +314,14 @@ export default function SyncPush() {
       {conflicts.length > 0 && (
         <ConflictDialog
           conflicts={conflicts}
-          onOverwrite={async (name) => {
-            const skill = skills.find(s => s.Name === name)
-            if (skill) await PushToToolsForce([skill.ID], Array.from(selectedTools))
-            setConflicts(prev => prev.filter(item => item !== name))
+          labelForConflict={(conflict) => `${conflict.skillName} → ${conflict.toolName}`}
+          onOverwrite={async (conflict) => {
+            if (conflict.skillId) {
+              await PushToToolsForce([conflict.skillId], [conflict.toolName])
+            }
+            setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.toolName === conflict.toolName)))
           }}
-          onSkip={(name) => setConflicts(prev => prev.filter(item => item !== name))}
+          onSkip={(conflict) => setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.toolName === conflict.toolName)))}
           onDone={() => setDone(true)}
         />
       )}

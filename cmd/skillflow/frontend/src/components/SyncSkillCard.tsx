@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { FolderOpen, Github, FolderOpenDot, Copy, Check } from 'lucide-react'
 import { OpenPath, GetSkillMeta, GetSkillMetaByPath, ReadSkillFileContent } from '../../wailsjs/go/main/App'
 import { useLanguage } from '../contexts/LanguageContext'
+import { copyTextToClipboard } from '../lib/clipboard'
 import SkillTooltip from './SkillTooltip'
 
 interface Props {
@@ -12,13 +13,14 @@ interface Props {
   id?: string
   showSelection?: boolean
   imported?: boolean
+  updatable?: boolean
   selected: boolean
   onToggle: () => void
 }
 
 export default function SyncSkillCard({
   name, subtitle, source, path, id,
-  showSelection = true, imported, selected, onToggle,
+  showSelection = true, imported, updatable, selected, onToggle,
 }: Props) {
   const { t } = useLanguage()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -71,7 +73,7 @@ export default function SyncSkillCard({
     if (!path) return
     try {
       const content = await ReadSkillFileContent(path)
-      await navigator.clipboard.writeText(content)
+      await copyTextToClipboard(content)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch { /* ignore */ }
@@ -152,6 +154,18 @@ export default function SyncSkillCard({
               }}
             >
               {t('github.installed')}
+            </span>
+          )}
+          {updatable && (
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(251, 191, 36, 0.16)',
+                color: 'var(--color-warning)',
+                border: '1px solid rgba(251, 191, 36, 0.28)',
+              }}
+            >
+              {t('common.updatable')}
             </span>
           )}
         </div>

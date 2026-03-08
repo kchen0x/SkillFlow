@@ -46,7 +46,7 @@ export default function StarredRepos() {
   const [showPushToolDialog, setShowPushToolDialog] = useState(false)
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [pushingToTools, setPushingToTools] = useState(false)
-  const [pushConflicts, setPushConflicts] = useState<string[]>([])
+  const [pushConflicts, setPushConflicts] = useState<any[]>([])
   const [showPushConflictDialog, setShowPushConflictDialog] = useState(false)
   const [missingDirs, setMissingDirs] = useState<{name: string, dir: string}[]>([])
   const [showMkdirDialog, setShowMkdirDialog] = useState(false)
@@ -227,14 +227,14 @@ export default function StarredRepos() {
 
   const handlePushToToolsForce = async () => {
     try {
-      const paths = [...selectedPaths]
-      const toolNames = [...selectedTools]
-      await PushStarSkillsToToolsForce(paths, toolNames)
+      for (const conflict of pushConflicts) {
+        await PushStarSkillsToToolsForce([conflict.skillPath], [conflict.toolName])
+      }
       setShowPushConflictDialog(false)
       setSelectMode(false)
       setSelectedPaths(new Set())
       setPushConflicts([])
-      setPushSuccessMsg(t('starred.successMsg', { count: paths.length, toolCount: toolNames.length }))
+      setPushSuccessMsg(t('starred.successMsg', { count: selectedPaths.size, toolCount: selectedTools.size }))
       setTimeout(() => setPushSuccessMsg(''), 3000)
     } catch (e: any) {
       console.error('Force push failed:', e)
@@ -636,7 +636,13 @@ export default function StarredRepos() {
         <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('starred.conflictsDesc')}</p>
         <ul className="space-y-1 mb-4 max-h-40 overflow-y-auto">
           {pushConflicts.map(c => (
-            <li key={c} className="text-sm px-3 py-1.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>{c}</li>
+            <li
+              key={`${c.skillPath}|${c.toolName}`}
+              className="text-sm px-3 py-1.5 rounded"
+              style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
+            >
+              {c.skillName} → {c.toolName}
+            </li>
           ))}
         </ul>
         <div className="flex gap-3">
@@ -760,6 +766,7 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
             source={sourceType}
             subtitle={showRepo ? sk.repoName : undefined}
             imported={sk.imported}
+            updatable={sk.updatable}
             showSelection={selectMode}
             selected={selectedPaths.has(sk.path)}
             onToggle={() => selectMode && onToggle(sk.path)}

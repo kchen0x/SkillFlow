@@ -63,7 +63,7 @@ Central library for managing your skill collection.
 |---------|--------|
 | **Search input** | Wide search field for real-time case-insensitive filter by skill name; the toolbar wraps on narrower window widths so controls stay visible |
 | **Sort toggle** | Two-button toggle for alphabetical order by skill name: **A-Z** or **Z-A** |
-| **Update** (RefreshCw) | Calls backend `CheckUpdates()`; compares installed Git-backed skills with remote SHAs, then marks updatable cards with a red dot and Update action. This checks only — it does not overwrite local files by itself |
+| **Update** (RefreshCw) | Calls backend `CheckUpdates()`; groups installed Git-backed skills by normalized repo source + subpath, refreshes `LatestSHA` / `LastCheckedAt`, marks updatable cards with a red dot and Update action, and clears stale markers when an installed instance is already current. This checks only — it does not overwrite local files by itself |
 | **Batch Delete** (CheckSquare) | Toggles multi-select mode |
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
 | **Remote Install** (Github) | Opens the GitHub Install dialog |
@@ -100,6 +100,8 @@ Central library for managing your skill collection.
 
 - Toolbar **Update** performs a remote update check for installed Git-backed skills and only marks cards as updatable.
 - Card-level **Update** is the action that actually downloads the latest files and overwrites the installed copy in **My Skills**.
+- Remote checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
+- When multiple installed instances point at the same logical git skill, one remote SHA lookup updates their check state together, but each installed instance still decides its own `updatable` state by comparing its own `SourceSHA`.
 
 ```text
 [Dashboard toolbar Update]
@@ -194,14 +196,17 @@ Imports skills from external tool directories into your library.
 - Local tool scanning uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Shows animated "Scanning…" state while in progress.
 - **Error alert** (red) if scan fails; **warning alert** (yellow) if no skills found.
+- Tool-scan candidates are deduplicated and correlated by logical key first; same-name items are kept distinct when their content-derived keys differ.
 
 ### Skill Grid
 
 - Appears after a successful scan.
 - Search field filters the scanned skill list by name in real time.
 - Two-button sort toggle switches between **A-Z** and **Z-A** ordering by skill name.
-- Each card shows whether the skill is already imported (green "Imported" badge).
+- Each card shows whether the skill is already imported (green "Imported" badge), based on backend logical-key correlation rather than page-local name checks.
+- When the correlated installed instance has a newer remote SHA, the card also shows an amber **Update available** badge.
 - Select individual skills or use "Select All / Deselect All" for the currently visible list.
+- Selection and pull conflicts are tracked by scanned path, so same-name skills from different tool folders remain independent.
 
 ### Bottom Bar
 
@@ -256,6 +261,8 @@ Browse and import skills directly from watched Git repositories without installi
 
 - Breadcrumb back button (ChevronLeft) to return to the repo grid.
 - Skills grid with same select/import behavior as flat view.
+- Imported badges are resolved from normalized repo source + subpath, so same-name skills from different repos are not conflated.
+- If the correlated installed instance is updatable, the skill card also shows an amber **Update available** badge so the repo view reflects installed-instance update state.
 
 ### Repo Sync vs Installed Skill Update
 
@@ -318,6 +325,7 @@ Refresh Starred Repos list                     Clear update marker in My Skills
 - Lists all enabled tools as checkboxes with their push directory paths shown.
 - **Empty state** message if no tools are configured.
 - **"Push to n tools"** button.
+- If conflicts exist, a follow-up dialog lists the exact `skill → tool` pairs that were skipped; **Overwrite All** only overwrites those listed pairs.
 - **"Cancel"**.
 
 ### Missing Directory Confirmation
@@ -497,6 +505,7 @@ Reusable card component shown in the My Skills grid and Sync pages.
 |---------|-------------|
 | **Source badge** | Same as above |
 | **"Imported" badge** (green) | Shown when skill already exists in the library |
+| **"Update available" badge** (amber) | Shown when the correlated installed instance has a newer remote SHA |
 | **Skill name** | Truncated |
 | **Subtitle** | Category or repo name |
 | **Copy button** (hover) | Same clipboard behavior |
@@ -512,6 +521,8 @@ Reusable card component shown in the My Skills grid and Sync pages.
 | **pushed** | The logical skill already exists in a tool's configured **PushDir** |
 | **seenInToolScan** | The logical skill was detected in one of a tool's configured **ScanDirs**; this means the tool already has it somewhere, but not necessarily because SkillFlow pushed it |
 | **updatable** | An installed Git-backed skill has a newer remote SHA than its installed `SourceSHA` |
+
+These statuses are resolved by the backend from a unified logical-key model; frontend pages no longer infer them independently from `Name` or `Path`.
 
 ```text
                  Unified skill status picture
@@ -564,7 +575,7 @@ Shown one conflict at a time during push or pull when a skill already exists at 
 
 - Displays: "[Skill name] already exists. How to handle?"
 - **"Skip"** — leaves existing file untouched, moves to next conflict.
-- **"Overwrite"** — calls the `*Force` variant, replaces the existing file.
+- **"Overwrite"** — calls the `*Force` variant, replaces only the exact conflicting skill-target pair.
 - Auto-closes when the conflict queue is empty.
 
 ### 10.2 GitHub Install Dialog
@@ -582,6 +593,7 @@ Opened from Dashboard toolbar.
 - Info text: "First scan clones the repo; subsequent scans auto-pull."
 - Candidate discovery is recursive across the cloned repo, so nested layouts such as `plugins/<plugin>/skills/<name>` are also listed; `skill.md` matching is case-insensitive.
 - Recursive candidate discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
+- Already-installed badges are resolved from normalized repo source + subpath instead of `Name`, and checkbox state is tracked by candidate path so same-name candidates remain independent.
 - Separate error alerts for scan errors and install errors.
 
 ### 10.3 Missing Directory Dialog
@@ -752,7 +764,7 @@ Store reusable system prompts inside the synced `prompts/` directory.
 - Cards reuse the same visual language as Skill cards (`card-base`, hover glow, compact actions).
 - Each card shows **name**, optional **description**, and the opening content excerpt by default.
 - When the content is longer than the preview window, the card displays **Click to view more**.
-- Top-right action button copies the full prompt content to the clipboard in one click.
+- Top-right action button copies the full prompt content to the desktop clipboard in one click, preserving multi-line content on Windows.
 - Bottom-right **Delete** action opens a confirmation dialog before removing both the card and the underlying prompt folder.
 
 ### Prompt Editor

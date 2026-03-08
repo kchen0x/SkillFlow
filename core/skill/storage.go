@@ -152,6 +152,10 @@ func (s *Storage) UpdateMeta(sk *Skill) error {
 	return s.saveMeta(sk)
 }
 
+func (s *Storage) SaveMeta(sk *Skill) error {
+	return s.saveMeta(sk)
+}
+
 func (s *Storage) RenameCategory(oldName, newName string) error {
 	oldPath := filepath.Join(s.root, oldName)
 	newPath := filepath.Join(s.root, newName)

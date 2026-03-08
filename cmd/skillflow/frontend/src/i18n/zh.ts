@@ -29,6 +29,7 @@ export const zh = {
   'common.sourceGitHub': 'GitHub',
   'common.sourceGit': 'Git',
   'common.sourceManual': '手动',
+  'common.updatable': '可更新',
   'update.newVersion': '发现新版本',
   'update.ready': '更新已就绪',
   'update.failed': '下载失败',

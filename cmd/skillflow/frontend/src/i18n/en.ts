@@ -29,6 +29,7 @@ export const en = {
   'common.sourceGitHub': 'GitHub',
   'common.sourceGit': 'Git',
   'common.sourceManual': 'Manual',
+  'common.updatable': 'Update available',
   'update.newVersion': 'Update Available',
   'update.ready': 'Ready to Restart',
   'update.failed': 'Download Failed',

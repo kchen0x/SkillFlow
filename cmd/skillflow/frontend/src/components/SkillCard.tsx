@@ -3,6 +3,7 @@ import { Github, FolderOpen, RefreshCw, FolderOpenDot, Copy, Check } from 'lucid
 import ContextMenu from './ContextMenu'
 import { OpenPath, ReadSkillFileContent } from '../../wailsjs/go/main/App'
 import { useLanguage } from '../contexts/LanguageContext'
+import { copyTextToClipboard } from '../lib/clipboard'
 
 interface Skill { id: string; name: string; category: string; source: 'github' | 'manual'; hasUpdate: boolean; path?: string }
 interface Props {
@@ -89,7 +90,7 @@ export default function SkillCard({
     if (!skill.path) return
     try {
       const content = await ReadSkillFileContent(skill.path)
-      await navigator.clipboard.writeText(content)
+      await copyTextToClipboard(content)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch { /* ignore */ }

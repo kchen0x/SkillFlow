@@ -41,7 +41,7 @@ export default function SyncPull() {
     try {
       const skills = await ScanToolSkills(toolName)
       setScanned(skills ?? [])
-      setSelected(new Set((skills ?? []).map((s: any) => s.Name)))
+      setSelected(new Set((skills ?? []).filter((s: any) => !s.imported).map((s: any) => s.path)))
       setScannedOnce(true)
     } catch (e: any) {
       setScanError(String(e?.message ?? e))
@@ -52,8 +52,8 @@ export default function SyncPull() {
 
   const pull = async () => {
     setPulling(true)
-    const names = [...selected]
-    const result = await PullFromTool(selectedTool, names, targetCategory)
+    const paths = [...selected]
+    const result = await PullFromTool(selectedTool, paths, targetCategory)
     if (result && result.length > 0) {
       setConflicts(result)
     } else {
@@ -62,31 +62,31 @@ export default function SyncPull() {
     setPulling(false)
   }
 
-  const toggle = (name: string) => {
+  const toggle = (path: string) => {
     const next = new Set(selected)
-    next.has(name) ? next.delete(name) : next.add(name)
+    next.has(path) ? next.delete(path) : next.add(path)
     setSelected(next)
   }
 
   const toggleAll = () => {
-    const visibleNames = filteredScanned.map((skill: any) => skill.Name)
+    const visiblePaths = filteredScanned.map((skill: any) => skill.path)
     setSelected(prev => {
       const next = new Set(prev)
-      if (visibleNames.every(name => next.has(name))) {
-        visibleNames.forEach(name => next.delete(name))
+      if (visiblePaths.every(path => next.has(path))) {
+        visiblePaths.forEach(path => next.delete(path))
       } else {
-        visibleNames.forEach(name => next.add(name))
+        visiblePaths.forEach(path => next.add(path))
       }
       return next
     })
   }
 
   const filteredScanned = useMemo(
-    () => filterAndSortSkills(scanned, search, sortOrder, skill => skill.Name ?? ''),
+    () => filterAndSortSkills(scanned, search, sortOrder, skill => skill.name ?? ''),
     [scanned, search, sortOrder],
   )
 
-  const allSelected = filteredScanned.length > 0 && filteredScanned.every((skill: any) => selected.has(skill.Name))
+  const allSelected = filteredScanned.length > 0 && filteredScanned.every((skill: any) => selected.has(skill.path))
 
   const getNavStyle = (isActive: boolean) => isActive ? {
     background: 'var(--accent-glow)',
@@ -99,9 +99,9 @@ export default function SyncPull() {
   }
 
   useEffect(() => {
-    const visibleNames = new Set(filteredScanned.map((skill: any) => skill.Name))
+    const visiblePaths = new Set(filteredScanned.map((skill: any) => skill.path))
     setSelected(prev => {
-      const next = new Set([...prev].filter(name => visibleNames.has(name)))
+      const next = new Set([...prev].filter(path => visiblePaths.has(path)))
       return next.size === prev.size ? prev : next
     })
   }, [filteredScanned])
@@ -238,11 +238,13 @@ export default function SyncPull() {
                 <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredScanned.map((sk: any) => (
                     <SyncSkillCard
-                      key={sk.Name}
-                      name={sk.Name}
-                      path={sk.Path}
-                      selected={selected.has(sk.Name)}
-                      onToggle={() => toggle(sk.Name)}
+                      key={sk.path}
+                      name={sk.name}
+                      path={sk.path}
+                      imported={sk.imported}
+                      updatable={sk.updatable}
+                      selected={selected.has(sk.path)}
+                      onToggle={() => toggle(sk.path)}
                     />
                   ))}
                 </div>
@@ -266,11 +268,12 @@ export default function SyncPull() {
       {conflicts.length > 0 && (
         <ConflictDialog
           conflicts={conflicts}
-          onOverwrite={async (name) => {
-            await PullFromToolForce(selectedTool, [name], targetCategory)
-            setConflicts(prev => prev.filter(c => c !== name))
+          labelForConflict={(path) => scanned.find((item: any) => item.path === path)?.name ?? path}
+          onOverwrite={async (path) => {
+            await PullFromToolForce(selectedTool, [path], targetCategory)
+            setConflicts(prev => prev.filter(c => c !== path))
           }}
-          onSkip={(name) => setConflicts(prev => prev.filter(c => c !== name))}
+          onSkip={(path) => setConflicts(prev => prev.filter(c => c !== path))}
           onDone={() => setDone(true)}
         />
       )}

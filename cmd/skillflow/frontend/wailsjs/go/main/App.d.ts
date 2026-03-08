@@ -112,11 +112,11 @@ export function PullFromTool(arg1:string,arg2:Array<string>,arg3:string):Promise
 
 export function PullFromToolForce(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
 
-export function PushStarSkillsToTools(arg1:Array<string>,arg2:Array<string>):Promise<Array<string>>;
+export function PushStarSkillsToTools(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
 
 export function PushStarSkillsToToolsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
-export function PushToTools(arg1:Array<string>,arg2:Array<string>):Promise<Array<string>>;
+export function PushToTools(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
 
 export function PushToToolsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
@@ -138,7 +138,7 @@ export function SaveConfig(arg1:config.AppConfig):Promise<void>;
 
 export function ScanGitHub(arg1:string):Promise<Array<install.SkillCandidate>>;
 
-export function ScanToolSkills(arg1:string):Promise<Array<skill.Skill>>;
+export function ScanToolSkills(arg1:string):Promise<Array<main.ToolSkillCandidate>>;
 
 export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 

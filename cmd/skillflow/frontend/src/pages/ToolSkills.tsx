@@ -3,6 +3,7 @@ import { GetEnabledTools, ListToolSkills, DeleteToolSkill, OpenPath, ReadSkillFi
 import { ToolIcon } from '../config/toolIcons'
 import SkillTooltip from '../components/SkillTooltip'
 import SkillListControls from '../components/SkillListControls'
+import { copyTextToClipboard } from '../lib/clipboard'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -74,8 +75,8 @@ export default function ToolSkills() {
     })
   }
 
-  const pushSkills = skills.filter(s => s.inPush)
-  const scanOnlySkills = skills.filter(s => s.inScan && !s.inPush)
+  const pushSkills = skills.filter(s => s.pushed)
+  const scanOnlySkills = skills.filter(s => s.seenInToolScan && !s.pushed)
 
   const filteredPushSkills = useMemo(
     () => filterAndSortSkills(pushSkills, search, sortOrder, skill => skill.name ?? ''),
@@ -249,6 +250,8 @@ export default function ToolSkills() {
                         key={sk.path}
                         name={sk.name}
                         path={sk.path}
+                        imported={sk.imported}
+                        updatable={sk.updatable}
                         canDelete
                         selectMode={selectMode}
                         selected={selectedPaths.has(sk.path)}
@@ -282,6 +285,8 @@ export default function ToolSkills() {
                         key={sk.path}
                         name={sk.name}
                         path={sk.path}
+                        imported={sk.imported}
+                        updatable={sk.updatable}
                         canDelete={false}
                         selectMode={false}
                         selected={false}
@@ -303,6 +308,8 @@ export default function ToolSkills() {
 interface ToolSkillCardProps {
   name: string
   path: string
+  imported?: boolean
+  updatable?: boolean
   canDelete: boolean
   selectMode: boolean
   selected: boolean
@@ -310,7 +317,7 @@ interface ToolSkillCardProps {
   onDelete: () => void
 }
 
-function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSelect, onDelete }: ToolSkillCardProps) {
+function ToolSkillCard({ name, path, imported, updatable, canDelete, selectMode, selected, onToggleSelect, onDelete }: ToolSkillCardProps) {
   const { t } = useLanguage()
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -348,7 +355,7 @@ function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSe
     e.stopPropagation()
     try {
       const content = await ReadSkillFileContent(path)
-      await navigator.clipboard.writeText(content)
+      await copyTextToClipboard(content)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch { /* ignore */ }
@@ -420,6 +427,33 @@ function ToolSkillCard({ name, path, canDelete, selectMode, selected, onToggleSe
             </button>
           </div>
         )}
+
+        <div className={`flex items-center gap-2 flex-wrap pr-12 ${selectMode && canDelete ? 'pl-5' : ''}`}>
+          {imported && (
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(52, 211, 153, 0.15)',
+                color: 'var(--color-success)',
+                border: '1px solid rgba(52, 211, 153, 0.25)',
+              }}
+            >
+              {t('github.installed')}
+            </span>
+          )}
+          {updatable && (
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{
+                background: 'rgba(251, 191, 36, 0.16)',
+                color: 'var(--color-warning)',
+                border: '1px solid rgba(251, 191, 36, 0.28)',
+              }}
+            >
+              {t('common.updatable')}
+            </span>
+          )}
+        </div>
 
         <p
           className={`font-medium text-sm truncate mt-1 ${selectMode && canDelete ? 'pl-5' : ''} ${!selectMode ? 'pr-5' : ''}`}

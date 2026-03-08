@@ -55,7 +55,8 @@ Installed skill instances are identified by UUID. Cross-module correlation must 
 
 | Package | Responsibility |
 |---------|---------------|
-| `core/skill` | `Skill` model, `Storage` (CRUD + categories), `Validator` (skill.md check) |
+| `core/skill` | `Skill` model, `Storage` (CRUD + categories), `Validator` (skill.md check), installed-skill correlation index |
+| `core/skillkey` | Stable logical-key derivation for git-backed skills and content-derived local skills |
 | `core/config` | `AppConfig` model, `Service` (load/save JSON), `DefaultToolsDir()` per tool |
 | `core/notify` | `Hub` (buffered channel pub/sub), `EventType` constants |
 | `core/install` | `Installer` interface, `GitHubInstaller` (scan/download/SHA), `LocalInstaller` |
@@ -162,6 +163,8 @@ SkillFlow must distinguish between two different identities:
 - The backend should own cross-module skill correlation and expose normalized statuses to the frontend.
 - Frontend pages should not independently decide “same skill”, “already imported”, or “already pushed” from `Name` or `Path` alone.
 - Any future catalog / aggregate layer should group all module-specific representations under one logical skill record and keep installed instances as child references.
+- The current implementation uses `core/skillkey` to derive logical keys and `core/skill.BuildInstalledIndex` to resolve `installed` / `imported` / `updatable` across GitHub, starred repos, and tool scans.
+- Push conflict reporting is structured per skill-target pair (`skill + tool + target path`) so overwrite actions can be scoped to one exact conflict instead of a name-only batch guess.
 
 ### AppConfig (`core/config/model.go`)
 
@@ -397,7 +400,7 @@ frontend/src/
     runtime/runtime.js ← Wails runtime (EventsOn, EventsEmit, etc.)
 ```
 
-Frontend calls Go methods directly: `import { ListSkills } from '../../wailsjs/go/main/App'`. Go struct field names are PascalCase in JSON (e.g. `cfg.Tools`, `t.SkillsDir`, `cfg.Cloud.Enabled`).
+Frontend calls Go methods directly: `import { ListSkills } from '../../wailsjs/go/main/App'`. Generated JSON respects exported Go field names unless a struct declares explicit `json` tags; config models remain PascalCase while tool/starred DTOs may expose lower-case tagged fields.
 
 ---
 
@@ -441,4 +444,4 @@ If the tool uses a flat directory of skills (standard), just add it to `register
 
 ---
 
-*Last updated: 2026-03-06*
+*Last updated: 2026-03-08*

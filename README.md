@@ -20,11 +20,11 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 |---------|-------------|
 | **Skill Library** | Central store with categories, real-time search, A-Z / Z-A sorting, drag-and-drop organization, batch delete, and safe empty-category deletion |
 | **Prompt Library** | Save reusable prompts as synced `prompts/<category>/<name>/system.md` cards, with required unique names, optional descriptions, categories, import/export, drag-to-category management, one-click copy, and `and` / `or` keyword search |
-| **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones with one click; subsequent scans auto-pull updates |
-| **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; searchable, sortable skill pickers and conflict handling per skill |
-| **Starred Repos** | Watch Git repos and recursively browse/import nested repo skills without adding them to your library first, with search and alphabetical sorting in skill grids |
+| **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones with one click; already-installed detection is keyed by normalized repo source + subpath so same-name candidates remain distinct |
+| **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; searchable, sortable skill pickers with backend-resolved imported/pushed status, pair-precise conflict handling, and no name-only heuristics |
+| **Starred Repos** | Watch Git repos and recursively browse/import nested repo skills without adding them to your library first; imported badges follow normalized repo source + subpath, and updatable installed instances are surfaced directly in repo skill cards |
 | **Cloud Backup** | Mirror your library to Aliyun OSS, Tencent COS, Huawei OBS, or any Git repo, with a custom object-storage remote path preview, provider-specific saved profiles, and local-only sensitive credentials |
-| **Update Checker** | Detects new commits for GitHub-sourced skills; one-click update |
+| **Update Checker** | Detects new commits for installed GitHub-sourced skills by normalized repo source + subpath, clears stale update markers when already current, and supports one-click instance updates |
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
 | **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
 | **Desktop Shell** | Fixed sidebar with the branded SkillFlow title, app icon, quick language/theme toggles, and feedback entry |

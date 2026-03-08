@@ -55,7 +55,8 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
 
 | 包 | 职责 |
 |----|------|
-| `core/skill` | `Skill` 模型、`Storage`（增删改查 + 分类）、`Validator`（skill.md 校验） |
+| `core/skill` | `Skill` 模型、`Storage`（增删改查 + 分类）、`Validator`（skill.md 校验）、已安装 Skill 关联索引 |
+| `core/skillkey` | Git Skill 与本地 Skill 的稳定逻辑主键生成 |
 | `core/config` | `AppConfig` 模型、`Service`（JSON 加载/保存）、各工具的 `DefaultToolsDir()` |
 | `core/notify` | `Hub`（缓冲通道发布/订阅）、`EventType` 常量 |
 | `core/install` | `Installer` 接口、`GitHubInstaller`（扫描/下载/SHA）、`LocalInstaller` |
@@ -162,6 +163,8 @@ SkillFlow 必须区分两类身份：
 - 跨模块的 skill 关联应由后端统一负责，并向前端暴露规范化后的状态。
 - 前端页面不应再基于 `Name` 或 `Path` 独自判断“是不是同一个 skill”“是否已导入”或“是否已推送”。
 - 后续若引入 catalog / aggregate 层，应将各模块中的不同表示统一归并到同一个逻辑 skill 记录下，并把已安装实例作为其子引用。
+- 当前实现使用 `core/skillkey` 生成逻辑主键，并通过 `core/skill.BuildInstalledIndex` 统一解析 GitHub、仓库收藏、工具扫描中的 `installed` / `imported` / `updatable` 状态。
+- Push 冲突现在按 skill-target 配对（`skill + tool + target path`）结构化返回，因此覆盖操作可以精确作用于单个冲突，而不再是按名称猜测的一整批。
 
 ### AppConfig（`core/config/model.go`）
 
@@ -397,7 +400,7 @@ frontend/src/
     runtime/runtime.js ← Wails runtime（EventsOn、EventsEmit 等）
 ```
 
-前端直接调用 Go 方法：`import { ListSkills } from '../../wailsjs/go/main/App'`。Go 结构体字段名在 JSON 中为 PascalCase（如 `cfg.Tools`、`t.SkillsDir`、`cfg.Cloud.Enabled`）。
+前端直接调用 Go 方法：`import { ListSkills } from '../../wailsjs/go/main/App'`。生成后的 JSON 默认沿用导出字段名；若结构体声明了显式 `json` 标签，则以前端标签名为准。因此配置模型仍是 PascalCase，而工具/收藏相关 DTO 可能暴露为小写字段。
 
 ---
 
@@ -441,4 +444,4 @@ frontend/src/
 
 ---
 
-*最后更新：2026-03-06*
+*最后更新：2026-03-08*

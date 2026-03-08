@@ -8,9 +8,11 @@ type InstallSource struct {
 }
 
 type SkillCandidate struct {
-	Name      string
-	Path      string // relative path within source
-	Installed bool
+	Name       string
+	Path       string // relative path within source
+	LogicalKey string
+	Installed  bool
+	Updatable  bool
 }
 
 type Installer interface {

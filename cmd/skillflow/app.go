@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +22,7 @@ import (
 	"github.com/shinerio/skillflow/core/notify"
 	"github.com/shinerio/skillflow/core/registry"
 	"github.com/shinerio/skillflow/core/skill"
+	"github.com/shinerio/skillflow/core/skillkey"
 	toolsync "github.com/shinerio/skillflow/core/sync"
 	"github.com/shinerio/skillflow/core/update"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -534,19 +534,23 @@ func (a *App) OpenURL(rawURL string) error {
 }
 
 // PushStarSkillsToTools copies starred skill directories directly to the push directory of each
-// specified tool, skipping skills that already exist. Returns a list of conflict descriptions.
-func (a *App) PushStarSkillsToTools(skillPaths []string, toolNames []string) ([]string, error) {
+// specified tool, skipping skills that already exist. Returns structured conflicts.
+func (a *App) PushStarSkillsToTools(skillPaths []string, toolNames []string) ([]PushConflict, error) {
+	a.logInfof("push starred skills started: skillCount=%d toolCount=%d", len(skillPaths), len(toolNames))
 	cfg, _ := a.config.Load()
-	var conflicts []string
+	var conflicts []PushConflict
 	for _, toolName := range toolNames {
 		for _, t := range cfg.Tools {
 			if t.Name != toolName {
 				continue
 			}
 			if t.PushDir == "" {
-				return nil, fmt.Errorf("工具 %s 未配置推送路径", toolName)
+				err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
+				a.logErrorf("push starred skills failed: tool=%s err=%v", toolName, err)
+				return nil, err
 			}
 			if err := os.MkdirAll(t.PushDir, 0755); err != nil {
+				a.logErrorf("push starred skills failed: tool=%s pushDir=%s err=%v", toolName, t.PushDir, err)
 				return nil, err
 			}
 			adapter := getAdapter(t)
@@ -554,22 +558,30 @@ func (a *App) PushStarSkillsToTools(skillPaths []string, toolNames []string) ([]
 				name := filepath.Base(skillPath)
 				dst := filepath.Join(t.PushDir, name)
 				if _, err := os.Stat(dst); err == nil {
-					conflicts = append(conflicts, fmt.Sprintf("%s → %s", name, toolName))
+					conflicts = append(conflicts, PushConflict{
+						SkillName:  name,
+						SkillPath:  skillPath,
+						ToolName:   toolName,
+						TargetPath: dst,
+					})
 					continue
 				}
 				sk := []*skill.Skill{{Name: name, Path: skillPath}}
 				if err := adapter.Push(a.ctx, sk, t.PushDir); err != nil {
+					a.logErrorf("push starred skills failed: tool=%s skill=%s err=%v", toolName, name, err)
 					return nil, err
 				}
 			}
 		}
 	}
+	a.logInfof("push starred skills completed: conflicts=%d", len(conflicts))
 	return conflicts, nil
 }
 
 // PushStarSkillsToToolsForce copies starred skill directories to tool push directories,
 // overwriting any existing skills.
 func (a *App) PushStarSkillsToToolsForce(skillPaths []string, toolNames []string) error {
+	a.logInfof("force push starred skills started: skillCount=%d toolCount=%d", len(skillPaths), len(toolNames))
 	cfg, _ := a.config.Load()
 	for _, toolName := range toolNames {
 		for _, t := range cfg.Tools {
@@ -577,19 +589,27 @@ func (a *App) PushStarSkillsToToolsForce(skillPaths []string, toolNames []string
 				continue
 			}
 			if t.PushDir == "" {
-				return fmt.Errorf("工具 %s 未配置推送路径", toolName)
+				err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
+				a.logErrorf("force push starred skills failed: tool=%s err=%v", toolName, err)
+				return err
 			}
 			var tempSkills []*skill.Skill
 			for _, skillPath := range skillPaths {
 				name := filepath.Base(skillPath)
-				_ = os.RemoveAll(filepath.Join(t.PushDir, name))
+				targetPath := filepath.Join(t.PushDir, name)
+				if err := os.RemoveAll(targetPath); err != nil {
+					a.logErrorf("force push starred skills failed: tool=%s target=%s err=%v", toolName, targetPath, err)
+					return err
+				}
 				tempSkills = append(tempSkills, &skill.Skill{Name: name, Path: skillPath})
 			}
 			if err := getAdapter(t).Push(a.ctx, tempSkills, t.PushDir); err != nil {
+				a.logErrorf("force push starred skills failed: tool=%s err=%v", toolName, err)
 				return err
 			}
 		}
 	}
+	a.logInfof("force push starred skills completed")
 	return nil
 }
 
@@ -614,20 +634,19 @@ func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 	if err != nil {
 		return nil, err
 	}
-	existing, _ := a.storage.ListAll()
-	existingNames := map[string]bool{}
-	for _, sk := range existing {
-		existingNames[sk.Name] = true
+	_, installedIndex, err := a.installedIndex()
+	if err != nil {
+		return nil, err
 	}
 	var candidates []install.SkillCandidate
 	for _, ss := range starSkills {
 		candidates = append(candidates, install.SkillCandidate{
-			Name:      ss.Name,
-			Path:      ss.SubPath,
-			Installed: existingNames[ss.Name],
+			Name:       ss.Name,
+			Path:       ss.SubPath,
+			LogicalKey: skillkey.Git(repoSource, ss.SubPath),
 		})
 	}
-	return candidates, nil
+	return resolveGitHubCandidates(candidates, installedIndex), nil
 }
 
 // InstallFromGitHub imports selected skills from a scanned remote git repo into storage.
@@ -642,7 +661,18 @@ func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandid
 	if err != nil {
 		return err
 	}
+	_, installedIndex, err := a.installedIndex()
+	if err != nil {
+		return err
+	}
 	for _, c := range candidates {
+		logicalKey := c.LogicalKey
+		if logicalKey == "" {
+			logicalKey = skillkey.GitFromRepoURLOrEmpty(canonicalRepoURL, c.Path)
+		}
+		if installedIndex.IsInstalled(c.Name, logicalKey) {
+			continue
+		}
 		skillDir := filepath.Join(cacheDir, filepath.FromSlash(c.Path))
 		sha, _ := coregit.GetSubPathSHA(a.ctx, cacheDir, c.Path)
 		sk, err := a.storage.Import(skillDir, category, skill.SourceGitHub, canonicalRepoURL, c.Path)
@@ -683,22 +713,22 @@ func (a *App) GetEnabledTools() ([]config.ToolConfig, error) {
 }
 
 // ScanToolSkills lists all skills in a tool's configured scan directories for the pull page.
-func (a *App) ScanToolSkills(toolName string) ([]*skill.Skill, error) {
+func (a *App) ScanToolSkills(toolName string) ([]ToolSkillCandidate, error) {
 	cfg, _ := a.config.Load()
 	for _, t := range cfg.Tools {
 		if t.Name == toolName {
-			return scanToolSkills(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
+			scanned, err := scanToolSkillsRaw(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
+			if err != nil {
+				return nil, err
+			}
+			_, installedIndex, err := a.installedIndex()
+			if err != nil {
+				return nil, err
+			}
+			return resolveToolSkillCandidates(scanned, installedIndex), nil
 		}
 	}
 	return nil, nil
-}
-
-// ToolSkillEntry describes a skill found in a tool's configured directories.
-type ToolSkillEntry struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	InPush bool   `json:"inPush"`
-	InScan bool   `json:"inScan"`
 }
 
 // ListToolSkills returns all skills for a tool, annotated with whether each
@@ -719,40 +749,25 @@ func (a *App) ListToolSkills(toolName string) ([]ToolSkillEntry, error) {
 		return nil, fmt.Errorf("tool %s not found", toolName)
 	}
 	adapter := getAdapter(*tc)
-
-	type entryState struct {
-		path   string
-		inPush bool
-		inScan bool
+	_, installedIndex, err := a.installedIndex()
+	if err != nil {
+		return nil, err
 	}
-	byName := map[string]*entryState{}
+	var pushSkills []*skill.Skill
 
 	if tc.PushDir != "" {
 		if _, statErr := os.Stat(tc.PushDir); statErr == nil {
-			if pushSkills, pullErr := pullToolSkills(a.ctx, adapter, tc.PushDir, a.repoScanMaxDepth()); pullErr == nil {
-				for _, sk := range pushSkills {
-					byName[sk.Name] = &entryState{path: sk.Path, inPush: true}
-				}
+			if pulled, pullErr := pullToolSkills(a.ctx, adapter, tc.PushDir, a.repoScanMaxDepth()); pullErr == nil {
+				pushSkills = pulled
 			}
 		}
 	}
 
-	if scanSkills, _ := scanToolSkills(a.ctx, adapter, tc.ScanDirs, a.repoScanMaxDepth()); scanSkills != nil {
-		for _, sk := range scanSkills {
-			if e, ok := byName[sk.Name]; ok {
-				e.inScan = true
-			} else {
-				byName[sk.Name] = &entryState{path: sk.Path, inScan: true}
-			}
-		}
+	scanSkills, err := scanToolSkillsRaw(a.ctx, adapter, tc.ScanDirs, a.repoScanMaxDepth())
+	if err != nil {
+		return nil, err
 	}
-
-	result := make([]ToolSkillEntry, 0, len(byName))
-	for name, e := range byName {
-		result = append(result, ToolSkillEntry{Name: name, Path: e.path, InPush: e.inPush, InScan: e.inScan})
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
-	return result, nil
+	return aggregateToolSkillEntries(pushSkills, scanSkills, installedIndex), nil
 }
 
 // DeleteToolSkill removes a skill directory from a tool's push directory.
@@ -807,11 +822,13 @@ func (a *App) CheckMissingPushDirs(toolNames []string) ([]map[string]string, err
 }
 
 // PushToTools pushes selected skills to target tools.
-// Returns list of conflict descriptions that were skipped.
-func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]string, error) {
+// Returns structured conflicts that were skipped.
+func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]PushConflict, error) {
+	a.logInfof("push skills to tools started: skillCount=%d toolCount=%d", len(skillIDs), len(toolNames))
 	cfg, _ := a.config.Load()
 	skills, err := a.storage.ListAll()
 	if err != nil {
+		a.logErrorf("push skills to tools failed: %v", err)
 		return nil, err
 	}
 	idSet := map[string]bool{}
@@ -825,31 +842,49 @@ func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]string, erro
 		}
 	}
 
-	var conflicts []string
+	var conflicts []PushConflict
 	for _, toolName := range toolNames {
 		for _, t := range cfg.Tools {
 			if t.Name != toolName {
 				continue
 			}
 			if t.PushDir == "" {
-				return nil, fmt.Errorf("工具 %s 未配置推送路径", toolName)
+				err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
+				a.logErrorf("push skills to tools failed: tool=%s err=%v", toolName, err)
+				return nil, err
 			}
 			adapter := getAdapter(t)
+			var toPush []*skill.Skill
 			for _, sk := range selected {
 				dst := filepath.Join(t.PushDir, sk.Name)
 				if _, err := os.Stat(dst); err == nil {
-					conflicts = append(conflicts, fmt.Sprintf("%s -> %s", sk.Name, toolName))
+					conflicts = append(conflicts, PushConflict{
+						SkillID:    sk.ID,
+						SkillName:  sk.Name,
+						SkillPath:  sk.Path,
+						ToolName:   toolName,
+						TargetPath: dst,
+					})
 					continue
 				}
+				toPush = append(toPush, sk)
 			}
-			_ = adapter.Push(a.ctx, selected, t.PushDir)
+			if len(toPush) == 0 {
+				continue
+			}
+			if err := adapter.Push(a.ctx, toPush, t.PushDir); err != nil {
+				a.logErrorf("push skills to tools failed: tool=%s err=%v", toolName, err)
+				return nil, err
+			}
 		}
 	}
+	a.logInfof("push skills to tools completed: conflicts=%d", len(conflicts))
 	return conflicts, nil
 }
 
 // PushToToolsForce pushes and overwrites conflicts.
 func (a *App) PushToToolsForce(skillIDs []string, toolNames []string) error {
+	a.logInfof("force push skills to tools started: skillCount=%d toolCount=%d", len(skillIDs), len(toolNames))
 	cfg, _ := a.config.Load()
 	skills, _ := a.storage.ListAll()
 	idSet := map[string]bool{}
@@ -866,38 +901,53 @@ func (a *App) PushToToolsForce(skillIDs []string, toolNames []string) error {
 		for _, t := range cfg.Tools {
 			if t.Name == toolName {
 				if t.PushDir == "" {
-					return fmt.Errorf("工具 %s 未配置推送路径", toolName)
+					err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
+					a.logErrorf("force push skills to tools failed: tool=%s err=%v", toolName, err)
+					return err
 				}
-				_ = getAdapter(t).Push(a.ctx, selected, t.PushDir)
+				for _, sk := range selected {
+					targetPath := filepath.Join(t.PushDir, sk.Name)
+					if err := os.RemoveAll(targetPath); err != nil {
+						a.logErrorf("force push skills to tools failed: tool=%s target=%s err=%v", toolName, targetPath, err)
+						return err
+					}
+				}
+				if err := getAdapter(t).Push(a.ctx, selected, t.PushDir); err != nil {
+					a.logErrorf("force push skills to tools failed: tool=%s err=%v", toolName, err)
+					return err
+				}
 			}
 		}
 	}
+	a.logInfof("force push skills to tools completed")
 	return nil
 }
 
 // PullFromTool imports selected skills from a tool into SkillFlow storage.
-func (a *App) PullFromTool(toolName string, skillNames []string, category string) ([]string, error) {
+func (a *App) PullFromTool(toolName string, skillPaths []string, category string) ([]string, error) {
 	category = normalizeCategoryName(category)
 	cfg, _ := a.config.Load()
-	nameSet := map[string]bool{}
-	for _, n := range skillNames {
-		nameSet[n] = true
-	}
 	for _, t := range cfg.Tools {
 		if t.Name != toolName {
 			continue
 		}
-		candidates, err := scanToolSkills(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
+		scanned, err := scanToolSkillsRaw(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
 		if err != nil {
 			return nil, err
 		}
+		_, installedIndex, err := a.installedIndex()
+		if err != nil {
+			return nil, err
+		}
+		candidates := resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex), skillPaths)
 		var conflicts []string
-		for _, sk := range candidates {
-			if !nameSet[sk.Name] {
+		for _, candidate := range candidates {
+			if candidate.Imported {
+				conflicts = append(conflicts, candidate.Path)
 				continue
 			}
-			if _, err := a.storage.Import(sk.Path, category, skill.SourceManual, "", ""); err == skill.ErrSkillExists {
-				conflicts = append(conflicts, sk.Name)
+			if _, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", ""); err == skill.ErrSkillExists {
+				conflicts = append(conflicts, candidate.Path)
 			}
 		}
 		go a.autoBackup()
@@ -907,33 +957,30 @@ func (a *App) PullFromTool(toolName string, skillNames []string, category string
 }
 
 // PullFromToolForce imports selected skills, overwriting existing ones.
-func (a *App) PullFromToolForce(toolName string, skillNames []string, category string) error {
+func (a *App) PullFromToolForce(toolName string, skillPaths []string, category string) error {
 	category = normalizeCategoryName(category)
 	cfg, _ := a.config.Load()
-	nameSet := map[string]bool{}
-	for _, n := range skillNames {
-		nameSet[n] = true
-	}
 	for _, t := range cfg.Tools {
 		if t.Name != toolName {
 			continue
 		}
-		candidates, err := scanToolSkills(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
+		scanned, err := scanToolSkillsRaw(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
 		if err != nil {
 			return err
 		}
-		for _, sk := range candidates {
-			if !nameSet[sk.Name] {
-				continue
-			}
+		_, installedIndex, err := a.installedIndex()
+		if err != nil {
+			return err
+		}
+		for _, candidate := range resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex), skillPaths) {
 			existing, _ := a.storage.ListAll()
 			for _, e := range existing {
-				if e.Name == sk.Name {
+				logicalKey, logicalErr := skill.LogicalKey(e)
+				if (candidate.LogicalKey != "" && logicalErr == nil && logicalKey == candidate.LogicalKey) || (candidate.LogicalKey == "" && e.Name == candidate.Name) {
 					_ = a.storage.Delete(e.ID)
-					break
 				}
 			}
-			_, _ = a.storage.Import(sk.Path, category, skill.SourceManual, "", "")
+			_, _ = a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
 		}
 		go a.autoBackup()
 	}
@@ -945,34 +992,6 @@ func pullToolSkills(ctx context.Context, adapter toolsync.ToolAdapter, dir strin
 		return depthAware.PullWithMaxDepth(ctx, dir, maxDepth)
 	}
 	return adapter.Pull(ctx, dir)
-}
-
-func scanToolSkills(ctx context.Context, adapter toolsync.ToolAdapter, scanDirs []string, maxDepth int) ([]*skill.Skill, error) {
-	var result []*skill.Skill
-	seen := map[string]struct{}{}
-	for _, dir := range scanDirs {
-		if dir == "" {
-			continue
-		}
-		if _, err := os.Stat(dir); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
-		}
-		skills, err := pullToolSkills(ctx, adapter, dir, maxDepth)
-		if err != nil {
-			return nil, err
-		}
-		for _, sk := range skills {
-			if _, ok := seen[sk.Name]; ok {
-				continue
-			}
-			seen[sk.Name] = struct{}{}
-			result = append(result, sk)
-		}
-	}
-	return result, nil
 }
 
 func getAdapter(t config.ToolConfig) toolsync.ToolAdapter {
@@ -1156,33 +1175,75 @@ func (a *App) ListCloudProviders() []map[string]any {
 // --- Updates ---
 
 func (a *App) CheckUpdates() error {
-	a.logDebugf("check skill updates started")
+	a.logInfof("check skill updates started")
 	skills, err := a.storage.ListAll()
 	if err != nil {
 		a.logErrorf("check skill updates failed: %v", err)
 		return err
 	}
-	checker := update.NewChecker("", a.proxyHTTPClient())
+
+	type updateGroup struct {
+		LogicalKey string
+		Skills     []*skill.Skill
+	}
+
+	groups := map[string]*updateGroup{}
 	for _, sk := range skills {
-		result, err := checker.Check(a.ctx, sk)
-		if err != nil {
+		if sk == nil || !sk.IsGitHub() {
 			continue
 		}
-		if result.HasUpdate {
-			sk.LatestSHA = result.LatestSHA
-			_ = a.storage.UpdateMeta(sk)
-			a.hub.Publish(notify.Event{
-				Type: notify.EventUpdateAvailable,
-				Payload: notify.UpdateAvailablePayload{
-					SkillID:    sk.ID,
-					SkillName:  sk.Name,
-					CurrentSHA: sk.SourceSHA,
-					LatestSHA:  result.LatestSHA,
-				},
-			})
+		logicalKey, logicalErr := skillkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath)
+		if logicalErr != nil || strings.TrimSpace(logicalKey) == "" {
+			if logicalErr != nil {
+				a.logErrorf("check skill updates failed: skillID=%s name=%s err=%v", sk.ID, sk.Name, logicalErr)
+			}
+			continue
 		}
+		group := groups[logicalKey]
+		if group == nil {
+			group = &updateGroup{LogicalKey: logicalKey}
+			groups[logicalKey] = group
+		}
+		group.Skills = append(group.Skills, sk)
 	}
-	a.logDebugf("check skill updates completed")
+
+	checker := update.NewChecker("", a.proxyHTTPClient())
+	for _, group := range groups {
+		reference := group.Skills[0]
+		a.logInfof("check skill updates started: logicalKey=%s instances=%d", group.LogicalKey, len(group.Skills))
+		result, err := checker.Check(a.ctx, reference)
+		checkedAt := time.Now()
+		if err != nil {
+			a.logErrorf("check skill updates failed: logicalKey=%s repo=%s subPath=%s err=%v", group.LogicalKey, reference.SourceURL, reference.SourceSubPath, err)
+			for _, sk := range group.Skills {
+				sk.LastCheckedAt = checkedAt
+				_ = a.storage.SaveMeta(sk)
+			}
+			continue
+		}
+		for _, sk := range group.Skills {
+			sk.LastCheckedAt = checkedAt
+			if result.LatestSHA != "" && result.LatestSHA != sk.SourceSHA {
+				sk.LatestSHA = result.LatestSHA
+			} else {
+				sk.LatestSHA = ""
+			}
+			_ = a.storage.SaveMeta(sk)
+			if sk.LatestSHA != "" {
+				a.hub.Publish(notify.Event{
+					Type: notify.EventUpdateAvailable,
+					Payload: notify.UpdateAvailablePayload{
+						SkillID:    sk.ID,
+						SkillName:  sk.Name,
+						CurrentSHA: sk.SourceSHA,
+						LatestSHA:  result.LatestSHA,
+					},
+				})
+			}
+		}
+		a.logInfof("check skill updates completed: logicalKey=%s latestSHA=%s", group.LogicalKey, result.LatestSHA)
+	}
+	a.logInfof("check skill updates completed")
 	return nil
 }
 
@@ -1433,10 +1494,9 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 		return nil, err
 	}
 	maxDepth := a.repoScanMaxDepth()
-	existing, _ := a.storage.ListAll()
-	importedNames := map[string]bool{}
-	for _, sk := range existing {
-		importedNames[sk.Name] = true
+	_, installedIndex, err := a.installedIndex()
+	if err != nil {
+		return nil, err
 	}
 	var all []coregit.StarSkill
 	for _, r := range repos {
@@ -1445,10 +1505,7 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 			source, _ = coregit.RepoSource(r.URL)
 		}
 		skills, _ := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
-		for i := range skills {
-			skills[i].Imported = importedNames[skills[i].Name]
-		}
-		all = append(all, skills...)
+		all = append(all, resolveStarSkills(skills, installedIndex)...)
 	}
 	if all == nil {
 		return []coregit.StarSkill{}, nil
@@ -1462,10 +1519,9 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 		return nil, err
 	}
 	maxDepth := a.repoScanMaxDepth()
-	existing, _ := a.storage.ListAll()
-	importedNames := map[string]bool{}
-	for _, sk := range existing {
-		importedNames[sk.Name] = true
+	_, installedIndex, err := a.installedIndex()
+	if err != nil {
+		return nil, err
 	}
 	for _, r := range repos {
 		if !coregit.SameRepo(r.URL, repoURL) {
@@ -1479,9 +1535,7 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 		if err != nil {
 			return nil, err
 		}
-		for i := range skills {
-			skills[i].Imported = importedNames[skills[i].Name]
-		}
+		skills = resolveStarSkills(skills, installedIndex)
 		if skills == nil {
 			return []coregit.StarSkill{}, nil
 		}
@@ -1577,9 +1631,17 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	if repoLocalDir == "" {
 		return fmt.Errorf("starred repo not found: %s", repoURL)
 	}
+	_, installedIndex, err := a.installedIndex()
+	if err != nil {
+		return err
+	}
 	for _, skillPath := range skillPaths {
 		subPath, _ := filepath.Rel(repoLocalDir, skillPath)
 		subPath = filepath.ToSlash(subPath)
+		logicalKey := skillkey.GitFromRepoURLOrEmpty(canonicalRepoURL, subPath)
+		if installedIndex.IsInstalled(filepath.Base(skillPath), logicalKey) {
+			continue
+		}
 		sk, err := a.storage.Import(skillPath, category, skill.SourceGitHub, canonicalRepoURL, subPath)
 		if err == skill.ErrSkillExists {
 			continue

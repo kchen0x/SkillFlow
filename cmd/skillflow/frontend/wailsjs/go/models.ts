@@ -154,7 +154,10 @@ export namespace git {
 	    repoUrl: string;
 	    repoName: string;
 	    source: string;
+	    logicalKey: string;
+	    installed: boolean;
 	    imported: boolean;
+	    updatable: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new StarSkill(source);
@@ -168,7 +171,10 @@ export namespace git {
 	        this.repoUrl = source["repoUrl"];
 	        this.repoName = source["repoName"];
 	        this.source = source["source"];
+	        this.logicalKey = source["logicalKey"];
+	        this.installed = source["installed"];
 	        this.imported = source["imported"];
+	        this.updatable = source["updatable"];
 	    }
 	}
 	export class StarredRepo {
@@ -220,7 +226,9 @@ export namespace install {
 	export class SkillCandidate {
 	    Name: string;
 	    Path: string;
+	    LogicalKey: string;
 	    Installed: boolean;
+	    Updatable: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SkillCandidate(source);
@@ -230,7 +238,9 @@ export namespace install {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
 	        this.Path = source["Path"];
+	        this.LogicalKey = source["LogicalKey"];
 	        this.Installed = source["Installed"];
+	        this.Updatable = source["Updatable"];
 	    }
 	}
 
@@ -262,11 +272,57 @@ export namespace main {
 	        this.canAutoUpdate = source["canAutoUpdate"];
 	    }
 	}
+	export class PushConflict {
+	    skillId?: string;
+	    skillName: string;
+	    skillPath?: string;
+	    toolName: string;
+	    targetPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PushConflict(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.skillId = source["skillId"];
+	        this.skillName = source["skillName"];
+	        this.skillPath = source["skillPath"];
+	        this.toolName = source["toolName"];
+	        this.targetPath = source["targetPath"];
+	    }
+	}
+	export class ToolSkillCandidate {
+	    name: string;
+	    path: string;
+	    logicalKey: string;
+	    installed: boolean;
+	    imported: boolean;
+	    updatable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ToolSkillCandidate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.logicalKey = source["logicalKey"];
+	        this.installed = source["installed"];
+	        this.imported = source["imported"];
+	        this.updatable = source["updatable"];
+	    }
+	}
 	export class ToolSkillEntry {
 	    name: string;
 	    path: string;
-	    inPush: boolean;
-	    inScan: boolean;
+	    logicalKey: string;
+	    installed: boolean;
+	    imported: boolean;
+	    updatable: boolean;
+	    pushed: boolean;
+	    seenInToolScan: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolSkillEntry(source);
@@ -276,8 +332,12 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.path = source["path"];
-	        this.inPush = source["inPush"];
-	        this.inScan = source["inScan"];
+	        this.logicalKey = source["logicalKey"];
+	        this.installed = source["installed"];
+	        this.imported = source["imported"];
+	        this.updatable = source["updatable"];
+	        this.pushed = source["pushed"];
+	        this.seenInToolScan = source["seenInToolScan"];
 	    }
 	}
 

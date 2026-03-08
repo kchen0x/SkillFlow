@@ -31,7 +31,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
       setCandidates(skills)
       setCategories(catList)
       if (catList.length > 0 && category === '') setCategory(catList[0])
-      setSelected(new Set(skills.filter((x: any) => !x.Installed).map((x: any) => x.Name)))
+      setSelected(new Set(skills.filter((x: any) => !x.Installed).map((x: any) => x.Path)))
       setScannedOnce(true)
       if (skills.length === 0) setScanError(t('github.noSkills'))
     } catch (e: any) {
@@ -45,7 +45,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
     setInstalling(true)
     setInstallError('')
     try {
-      const toInstall = candidates.filter(c => selected.has(c.Name))
+      const toInstall = candidates.filter(c => selected.has(c.Path))
       await InstallFromGitHub(url, toInstall, category)
       onDone()
     } catch (e: any) {
@@ -55,9 +55,9 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
     }
   }
 
-  const toggle = (name: string) => {
+  const toggle = (path: string) => {
     const next = new Set(selected)
-    next.has(name) ? next.delete(name) : next.add(name)
+    next.has(path) ? next.delete(path) : next.add(path)
     setSelected(next)
   }
 
@@ -113,7 +113,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
           >
             {candidates.map(c => (
               <label
-                key={c.Name}
+                key={c.Path}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors"
                 style={{ color: 'var(--text-primary)' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)' }}
@@ -121,8 +121,8 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
               >
                 <input
                   type="checkbox"
-                  checked={selected.has(c.Name)}
-                  onChange={() => toggle(c.Name)}
+                  checked={selected.has(c.Path)}
+                  onChange={() => toggle(c.Path)}
                   style={{ accentColor: 'var(--accent-secondary)' }}
                 />
                 <span className="text-sm flex-1">{c.Name}</span>

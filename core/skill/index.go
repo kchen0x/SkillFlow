@@ -1,0 +1,139 @@
+package skill
+
+import (
+	"strings"
+
+	"github.com/shinerio/skillflow/core/skillkey"
+)
+
+type CorrelationStatus struct {
+	LogicalKey    string                 `json:"logicalKey,omitempty"`
+	MatchStrength skillkey.MatchStrength `json:"matchStrength,omitempty"`
+	Installed     bool                   `json:"installed"`
+	Imported      bool                   `json:"imported"`
+	Updatable     bool                   `json:"updatable"`
+}
+
+type InstalledIndex struct {
+	byLogical map[string]*installedGroup
+	byName    map[string][]*installedGroup
+}
+
+type installedGroup struct {
+	LogicalKey string
+	Name       string
+	Skills     []*Skill
+}
+
+func BuildInstalledIndex(skills []*Skill) *InstalledIndex {
+	idx := &InstalledIndex{
+		byLogical: map[string]*installedGroup{},
+		byName:    map[string][]*installedGroup{},
+	}
+
+	groupsByID := map[string]*installedGroup{}
+	for _, sk := range skills {
+		if sk == nil {
+			continue
+		}
+		logicalKey, _ := LogicalKey(sk)
+		groupID := logicalKey
+		if groupID == "" {
+			groupID = "instance:" + sk.ID
+		}
+
+		group := groupsByID[groupID]
+		if group == nil {
+			group = &installedGroup{
+				LogicalKey: logicalKey,
+				Name:       sk.Name,
+			}
+			groupsByID[groupID] = group
+			if logicalKey != "" {
+				idx.byLogical[logicalKey] = group
+			}
+		}
+		group.Skills = append(group.Skills, sk)
+		if strings.TrimSpace(group.Name) == "" {
+			group.Name = sk.Name
+		}
+	}
+
+	for _, group := range groupsByID {
+		nameKey := normalizedName(group.Name)
+		if nameKey == "" {
+			continue
+		}
+		idx.byName[nameKey] = append(idx.byName[nameKey], group)
+	}
+
+	return idx
+}
+
+func (idx *InstalledIndex) Resolve(name, logicalKey string) CorrelationStatus {
+	if idx == nil {
+		return CorrelationStatus{LogicalKey: logicalKey}
+	}
+
+	if logicalKey != "" {
+		if group, ok := idx.byLogical[logicalKey]; ok {
+			return group.status(logicalKey, skillkey.MatchStrengthLogical)
+		}
+	}
+
+	nameKey := normalizedName(name)
+	if nameKey == "" {
+		return CorrelationStatus{LogicalKey: logicalKey}
+	}
+	if groups := idx.byName[nameKey]; len(groups) == 1 {
+		return groups[0].status(coalesceLogicalKey(logicalKey, groups[0].LogicalKey), skillkey.MatchStrengthFallback)
+	}
+
+	return CorrelationStatus{LogicalKey: logicalKey}
+}
+
+func (idx *InstalledIndex) IsInstalled(name, logicalKey string) bool {
+	return idx.Resolve(name, logicalKey).Installed
+}
+
+func LogicalKey(sk *Skill) (string, error) {
+	if sk == nil {
+		return "", nil
+	}
+	if sk.IsGitHub() {
+		if logicalKey, err := skillkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath); err == nil && strings.TrimSpace(logicalKey) != "" {
+			return logicalKey, nil
+		}
+	}
+	if strings.TrimSpace(sk.Path) == "" {
+		return "", nil
+	}
+	return skillkey.ContentFromDir(sk.Path)
+}
+
+func (g *installedGroup) status(logicalKey string, matchStrength skillkey.MatchStrength) CorrelationStatus {
+	status := CorrelationStatus{
+		LogicalKey:    logicalKey,
+		MatchStrength: matchStrength,
+		Installed:     true,
+		Imported:      true,
+	}
+	for _, sk := range g.Skills {
+		if sk != nil && sk.HasUpdate() {
+			status.Updatable = true
+			break
+		}
+	}
+	return status
+}
+
+func normalizedName(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func coalesceLogicalKey(primary, secondary string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return secondary
+}

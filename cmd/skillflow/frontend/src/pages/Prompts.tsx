@@ -15,6 +15,7 @@ import PromptCategoryPanel from '../components/PromptCategoryPanel'
 import AnimatedDialog from '../components/ui/AnimatedDialog'
 import SkillListControls from '../components/SkillListControls'
 import { useLanguage } from '../contexts/LanguageContext'
+import { copyTextToClipboard } from '../lib/clipboard'
 import { SkillSortOrder } from '../lib/skillList'
 import { matchesKeywordExpression } from '../lib/search'
 
@@ -164,7 +165,7 @@ export default function Prompts() {
 
   const handleCopy = async (item: PromptItem) => {
     try {
-      await navigator.clipboard.writeText(item.content)
+      await copyTextToClipboard(item.content)
       setCopiedName(item.name)
       window.setTimeout(() => {
         setCopiedName(current => current === item.name ? null : current)

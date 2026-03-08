@@ -246,7 +246,7 @@ export default function Dashboard() {
           ) : (
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               {[
-                { icon: <RefreshCw size={14} />, label: t('dashboard.update'), onClick: () => CheckUpdates() },
+                { icon: <RefreshCw size={14} />, label: t('dashboard.update'), onClick: async () => { await CheckUpdates(); load() } },
                 { icon: <CheckSquare size={14} />, label: t('dashboard.batchDelete'), onClick: toggleSelectMode },
                 { icon: <FolderOpen size={14} />, label: t('dashboard.import'), onClick: handleImportButton },
               ].map(btn => (
