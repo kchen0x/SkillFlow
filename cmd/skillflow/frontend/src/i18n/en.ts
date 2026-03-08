@@ -99,6 +99,7 @@ export const en = {
   'syncPull.done': 'Pull complete ✓',
   'syncPull.noMatch': 'No Skills match the current filter',
   'syncPull.searchPlaceholder': 'Search scanned Skills...',
+  'syncPull.selectNotImported': 'Select Not Imported',
   'starred.title': 'Starred Repos',
   'starred.addRepo': 'Add Repository',
   'starred.updateAll': 'Update All',

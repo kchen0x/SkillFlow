@@ -27,7 +27,7 @@ export default function SyncPush() {
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [skills, setSkills] = useState<any[]>([])
-  const [scope, setScope] = useState<Scope>('auto')
+  const [scope, setScope] = useState<Scope>('manual')
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
   const [conflicts, setConflicts] = useState<any[]>([])
   const [pushing, setPushing] = useState(false)
@@ -136,7 +136,6 @@ export default function SyncPush() {
 
   const setManualScope = () => {
     setScope('manual')
-    setSelectedSkills(new Set(visibleSkills.map((skill: any) => skill.id)))
   }
 
   const getNavStyle = (isActive: boolean) => isActive ? {
@@ -245,18 +244,18 @@ export default function SyncPush() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <button
-                onClick={setAutoScope}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${scope === 'auto' ? 'font-semibold -translate-y-px' : ''}`}
-                style={getScopeButtonStyle(scope === 'auto')}
-              >
-                {selectedCategory === null ? t('syncPush.pushAll') : t('syncPush.pushCategory')}
-              </button>
-              <button
                 onClick={setManualScope}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${scope === 'manual' ? 'font-semibold -translate-y-px' : ''}`}
                 style={getScopeButtonStyle(scope === 'manual')}
               >
                 {t('syncPush.manualSelect')}
+              </button>
+              <button
+                onClick={setAutoScope}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${scope === 'auto' ? 'font-semibold -translate-y-px' : ''}`}
+                style={getScopeButtonStyle(scope === 'auto')}
+              >
+                {selectedCategory === null ? t('syncPush.pushAll') : t('syncPush.pushCategory')}
               </button>
             </div>
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{scopeLabel}</p>

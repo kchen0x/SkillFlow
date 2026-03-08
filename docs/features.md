@@ -157,8 +157,8 @@ Two push behaviors based on the current left-sidebar category filter:
 
 | Mode | Behavior |
 |------|----------|
+| **Manual Select** | Shown to the left of **Push All / Push Current Category** and selected by default; uses the current sidebar filter as the candidate list, shows selection checkboxes on cards, and allows select-all for the visible list |
 | **Push All / Push Current Category** | If the sidebar is on **All**, pushes the whole library; if a category is selected, pushes only that category |
-| **Manual** | Uses the current sidebar filter as the candidate list, shows selection checkboxes on cards, and allows select-all for the visible list |
 
 ### Missing Directory Check
 
@@ -213,7 +213,8 @@ Imports skills from external tool directories into your library.
 - Search field filters the scanned skill list by name in real time.
 - Two-button sort toggle switches between **A-Z** and **Z-A** ordering by skill name.
 - Each card shows only the state relevant to pull decisions: whether that skill is already imported into My Skills.
-- Select individual skills or use "Select All / Deselect All" for the currently visible list.
+- After each scan, all skills start unchecked by default.
+- Select individual skills, use "Select All / Deselect All" for the currently visible list, or use the matching square-style "Select Not Imported" toggle to bulk-select only visible skills that are not yet imported.
 - Selection and pull conflicts are tracked by scanned path, so same-name skills from different tool folders remain independent.
 
 ### Bottom Bar
@@ -517,7 +518,7 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Status strip** | Source badge plus any coexisting state badges (for example Update available + pushed-tool icons) rendered in one compact single-line header row on the card |
+| **Status strip** | Source badge plus any coexisting state badges (for example Update available + pushed-tool icons) rendered in one compact header row on the card; the strip prefers a single line when space allows, then automatically wraps instead of clipping badges away when cards become too narrow |
 | **Skill name** | Two-line clamp; padded to avoid overlap with action buttons |
 | **Open folder button** (FolderOpenDot, top-right) | `OpenPath(skill.path)` — opens directory in OS file manager; visible on hover only |
 | **Select checkbox** (top-left) | Visible in select mode only |
@@ -530,7 +531,7 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Status strip** | Source badge plus only the page-selected state badges (for example imported, update-available, or pushed-tool icons) rendered together in one compact header row |
+| **Status strip** | Source badge plus only the page-selected state badges (for example imported, update-available, or pushed-tool icons) rendered together in one compact header row; cards keep imported and pushed-tool indicators on the same line when they fit, and automatically wrap them to a second row when the card width is too tight |
 | **Pushed-tool indicator** | Shows the exact tools whose `PushDir` already contains this logical skill via small tool-brand icons without an extra arrow prefix; overflows collapse into a compact count badge while hover still reveals the full list |
 | **Skill name** | Two-line clamp |
 | **Subtitle** | Category or repo name |

@@ -43,7 +43,7 @@ export default function SyncPull() {
     try {
       const skills = await ScanToolSkills(toolName)
       setScanned(skills ?? [])
-      setSelected(new Set((skills ?? []).filter((s: any) => !s.imported).map((s: any) => s.path)))
+      setSelected(new Set())
       setScannedOnce(true)
     } catch (e: any) {
       setScanError(String(e?.message ?? e))
@@ -82,11 +82,31 @@ export default function SyncPull() {
       return next
     })
   }
+  const toggleNotImported = () => {
+    if (visibleNotImportedPaths.length === 0) return
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (visibleNotImportedPaths.every(path => next.has(path))) {
+        visibleNotImportedPaths.forEach(path => next.delete(path))
+      } else {
+        visibleNotImportedPaths.forEach(path => next.add(path))
+      }
+      return next
+    })
+  }
+
 
   const filteredScanned = useMemo(
     () => filterAndSortSkills(scanned, search, sortOrder, skill => skill.name ?? ''),
     [scanned, search, sortOrder],
   )
+
+  const visibleNotImportedPaths = useMemo(
+    () => filteredScanned.filter((skill: any) => !skill.imported).map((skill: any) => skill.path),
+    [filteredScanned],
+  )
+
+  const allNotImportedSelected = visibleNotImportedPaths.length > 0 && visibleNotImportedPaths.every(path => selected.has(path))
 
   const allSelected = filteredScanned.length > 0 && filteredScanned.every((skill: any) => selected.has(skill.path))
 
@@ -209,12 +229,11 @@ export default function SyncPull() {
                 placeholder={t('syncPull.searchPlaceholder')}
                 resultLabel={t('common.showingNSkills', { count: filteredScanned.length })}
               />
-
               <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                     {t('syncPull.selectSkills')}
-                    <span className="ml-1" style={{ color: 'var(--text-disabled)' }}>（{selected.size}/{filteredScanned.length}）</span>
+                    <span className="ml-1" style={{ color: 'var(--text-disabled)' }}>({selected.size}/{filteredScanned.length})</span>
                   </p>
                   <button
                     onClick={toggleAll}
@@ -225,6 +244,19 @@ export default function SyncPull() {
                   >
                     {allSelected ? <CheckSquare size={13} /> : <Square size={13} />}
                     {allSelected ? t('common.deselectAll') : t('common.selectAll')}
+                  </button>
+                  <button
+                    onClick={toggleNotImported}
+                    disabled={visibleNotImportedPaths.length === 0}
+                    className="flex items-center gap-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ color: 'var(--text-muted)' }}
+                    onMouseEnter={e => {
+                      if (!e.currentTarget.disabled) e.currentTarget.style.color = 'var(--text-primary)'
+                    }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+                  >
+                    {allNotImportedSelected ? <CheckSquare size={13} /> : <Square size={13} />}
+                    {t('syncPull.selectNotImported')}
                   </button>
                 </div>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>

@@ -21,18 +21,51 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **Skill Library** | Central store with categories, real-time search, A-Z / Z-A sorting, drag-and-drop organization, batch delete, and safe empty-category deletion |
 | **Prompt Library** | Save reusable prompts as synced `prompts/<category>/<name>/system.md` cards, with required unique names, optional descriptions, categories, import/export, drag-to-category management, one-click copy, and `and` / `or` keyword search |
 | **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones with one click; candidate status badges follow the configurable per-page card-visibility policy, and same-name candidates stay distinct by normalized repo source + subpath |
-| **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; each page exposes only the statuses relevant to that workflow, and pushed tools are rendered as compact icon lists with hover-to-reveal full tool sets |
+| **Cross-tool Sync** | Push or pull skills to/from Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, or any custom tool; Push defaults to Manual Select, Pull starts with everything unchecked and adds a quick "Select Not Imported" checkbox, and pushed tools are rendered as compact icon lists with hover-to-reveal full tool sets |
 | **Starred Repos** | Watch Git repos and recursively browse/import nested repo skills without adding them to your library first; repo skill cards show imported and pushed-tool state with imported correlation keyed by normalized repo source + subpath, and builtin starter repos (`anthropics/skills`, `ComposioHQ/awesome-claude-skills`, `affaan-m/everything-claude-code`) are seeded only on first initialization (won't be re-added after user deletion) |
 | **Cloud Backup** | Mirror your library to Aliyun OSS, AWS S3, Azure Blob Storage, Google Cloud Storage, Tencent COS, Huawei OBS, or any Git repo, with a custom object-storage remote path preview, provider-specific saved profiles, local-only sensitive credentials, a manual Git-conflict folder shortcut, and a backup page that shows only per-run changed files |
 | **Update Checker** | Detects new commits for installed GitHub-sourced skills by normalized repo source + subpath, clears stale update markers when already current, and supports one-click instance updates |
 | **App Auto-Update** | Modal dialog notifies when a new version is available; Windows supports one-click download and restart; macOS links to GitHub Releases; users can skip a version to suppress future startup prompts |
 | **Background Tray** | Clicking the window close button keeps the app running in background; on macOS it hides the Dock icon and leaves a monochrome menu-bar status icon, on Windows it stays in the notification area |
-| **Desktop Shell** | Fixed sidebar with the branded SkillFlow title, app icon, quick language/theme toggles, feedback entry, and local-only startup window sizing that restores the last manual size on each device |
+| **Desktop Shell** | Fixed sidebar with the branded SkillFlow title, app icon, quick language/theme toggles, and feedback entry |
+| **Startup Window** | Each device stores the most recently adjusted window size in local `config_local.json` and restores it on the next launch; the first launch still calculates the window size adaptively for the current display |
 | **Settings** | Per-tool enable/disable, push & scan paths, custom tools, proxy configuration, configurable local/remote scan depth, per-page card-status visibility, and local-only path/proxy settings kept out of sync, plus a `Ctrl+S` / `Cmd+S` save shortcut on the Settings page; folder pickers reopen at the current location |
 | **Bilingual UI** | Switch the frontend instantly between Chinese and English from the sidebar or Settings; language preference is stored locally |
 | **Dark / Young / Light Themes** | Switch between a refined graphite Dark theme, a softened paper-blue Young theme evolved from the legacy Light palette, and a new Messor-inspired Light theme; persisted across restarts |
 
 For a complete description of every button, dialog, and interaction, see **[docs/features.md](docs/features.md)**.
+
+## SkillFlow vs cc-switch
+
+### 1. Core Positioning
+
+| | SkillFlow | cc-switch |
+|---|---|---|
+| **Goal** | A dedicated management tool for Skills (prompt libraries) | An all-in-one configuration assistant for AI CLI tools |
+| **Core Value** | Discovery, installation, sync, and cloud backup for Skills. **Philosophy**: lightweight tooling focused on accumulating and managing skill assets | One-stop management for provider API switching + MCP + Skills + Prompts |
+
+### 2. Supported Tools
+
+| | SkillFlow | cc-switch |
+|---|---|---|
+| **Claude Code** | ✅ | ✅ |
+| **OpenCode** | ✅ | ✅ |
+| **Codex** | ✅ | ✅ |
+| **Gemini CLI** | ✅ | ✅ |
+| **OpenClaw** | ✅ | ❌ |
+| **Custom Tools** | ✅ | ❌ |
+
+### 3. Feature Comparison
+
+| | SkillFlow | cc-switch |
+|---|---|---|
+| **Local Skill Library Management** | ✅ A local central library with categories, search, drag-and-drop organization, and batch delete | ❌ No local library concept; installs/uninstalls directly into `~/.claude/skills/` |
+| **Install Sources** | GitHub repo cloning, **Starred Repos** browsing, manual import, and scanning skills built into tools | GitHub repo scanning (3 preconfigured repos + custom repos) |
+| **GitHub Install** | ✅ Deep recursive scan with conflict handling | ✅ Basic support (preconfigured repos + custom repos) |
+| **Cross-tool Sync** | ✅ Fine-grained control with per-skill conflict handling | ✅ Basic, mainly one-click install to `~/.claude/skills/` |
+| **Update Detection** | ✅ Detects new commits per skill | ❌ |
+| **Cloud Backup** | ✅ Multiple object storage providers / Git | ❌ (relies on external cloud-drive directory sync) |
+| **Starred Repo Browsing** | ✅ | ❌ |
 
 ## Supported Tools
 

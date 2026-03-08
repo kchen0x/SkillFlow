@@ -21,9 +21,9 @@
 | **Skill 库** | 集中存储所有 Skills，支持分类管理、实时搜索、首字母正序 / 逆序排序、拖拽整理、批量删除，以及仅允许删除空分类的安全删除逻辑 |
 | **提示词库** | 将可复用的 prompt 保存为同步的 `prompts/<category>/<name>/system.md` 卡片，支持必填唯一名称、可选描述、分类、导入导出、拖拽移动分类、一键复制，以及 `and` / `or` 关键字搜索 |
 | **GitHub 安装** | 克隆任意仓库，递归发现仓库内嵌套的 Skill 候选项，并一键选择安装；候选项状态 badge 会遵循可配置的页面级显示策略，同名候选项仍按规范化仓库来源 + 子路径准确区分 |
-| **跨工具同步** | 推送或拉取 Skills 到/从 Claude Code、OpenCode、Codex、Gemini CLI、OpenClaw 及自定义工具；每个页面只展示当前流程真正相关的状态，已推送工具会以紧凑图标列表显示并支持悬浮查看完整列表 |
+| **跨工具同步** | 推送或拉取 Skills 到/从 Claude Code、OpenCode、Codex、Gemini CLI、OpenClaw 及自定义工具；推送页默认进入“手动选择”，拉取页默认全部不选并新增“选择未导入”复选框，已推送工具会以紧凑图标列表显示并支持悬浮查看完整列表 |
 | **仓库收藏** | 关注 Git 仓库，无需导入即可递归浏览和使用仓库内嵌套的 Skills；仓库 Skill 卡片显示“已导入 / 已推送工具”状态，其中导入关联仍按规范化仓库来源 + 子路径完成；内置起始仓库（`anthropics/skills`、`ComposioHQ/awesome-claude-skills`、`affaan-m/everything-claude-code`）仅在首次初始化时注入，用户删除后不会在后续启动被自动加回 |
-| **云端备份** | 将 Skill 库镜像至阿里云 OSS、腾讯云 COS、华为云 OBS 或任意 Git 仓库，支持自定义对象存储远程路径预览、按服务商独立保存配置、敏感云凭据仅保存在本地、Git 冲突时的手动处理入口，以及只显示每次备份/恢复实际改动文件的结果页 |
+| **云端备份** | 将 Skill 库镜像至阿里云 OSS、AWS S3、Azure Blob Storage、Google Cloud Storage、腾讯云 COS、华为云 OBS 或任意 Git 仓库，支持自定义对象存储远程路径预览、按服务商独立保存配置、敏感云凭据仅保存在本地、Git 冲突时的手动处理入口，以及只显示每次备份/恢复实际改动文件的结果页 |
 | **更新检测** | 按规范化仓库来源 + 子路径检测已安装 GitHub Skill 的新提交；实例已是最新时会自动清理过期更新标记，并支持一键更新 |
 | **应用自动更新** | 弹出模态对话框提示新版本；Windows 支持一键下载并重启；macOS 链接至 GitHub Releases 页面；用户可跳过当前版本以抑制后续启动弹窗 |
 | **托盘驻留** | 点击窗口关闭按钮后应用继续在后台运行；macOS 会隐藏 Dock 图标并仅保留顶部状态栏黑白图标入口，Windows 驻留系统托管区 |
@@ -34,6 +34,40 @@
 | **Dark / Young / Light 主题** | 可在重做后的石墨灰 Dark、由旧浅色主题演化而来的纸感浅蓝 Young，以及参考 Messor 配色的新 Light 主题之间切换；跨会话持久化 |
 
 每个按钮、对话框和交互的完整说明，请查阅 **[docs/features_zh.md](docs/features_zh.md)**。
+
+
+## SkillFlow vs cc-switch
+
+### 1. 核心定位
+
+| | SkillFlow | cc-switch |
+|---|---|---|
+| **目标** | Skill（提示词库）的专项管理工具 | AI CLI 工具的全能配置助手 |
+| **核心价值** | Skill的发现、安装、同步、云备份。**理念**：轻工具，注重资产（skil）的积累和管理 | Provider API切换 + MCP + Skills + Prompts 一站式管理 |
+
+
+### 2. 支持工具
+
+| | SkillFlow | cc-switch |
+|---|---|---|
+| **Claude Code** | ✅ | ✅ |
+| **OpenCode** | ✅ | ✅ |
+| **Codex** | ✅ | ✅ |
+| **Gemini CLI** | ✅ | ✅ |
+| **OpenClaw** | ✅ | ❌ |
+| **自定义工具** | ✅ | ❌ |
+
+### 3. 功能横向比较
+
+| | SkillFlow | cc-switch |
+|---|---|---|
+| **本地 Skill 库管理** | ✅ 本地Central Library（支持分类、搜索、拖拽排序、批量删除） | ❌ 无本地库概念，接安装/卸载到 `~/.claude/skills/`，无独立本地库概念 |
+| **安装来源** | GitHub 仓库克隆，支持 **Starred Repos** 浏览</br> 手动导入 </br> 扫描工具内置skill | GitHub 仓库扫描（3 个预配置仓库 + 自定义） |
+| **GitHub 安装** | ✅ 深度递归扫描，冲突处理 | ✅ 基础（预配置仓库 + 自定义） |
+| **跨工具同步** | ✅ 精细控制（per-skill 冲突处理） | ✅ 基础（一键安装到 ~/.claude/skills/） |
+| **更新检测** | ✅ 逐 Skill 检测新 commit | ❌ |
+| **云备份** | ✅ 多对象存储/Git | ❌（靠外部云盘目录同步） |
+| **收藏仓库浏览** | ✅ | ❌ |
 
 ## 支持的工具
 
@@ -63,7 +97,7 @@ my-skill/
 - 每个云服务商都会保留各自独立的存储桶 / 路径 / 凭据配置，因此在设置中切换服务商时不会覆盖其他服务商的值。
 - Git 同步发生冲突时，可以选择以本地为准、以远端为准，或直接打开备份文件夹手动处理。
 - 备份页只显示当前应用会话中最近一次备份或恢复实际涉及的改动文件，不再展示远端全量文件列表。
-- 阿里云 OSS、腾讯云 COS、华为云 OBS 使用相同的存储桶 + Endpoint 配置模型。对于腾讯云 COS，存储桶始终来自单独的存储桶输入框，而 Endpoint 字段既可填写纯 Endpoint host，也可填写完整桶域名/URL，并会按用户输入形式保留。
+- 阿里云 OSS、腾讯云 COS、华为云 OBS 使用相同的存储桶 + Endpoint 配置模型。AWS S3 使用存储桶 + Region。Azure Blob Storage 使用容器名称（填写在存储桶字段）+ Account Name + Account Key，并支持可选的 Service URL。Google Cloud Storage 使用存储桶 + Service Account JSON 或本地密钥文件路径。对于腾讯云 COS，存储桶始终来自单独的存储桶输入框，而 Endpoint 字段既可填写纯 Endpoint host，也可填写完整桶域名/URL，并会按用户输入形式保留。
 - 应用数据目录：
   - macOS：`~/Library/Application Support/SkillFlow/`
   - Windows：`%USERPROFILE%\.skillflow\`
@@ -72,12 +106,12 @@ my-skill/
 
 | 云服务商 | 必填字段 |
 |----------|---------|
-| AWS S3 | Access Key ID锛堜粎鏈湴锛夈€丼ecret Access Key锛堜粎鏈湴锛夈€丷egion锛堝悓姝ワ級 |
-| Azure Blob Storage | 瀛樺偍瀹瑰櫒鍚嶇О锛堝瓨鍌ㄦ《瀛楁锛屽悓姝ワ級銆丄ccount Name锛堝悓姝ワ級銆丄ccount Key锛堜粎鏈湴锛夈€丼ervice URL锛堝悓姝ワ紝鍙€夛級 |
-| Google Cloud Storage | Service Account JSON 鎴栨湰鍦板瘑閽ユ枃浠惰矾寰勶紙浠呮湰鍦帮級 |
 | 阿里云 OSS | Access Key ID（仅本地）、Access Key Secret（仅本地）、Endpoint（同步） |
+| AWS S3 | Access Key ID（仅本地）、Secret Access Key（仅本地）、Region（同步） |
+| Azure Blob Storage | 容器名称（存储桶字段，同步）、Account Name（同步）、Account Key（仅本地）、Service URL（同步，可选） |
+| Google Cloud Storage | Service Account JSON 或本地密钥文件路径（仅本地） |
 | 腾讯云 COS | SecretId（仅本地）、SecretKey（仅本地）、Endpoint（同步） |
-| 华为云 OBS | Access Key（仅本地）、Secret Key（仅本地）、Endpoint（同步） |
+| 华为云 OBS | Access Key ID（仅本地）、Secret Access Key（仅本地）、Endpoint（同步） |
 | Git 仓库 | 仓库地址（同步）、分支（同步）、用户名（同步）、访问令牌（仅本地） |
 
 ## 参与贡献 & 自行构建
