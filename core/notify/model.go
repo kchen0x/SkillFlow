@@ -1,5 +1,7 @@
 package notify
 
+import "github.com/shinerio/skillflow/core/backup"
+
 type EventType string
 
 const (
@@ -32,6 +34,10 @@ type BackupProgressPayload struct {
 	FilesTotal    int    `json:"filesTotal"`
 	FilesUploaded int    `json:"filesUploaded"`
 	CurrentFile   string `json:"currentFile"`
+}
+
+type BackupCompletedPayload struct {
+	Files []backup.RemoteFile `json:"files"`
 }
 
 type UpdateAvailablePayload struct {

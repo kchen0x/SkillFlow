@@ -46,6 +46,9 @@ type App struct {
 	gitConflictMu      sync.Mutex
 	gitConflictPending bool
 	stopAutoSync       chan struct{}
+
+	backupResultMu   sync.RWMutex
+	lastBackupResult []backup.RemoteFile
 }
 
 const defaultCategoryName = "Default"
@@ -200,6 +203,11 @@ func (a *App) runBackup() error {
 			return err
 		}
 	}
+	changes, currentSnapshot, err := a.computeBackupChanges(backupDir)
+	if err != nil {
+		a.logErrorf("backup failed: compute changes failed: %v", err)
+		return err
+	}
 	if isGit {
 		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
 	}
@@ -223,12 +231,17 @@ func (a *App) runBackup() error {
 		a.hub.Publish(notify.Event{Type: notify.EventBackupFailed, Payload: err.Error()})
 		return err
 	} else {
+		if saveErr := backup.SaveSnapshot(a.backupSnapshotPath(), currentSnapshot); saveErr != nil {
+			a.logErrorf("backup snapshot save failed: %v", saveErr)
+		}
+		a.setLastBackupResult(changes)
+		payload := notify.BackupCompletedPayload{Files: changes}
 		a.logInfof("backup completed")
 		if isGit {
 			a.clearGitConflictPending()
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted})
+			a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: payload})
 		}
-		a.hub.Publish(notify.Event{Type: notify.EventBackupCompleted})
+		a.hub.Publish(notify.Event{Type: notify.EventBackupCompleted, Payload: payload})
 		return nil
 	}
 }
@@ -392,6 +405,40 @@ func (a *App) prepareGitBackupRoot(cfg config.AppConfig) (string, error) {
 		a.logInfof("git backup root preparation completed: moved legacy nested git dir from skills storage to %s", migratedTo)
 	}
 	return backupDir, nil
+}
+
+func (a *App) backupSnapshotPath() string {
+	return filepath.Join(config.AppDataDir(), "cache", "backup_snapshot.json")
+}
+
+func (a *App) computeBackupChanges(backupDir string) ([]backup.RemoteFile, backup.Snapshot, error) {
+	previousSnapshot, err := backup.LoadSnapshot(a.backupSnapshotPath())
+	if err != nil {
+		return nil, nil, err
+	}
+	currentSnapshot, err := backup.BuildSnapshot(backupDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return backup.DiffSnapshots(previousSnapshot, currentSnapshot), currentSnapshot, nil
+}
+
+func (a *App) setLastBackupResult(files []backup.RemoteFile) {
+	copied := make([]backup.RemoteFile, len(files))
+	copy(copied, files)
+
+	a.backupResultMu.Lock()
+	a.lastBackupResult = copied
+	a.backupResultMu.Unlock()
+}
+
+func (a *App) GetLastBackupChanges() []backup.RemoteFile {
+	a.backupResultMu.RLock()
+	defer a.backupResultMu.RUnlock()
+
+	copied := make([]backup.RemoteFile, len(a.lastBackupResult))
+	copy(copied, a.lastBackupResult)
+	return copied
 }
 
 func (a *App) gitProxyURL() string {
