@@ -514,7 +514,7 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Status strip** | Source badge plus any coexisting state badges (for example Update available + pushed-tool icons) rendered in one wrapped header area |
+| **Status strip** | Source badge plus any coexisting state badges (for example Update available + pushed-tool icons) rendered in one compact single-line header row on the card |
 | **Skill name** | Two-line clamp; padded to avoid overlap with action buttons |
 | **Open folder button** (FolderOpenDot, top-right) | `OpenPath(skill.path)` — opens directory in OS file manager; visible on hover only |
 | **Select checkbox** (top-left) | Visible in select mode only |
@@ -527,8 +527,8 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Status strip** | Source badge plus only the page-selected state badges (for example imported, update-available, or pushed-tool icons) rendered together |
-| **Pushed-tool indicator** | Shows the exact tools whose `PushDir` already contains this logical skill via small tool-brand icons; overflows collapse into an ellipsis with hover-to-reveal full list |
+| **Status strip** | Source badge plus only the page-selected state badges (for example imported, update-available, or pushed-tool icons) rendered together in one compact header row |
+| **Pushed-tool indicator** | Shows the exact tools whose `PushDir` already contains this logical skill via small tool-brand icons without an extra arrow prefix; overflows collapse into a compact count badge while hover still reveals the full list |
 | **Skill name** | Two-line clamp |
 | **Subtitle** | Category or repo name |
 | **Copy button** (hover) | Same clipboard behavior |

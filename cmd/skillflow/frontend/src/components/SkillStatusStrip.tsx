@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react'
-import { ArrowUpFromLine } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
 import { useLanguage } from '../contexts/LanguageContext'
 
@@ -16,6 +15,7 @@ interface Props {
   pushedTools?: string[]
   maxVisiblePushedTools?: number
   className?: string
+  singleLine?: boolean
 }
 
 const toneStyles: Record<BadgeTone, CSSProperties> = {
@@ -51,41 +51,45 @@ export default function SkillStatusStrip({
   pushedTools = [],
   maxVisiblePushedTools = 3,
   className = '',
+  singleLine = false,
 }: Props) {
   const { t } = useLanguage()
   const visibleTools = pushedTools.slice(0, maxVisiblePushedTools)
-  const hasOverflow = pushedTools.length > visibleTools.length
+  const overflowCount = pushedTools.length - visibleTools.length
 
   return (
-    <div className={`flex min-h-[1.75rem] flex-wrap content-start items-start gap-1.5 overflow-hidden ${className}`}>
+    <div
+      className={`flex min-h-[1.75rem] gap-1.5 overflow-hidden ${
+        singleLine ? 'flex-nowrap items-center' : 'flex-wrap content-start items-start'
+      } ${className}`}
+    >
       {badges.map((badge) => (
         <span
           key={badge.key}
-          className="inline-flex max-w-full items-center rounded-full px-1.5 py-0.5 text-[11px] leading-4"
+          className="inline-flex max-w-full shrink-0 items-center rounded-full px-1.5 py-0.5 text-[11px] leading-4"
           style={toneStyles[badge.tone]}
           title={badge.label}
         >
-          <span className="truncate max-w-[9rem]">{badge.label}</span>
+          <span className="max-w-[9rem] truncate">{badge.label}</span>
         </span>
       ))}
 
       {pushedTools.length > 0 && (
         <span
-          className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] leading-4"
+          className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] leading-4"
           style={toneStyles.success}
           title={t('common.pushedToTools', { tools: pushedTools.join(', ') })}
         >
-          <ArrowUpFromLine size={11} className="shrink-0" />
-          <span className="flex items-center gap-1 overflow-hidden">
+          <span className="flex min-w-0 items-center gap-1 overflow-hidden">
             {visibleTools.map((toolName) => (
               <ToolIcon key={toolName} name={toolName} size={16} />
             ))}
-            {hasOverflow && (
+            {overflowCount > 0 && (
               <span
-                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] font-semibold"
+                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold"
                 style={{ background: 'rgba(255,255,255,0.4)', color: 'currentColor' }}
               >
-                …
+                +{overflowCount}
               </span>
             )}
           </span>

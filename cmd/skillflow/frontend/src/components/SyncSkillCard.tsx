@@ -154,14 +154,15 @@ export default function SyncSkillCard({
           )}
         </div>
 
-        <div className="flex items-start gap-1.5 pr-14">
+        <div className="flex items-center gap-1.5 pr-14">
           {source === 'github'
-            ? <Github size={12} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />
-            : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />}
+            ? <Github size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
+            : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />}
           <SkillStatusStrip
             badges={badges}
             pushedTools={showPushedTools ? pushedTools : []}
             className="flex-1 min-w-0"
+            singleLine
           />
         </div>
 
