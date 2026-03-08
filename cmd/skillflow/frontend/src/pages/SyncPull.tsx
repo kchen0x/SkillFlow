@@ -6,10 +6,12 @@ import { ArrowDownToLine, AlertCircle, X, CheckSquare, Square } from 'lucide-rea
 import { ToolIcon } from '../config/toolIcons'
 import SkillListControls from '../components/SkillListControls'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 
 export default function SyncPull() {
   const { t } = useLanguage()
+  const visibility = useSkillStatusVisibility('pullFromTool')
   const defaultCategory = 'Default'
   const [tools, setTools] = useState<any[]>([])
   const [selectedTool, setSelectedTool] = useState('')
@@ -242,7 +244,7 @@ export default function SyncPull() {
                       name={sk.name}
                       path={sk.path}
                       imported={sk.imported}
-                      updatable={sk.updatable}
+                      showImported={visibility.includes('imported')}
                       selected={selected.has(sk.path)}
                       onToggle={() => toggle(sk.path)}
                     />

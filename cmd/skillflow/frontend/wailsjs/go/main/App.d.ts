@@ -88,7 +88,7 @@ export function ListPrompts():Promise<Array<prompt.Prompt>>;
 
 export function ListRepoStarSkills(arg1:string):Promise<Array<git.StarSkill>>;
 
-export function ListSkills():Promise<Array<skill.Skill>>;
+export function ListSkills():Promise<Array<main.InstalledSkillEntry>>;
 
 export function ListStarredRepos():Promise<Array<git.StarredRepo>>;
 

@@ -93,11 +93,34 @@ export namespace config {
 	        this.custom = source["custom"];
 	    }
 	}
+	export class SkillStatusVisibilityConfig {
+	    mySkills: string[];
+	    myTools: string[];
+	    pushToTool: string[];
+	    pullFromTool: string[];
+	    starredRepos: string[];
+	    githubInstall: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillStatusVisibilityConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mySkills = source["mySkills"];
+	        this.myTools = source["myTools"];
+	        this.pushToTool = source["pushToTool"];
+	        this.pullFromTool = source["pullFromTool"];
+	        this.starredRepos = source["starredRepos"];
+	        this.githubInstall = source["githubInstall"];
+	    }
+	}
 	export class AppConfig {
 	    skillsStorageDir: string;
 	    defaultCategory: string;
 	    logLevel: string;
 	    repoScanMaxDepth: number;
+	    skillStatusVisibility: SkillStatusVisibilityConfig;
 	    tools: ToolConfig[];
 	    cloud: CloudConfig;
 	    cloudProfiles?: Record<string, CloudProviderConfig>;
@@ -114,6 +137,7 @@ export namespace config {
 	        this.defaultCategory = source["defaultCategory"];
 	        this.logLevel = source["logLevel"];
 	        this.repoScanMaxDepth = source["repoScanMaxDepth"];
+	        this.skillStatusVisibility = this.convertValues(source["skillStatusVisibility"], SkillStatusVisibilityConfig);
 	        this.tools = this.convertValues(source["tools"], ToolConfig);
 	        this.cloud = this.convertValues(source["cloud"], CloudConfig);
 	        this.cloudProfiles = this.convertValues(source["cloudProfiles"], CloudProviderConfig, true);
@@ -142,6 +166,7 @@ export namespace config {
 	
 	
 	
+	
 
 }
 
@@ -158,6 +183,8 @@ export namespace git {
 	    installed: boolean;
 	    imported: boolean;
 	    updatable: boolean;
+	    pushed: boolean;
+	    pushedTools: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new StarSkill(source);
@@ -175,6 +202,8 @@ export namespace git {
 	        this.installed = source["installed"];
 	        this.imported = source["imported"];
 	        this.updatable = source["updatable"];
+	        this.pushed = source["pushed"];
+	        this.pushedTools = source["pushedTools"];
 	    }
 	}
 	export class StarredRepo {
@@ -229,6 +258,8 @@ export namespace install {
 	    LogicalKey: string;
 	    Installed: boolean;
 	    Updatable: boolean;
+	    Pushed: boolean;
+	    PushedTools: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SkillCandidate(source);
@@ -241,6 +272,8 @@ export namespace install {
 	        this.LogicalKey = source["LogicalKey"];
 	        this.Installed = source["Installed"];
 	        this.Updatable = source["Updatable"];
+	        this.Pushed = source["Pushed"];
+	        this.PushedTools = source["PushedTools"];
 	    }
 	}
 
@@ -272,6 +305,36 @@ export namespace main {
 	        this.canAutoUpdate = source["canAutoUpdate"];
 	    }
 	}
+	export class InstalledSkillEntry {
+	    id: string;
+	    name: string;
+	    path: string;
+	    category: string;
+	    source: string;
+	    sourceSha: string;
+	    latestSha: string;
+	    updatable: boolean;
+	    pushed: boolean;
+	    pushedTools: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new InstalledSkillEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.category = source["category"];
+	        this.source = source["source"];
+	        this.sourceSha = source["sourceSha"];
+	        this.latestSha = source["latestSha"];
+	        this.updatable = source["updatable"];
+	        this.pushed = source["pushed"];
+	        this.pushedTools = source["pushedTools"];
+	    }
+	}
 	export class PushConflict {
 	    skillId?: string;
 	    skillName: string;
@@ -299,6 +362,8 @@ export namespace main {
 	    installed: boolean;
 	    imported: boolean;
 	    updatable: boolean;
+	    pushed: boolean;
+	    pushedTools: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolSkillCandidate(source);
@@ -312,6 +377,8 @@ export namespace main {
 	        this.installed = source["installed"];
 	        this.imported = source["imported"];
 	        this.updatable = source["updatable"];
+	        this.pushed = source["pushed"];
+	        this.pushedTools = source["pushedTools"];
 	    }
 	}
 	export class ToolSkillEntry {
@@ -322,6 +389,7 @@ export namespace main {
 	    imported: boolean;
 	    updatable: boolean;
 	    pushed: boolean;
+	    pushedTools: string[];
 	    seenInToolScan: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -337,6 +405,7 @@ export namespace main {
 	        this.imported = source["imported"];
 	        this.updatable = source["updatable"];
 	        this.pushed = source["pushed"];
+	        this.pushedTools = source["pushedTools"];
 	        this.seenInToolScan = source["seenInToolScan"];
 	    }
 	}

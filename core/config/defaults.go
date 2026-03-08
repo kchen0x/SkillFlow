@@ -76,11 +76,12 @@ func DefaultConfig(dataDir string) AppConfig {
 		})
 	}
 	return AppConfig{
-		SkillsStorageDir: filepath.Join(dataDir, "skills"),
-		DefaultCategory:  "Default",
-		LogLevel:         DefaultLogLevel,
-		RepoScanMaxDepth: DefaultRepoScanMaxDepth,
-		Tools:            tools,
-		Cloud:            CloudConfig{RemotePath: DefaultCloudRemotePath},
+		SkillsStorageDir:      filepath.Join(dataDir, "skills"),
+		DefaultCategory:       "Default",
+		LogLevel:              DefaultLogLevel,
+		RepoScanMaxDepth:      DefaultRepoScanMaxDepth,
+		SkillStatusVisibility: DefaultSkillStatusVisibility(),
+		Tools:                 tools,
+		Cloud:                 CloudConfig{RemotePath: DefaultCloudRemotePath},
 	}
 }

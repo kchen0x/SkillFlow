@@ -14,12 +14,14 @@ import { ToolIcon } from '../config/toolIcons'
 import AnimatedDialog from '../components/ui/AnimatedDialog'
 import SkillListControls from '../components/SkillListControls'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 
 type Scope = 'auto' | 'manual'
 
 export default function SyncPush() {
   const { t } = useLanguage()
+  const visibility = useSkillStatusVisibility('pushToTool')
   const [tools, setTools] = useState<any[]>([])
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [categories, setCategories] = useState<string[]>([])
@@ -44,22 +46,22 @@ export default function SyncPush() {
   }, [])
 
   const filteredSkills = useMemo(
-    () => skills.filter((skill: any) => selectedCategory === null || skill.Category === selectedCategory),
+    () => skills.filter((skill: any) => selectedCategory === null || skill.category === selectedCategory),
     [skills, selectedCategory],
   )
 
   const visibleSkills = useMemo(
-    () => filterAndSortSkills(filteredSkills, search, sortOrder, skill => skill.Name ?? ''),
+    () => filterAndSortSkills(filteredSkills, search, sortOrder, skill => skill.name ?? ''),
     [filteredSkills, search, sortOrder],
   )
 
   const pushIDs = useMemo(() => {
     if (scope === 'manual') return Array.from(selectedSkills)
-    return visibleSkills.map((skill: any) => skill.ID)
+    return visibleSkills.map((skill: any) => skill.id)
   }, [scope, selectedSkills, visibleSkills])
 
   const pushCount = pushIDs.length
-  const allManualSelected = visibleSkills.length > 0 && visibleSkills.every((skill: any) => selectedSkills.has(skill.ID))
+  const allManualSelected = visibleSkills.length > 0 && visibleSkills.every((skill: any) => selectedSkills.has(skill.id))
 
   const scopeLabel = scope === 'manual'
     ? t('syncPush.scopeManual', { count: selectedSkills.size })
@@ -115,7 +117,7 @@ export default function SyncPush() {
   }
 
   const toggleAllManual = () => {
-    const visibleIDs = visibleSkills.map((skill: any) => skill.ID)
+    const visibleIDs = visibleSkills.map((skill: any) => skill.id)
     setSelectedSkills(prev => {
       const next = new Set(prev)
       if (visibleIDs.every(id => next.has(id))) {
@@ -134,7 +136,7 @@ export default function SyncPush() {
 
   const setManualScope = () => {
     setScope('manual')
-    setSelectedSkills(new Set(visibleSkills.map((skill: any) => skill.ID)))
+    setSelectedSkills(new Set(visibleSkills.map((skill: any) => skill.id)))
   }
 
   const getNavStyle = (isActive: boolean) => isActive ? {
@@ -160,7 +162,7 @@ export default function SyncPush() {
 
   useEffect(() => {
     if (scope !== 'manual') return
-    const visibleIDs = new Set(visibleSkills.map((skill: any) => skill.ID))
+    const visibleIDs = new Set(visibleSkills.map((skill: any) => skill.id))
     setSelectedSkills(prev => {
       const next = new Set([...prev].filter(id => visibleIDs.has(id)))
       return next.size === prev.size ? prev : next
@@ -277,16 +279,17 @@ export default function SyncPush() {
           <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
             {visibleSkills.map((skill: any) => (
               <SyncSkillCard
-                key={skill.ID}
-                id={skill.ID}
-                name={skill.Name}
-                subtitle={skill.Category || undefined}
-                source={skill.Source}
-                path={skill.Path}
-                updatable={!!skill.LatestSHA}
-                selected={scope === 'manual' && selectedSkills.has(skill.ID)}
+                key={skill.id}
+                id={skill.id}
+                name={skill.name}
+                subtitle={skill.category || undefined}
+                source={skill.source}
+                path={skill.path}
+                pushedTools={skill.pushedTools}
+                showPushedTools={visibility.includes('pushedTools')}
+                selected={scope === 'manual' && selectedSkills.has(skill.id)}
                 showSelection={scope === 'manual'}
-                onToggle={() => toggleSkill(skill.ID)}
+                onToggle={() => toggleSkill(skill.id)}
               />
             ))}
           </div>

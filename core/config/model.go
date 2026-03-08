@@ -43,15 +43,16 @@ type ProxyConfig struct {
 }
 
 type AppConfig struct {
-	SkillsStorageDir     string                         `json:"skillsStorageDir"`
-	DefaultCategory      string                         `json:"defaultCategory"`
-	LogLevel             string                         `json:"logLevel"` // "debug" | "info" | "error"
-	RepoScanMaxDepth     int                            `json:"repoScanMaxDepth"`
-	Tools                []ToolConfig                   `json:"tools"`
-	Cloud                CloudConfig                    `json:"cloud"`
-	CloudProfiles        map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
-	Proxy                ProxyConfig                    `json:"proxy"`
-	SkippedUpdateVersion string                         `json:"skippedUpdateVersion,omitempty"` // version tag to suppress startup update prompt
+	SkillsStorageDir      string                         `json:"skillsStorageDir"`
+	DefaultCategory       string                         `json:"defaultCategory"`
+	LogLevel              string                         `json:"logLevel"` // "debug" | "info" | "error"
+	RepoScanMaxDepth      int                            `json:"repoScanMaxDepth"`
+	SkillStatusVisibility SkillStatusVisibilityConfig    `json:"skillStatusVisibility"`
+	Tools                 []ToolConfig                   `json:"tools"`
+	Cloud                 CloudConfig                    `json:"cloud"`
+	CloudProfiles         map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
+	Proxy                 ProxyConfig                    `json:"proxy"`
+	SkippedUpdateVersion  string                         `json:"skippedUpdateVersion,omitempty"` // version tag to suppress startup update prompt
 }
 
 const (

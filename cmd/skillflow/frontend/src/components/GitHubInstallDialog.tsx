@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { ScanGitHub, InstallFromGitHub, ListCategories } from '../../wailsjs/go/main/App'
 import { Github, X, AlertCircle } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import AnimatedDialog from './ui/AnimatedDialog'
+import SkillStatusStrip from './SkillStatusStrip'
 
 interface Props { onClose: () => void; onDone: () => void }
 
 export default function GitHubInstallDialog({ onClose, onDone }: Props) {
   const { t } = useLanguage()
+  const visibility = useSkillStatusVisibility('githubInstall')
   const [url, setUrl] = useState('')
   const [candidates, setCandidates] = useState<any[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -125,19 +128,29 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
                   onChange={() => toggle(c.Path)}
                   style={{ accentColor: 'var(--accent-secondary)' }}
                 />
-                <span className="text-sm flex-1">{c.Name}</span>
-                {c.Installed && (
-                  <span
-                    className="text-xs px-2 py-0.5 rounded"
-                    style={{
-                      background: 'rgba(14, 165, 233, 0.15)',
-                      color: 'var(--accent-secondary)',
-                      border: '1px solid rgba(14, 165, 233, 0.25)',
-                    }}
-                  >
-                    {t('github.installed')}
-                  </span>
-                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{c.Name}</p>
+                  <p className="truncate text-xs" style={{ color: 'var(--text-muted)' }} title={c.Path}>{c.Path}</p>
+                </div>
+                <div className="max-w-[48%] shrink-0">
+                  <SkillStatusStrip
+                    className="justify-end"
+                    maxVisiblePushedTools={2}
+                    badges={[
+                      ...(visibility.includes('imported') && c.Installed ? [{
+                        key: 'imported',
+                        label: t('common.imported'),
+                        tone: 'success' as const,
+                      }] : []),
+                      ...(visibility.includes('updatable') && c.Updatable ? [{
+                        key: 'updatable',
+                        label: t('common.updatable'),
+                        tone: 'warning' as const,
+                      }] : []),
+                    ]}
+                    pushedTools={visibility.includes('pushedTools') ? (c.PushedTools ?? []) : []}
+                  />
+                </div>
               </label>
             ))}
           </div>

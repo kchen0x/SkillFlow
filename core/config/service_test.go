@@ -19,6 +19,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 	assert.Equal(t, "Default", cfg.DefaultCategory)
 	assert.Equal(t, config.DefaultLogLevel, cfg.LogLevel)
 	assert.Equal(t, config.DefaultRepoScanMaxDepth, cfg.RepoScanMaxDepth)
+	assert.Equal(t, config.DefaultSkillStatusVisibility(), cfg.SkillStatusVisibility)
 	assert.NotEmpty(t, cfg.Tools)
 }
 
@@ -58,6 +59,44 @@ func TestSkippedUpdateVersionPersistsInSharedConfig(t *testing.T) {
 	loaded, err := svc.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "v9.9.9", loaded.SkippedUpdateVersion)
+}
+
+func TestSkillStatusVisibilityPersistsInSharedConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.SkillStatusVisibility.MySkills = []string{config.SkillStatusPushedTools}
+	cfg.SkillStatusVisibility.PullFromTool = []string{}
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, []string{config.SkillStatusPushedTools}, loaded.SkillStatusVisibility.MySkills)
+	assert.Equal(t, []string{}, loaded.SkillStatusVisibility.PullFromTool)
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sharedData), "skillStatusVisibility")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(localData), "skillStatusVisibility")
+}
+
+func TestSkillStatusVisibilityDropsStatusesOutsidePageDefaultPolicy(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.SkillStatusVisibility.PullFromTool = []string{config.SkillStatusImported, config.SkillStatusPushedTools}
+	cfg.SkillStatusVisibility.PushToTool = []string{config.SkillStatusImported, config.SkillStatusPushedTools}
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, []string{config.SkillStatusImported}, loaded.SkillStatusVisibility.PullFromTool)
+	assert.Equal(t, []string{config.SkillStatusPushedTools}, loaded.SkillStatusVisibility.PushToTool)
 }
 
 func TestSaveAndLoadConfigNormalizesLogLevel(t *testing.T) {

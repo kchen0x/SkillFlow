@@ -4,6 +4,7 @@ import { OpenPath, GetSkillMeta, GetSkillMetaByPath, ReadSkillFileContent } from
 import { useLanguage } from '../contexts/LanguageContext'
 import { copyTextToClipboard } from '../lib/clipboard'
 import SkillTooltip from './SkillTooltip'
+import SkillStatusStrip, { type SkillStatusBadge } from './SkillStatusStrip'
 
 interface Props {
   name: string
@@ -14,13 +15,25 @@ interface Props {
   showSelection?: boolean
   imported?: boolean
   updatable?: boolean
+  pushedTools?: string[]
+  showImported?: boolean
+  showUpdatable?: boolean
+  showPushedTools?: boolean
   selected: boolean
   onToggle: () => void
 }
 
 export default function SyncSkillCard({
   name, subtitle, source, path, id,
-  showSelection = true, imported, updatable, selected, onToggle,
+  showSelection = true,
+  imported,
+  updatable,
+  pushedTools = [],
+  showImported = false,
+  showUpdatable = false,
+  showPushedTools = false,
+  selected,
+  onToggle,
 }: Props) {
   const { t } = useLanguage()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -80,6 +93,23 @@ export default function SyncSkillCard({
   }
 
   const skillInfo = { Name: name, Source: source }
+  const badges: SkillStatusBadge[] = [
+    ...(sourceLabel ? [{
+      key: `source:${sourceLabel}`,
+      label: sourceLabel,
+      tone: source === 'github' ? ('accent' as const) : ('muted' as const),
+    }] : []),
+    ...(showImported && imported ? [{
+      key: 'imported',
+      label: t('common.imported'),
+      tone: 'success' as const,
+    }] : []),
+    ...(showUpdatable && updatable ? [{
+      key: 'updatable',
+      label: t('common.updatable'),
+      tone: 'warning' as const,
+    }] : []),
+  ]
 
   return (
     <>
@@ -124,53 +154,18 @@ export default function SyncSkillCard({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 pr-14 flex-wrap">
+        <div className="flex items-start gap-1.5 pr-14">
           {source === 'github'
-            ? <Github size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
-            : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />}
-          {sourceLabel && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded max-w-[72px] truncate"
-              style={source === 'github' ? {
-                background: 'rgba(14, 165, 233, 0.15)',
-                color: 'var(--accent-secondary)',
-                border: '1px solid rgba(14, 165, 233, 0.25)',
-              } : {
-                background: 'var(--bg-overlay)',
-                color: 'var(--text-muted)',
-              }}
-              title={sourceLabel}
-            >
-              {sourceLabel}
-            </span>
-          )}
-          {imported && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{
-                background: 'rgba(52, 211, 153, 0.15)',
-                color: 'var(--color-success)',
-                border: '1px solid rgba(52, 211, 153, 0.25)',
-              }}
-            >
-              {t('github.installed')}
-            </span>
-          )}
-          {updatable && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{
-                background: 'rgba(251, 191, 36, 0.16)',
-                color: 'var(--color-warning)',
-                border: '1px solid rgba(251, 191, 36, 0.28)',
-              }}
-            >
-              {t('common.updatable')}
-            </span>
-          )}
+            ? <Github size={12} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />
+            : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />}
+          <SkillStatusStrip
+            badges={badges}
+            pushedTools={showPushedTools ? pushedTools : []}
+            className="flex-1 min-w-0"
+          />
         </div>
 
-        <p className="text-sm font-medium leading-snug truncate pr-5" style={{ color: 'var(--text-primary)' }}>{name}</p>
+        <p className="min-h-[2.75rem] pr-5 text-sm font-medium leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>{name}</p>
 
         {subtitle && (
           <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>

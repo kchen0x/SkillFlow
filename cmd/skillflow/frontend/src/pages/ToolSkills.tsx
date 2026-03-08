@@ -2,14 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { GetEnabledTools, ListToolSkills, DeleteToolSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
 import { ToolIcon } from '../config/toolIcons'
 import SkillTooltip from '../components/SkillTooltip'
+import SkillStatusStrip from '../components/SkillStatusStrip'
 import SkillListControls from '../components/SkillListControls'
 import { copyTextToClipboard } from '../lib/clipboard'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 
 export default function ToolSkills() {
   const { t } = useLanguage()
+  const visibility = useSkillStatusVisibility('myTools')
   const [tools, setTools] = useState<any[]>([])
   const [selectedTool, setSelectedTool] = useState<string>('')
   const [skills, setSkills] = useState<any[]>([])
@@ -252,6 +255,10 @@ export default function ToolSkills() {
                         path={sk.path}
                         imported={sk.imported}
                         updatable={sk.updatable}
+                        pushedTools={(sk.pushedTools ?? []).filter((toolName: string) => toolName !== selectedTool)}
+                        showImported={visibility.includes('imported')}
+                        showUpdatable={visibility.includes('updatable')}
+                        showPushedTools={visibility.includes('pushedTools')}
                         canDelete
                         selectMode={selectMode}
                         selected={selectedPaths.has(sk.path)}
@@ -274,6 +281,7 @@ export default function ToolSkills() {
                     </span>
                   )}
                 </div>
+                <p className="mb-4 pl-5 text-xs" style={{ color: 'var(--text-muted)' }}>{t('toolSkills.scanPathHint')}</p>
                 {scanOnlySkills.length === 0 ? (
                   <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noScanSkills')}</p>
                 ) : filteredScanOnlySkills.length === 0 ? (
@@ -287,6 +295,10 @@ export default function ToolSkills() {
                         path={sk.path}
                         imported={sk.imported}
                         updatable={sk.updatable}
+                        pushedTools={(sk.pushedTools ?? []).filter((toolName: string) => toolName !== selectedTool)}
+                        showImported={visibility.includes('imported')}
+                        showUpdatable={visibility.includes('updatable')}
+                        showPushedTools={visibility.includes('pushedTools')}
                         canDelete={false}
                         selectMode={false}
                         selected={false}
@@ -310,6 +322,10 @@ interface ToolSkillCardProps {
   path: string
   imported?: boolean
   updatable?: boolean
+  pushedTools?: string[]
+  showImported: boolean
+  showUpdatable: boolean
+  showPushedTools: boolean
   canDelete: boolean
   selectMode: boolean
   selected: boolean
@@ -317,7 +333,21 @@ interface ToolSkillCardProps {
   onDelete: () => void
 }
 
-function ToolSkillCard({ name, path, imported, updatable, canDelete, selectMode, selected, onToggleSelect, onDelete }: ToolSkillCardProps) {
+function ToolSkillCard({
+  name,
+  path,
+  imported,
+  updatable,
+  pushedTools = [],
+  showImported,
+  showUpdatable,
+  showPushedTools,
+  canDelete,
+  selectMode,
+  selected,
+  onToggleSelect,
+  onDelete,
+}: ToolSkillCardProps) {
   const { t } = useLanguage()
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -428,35 +458,25 @@ function ToolSkillCard({ name, path, imported, updatable, canDelete, selectMode,
           </div>
         )}
 
-        <div className={`flex items-center gap-2 flex-wrap pr-12 ${selectMode && canDelete ? 'pl-5' : ''}`}>
-          {imported && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{
-                background: 'rgba(52, 211, 153, 0.15)',
-                color: 'var(--color-success)',
-                border: '1px solid rgba(52, 211, 153, 0.25)',
-              }}
-            >
-              {t('github.installed')}
-            </span>
-          )}
-          {updatable && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{
-                background: 'rgba(251, 191, 36, 0.16)',
-                color: 'var(--color-warning)',
-                border: '1px solid rgba(251, 191, 36, 0.28)',
-              }}
-            >
-              {t('common.updatable')}
-            </span>
-          )}
-        </div>
+        <SkillStatusStrip
+          className={`${selectMode && canDelete ? 'pl-5' : ''} pr-12`}
+          badges={[
+            ...(showImported && imported ? [{
+              key: 'imported',
+              label: t('common.imported'),
+              tone: 'success' as const,
+            }] : []),
+            ...(showUpdatable && updatable ? [{
+              key: 'updatable',
+              label: t('common.updatable'),
+              tone: 'warning' as const,
+            }] : []),
+          ]}
+          pushedTools={showPushedTools ? pushedTools : []}
+        />
 
         <p
-          className={`font-medium text-sm truncate mt-1 ${selectMode && canDelete ? 'pl-5' : ''} ${!selectMode ? 'pr-5' : ''}`}
+          className={`mt-1 min-h-[2.75rem] font-medium text-sm leading-snug line-clamp-2 ${selectMode && canDelete ? 'pl-5' : ''} ${!selectMode ? 'pr-5' : ''}`}
           style={{ color: 'var(--text-primary)' }}
         >
           {name}

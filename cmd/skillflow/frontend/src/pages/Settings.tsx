@@ -1,11 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { GetConfig, SaveConfig, ListCloudProviders, AddCustomTool, RemoveCustomTool, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir } from '../../wailsjs/go/main/App'
-import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check } from 'lucide-react'
+import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star, Github } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
+import { useSkillStatusVisibilityContext } from '../contexts/SkillStatusVisibilityContext'
 import { type Theme } from '../hooks/useTheme'
 import { useLanguage } from '../contexts/LanguageContext'
 import type { TranslationKey } from '../i18n'
+import {
+  DEFAULT_SKILL_STATUS_VISIBILITY,
+  normalizeSkillStatusVisibility,
+  toggleSkillStatusForPage,
+  type SkillStatusKey,
+  type SkillStatusPageKey,
+} from '../lib/skillStatusVisibility'
 
 type Tab = 'tools' | 'cloud' | 'general' | 'network'
 type ProxyMode = 'none' | 'system' | 'manual'
@@ -30,6 +38,18 @@ type ThemeOption = {
   description: string
   icon: ReactNode
   preview: ThemePreviewPalette
+}
+
+type StatusPageOption = {
+  key: SkillStatusPageKey
+  label: TranslationKey
+  description: TranslationKey
+  icon: ReactNode
+}
+
+type StatusOption = {
+  key: SkillStatusKey
+  label: TranslationKey
 }
 
 const CLOUD_PROVIDER_LABEL_KEYS: Record<string, TranslationKey> = {
@@ -67,6 +87,19 @@ const defaultRepoScanMaxDepth = 5
 const minRepoScanMaxDepth = 1
 const maxRepoScanMaxDepth = 20
 const CLOUD_REMOTE_ROOT_DIR = 'skillflow'
+const STATUS_PAGE_OPTIONS: StatusPageOption[] = [
+  { key: 'mySkills', label: 'settings.statusPageMySkills', description: 'settings.statusPageMySkillsDesc', icon: <Package size={14} /> },
+  { key: 'myTools', label: 'settings.statusPageMyTools', description: 'settings.statusPageMyToolsDesc', icon: <Wrench size={14} /> },
+  { key: 'pushToTool', label: 'settings.statusPagePushToTool', description: 'settings.statusPagePushToToolDesc', icon: <ArrowUpFromLine size={14} /> },
+  { key: 'pullFromTool', label: 'settings.statusPagePullFromTool', description: 'settings.statusPagePullFromToolDesc', icon: <ArrowDownToLine size={14} /> },
+  { key: 'starredRepos', label: 'settings.statusPageStarredRepos', description: 'settings.statusPageStarredReposDesc', icon: <Star size={14} /> },
+  { key: 'githubInstall', label: 'settings.statusPageGitHubInstall', description: 'settings.statusPageGitHubInstallDesc', icon: <Github size={14} /> },
+]
+const STATUS_OPTIONS: StatusOption[] = [
+  { key: 'imported', label: 'settings.statusImported' },
+  { key: 'updatable', label: 'settings.statusUpdatable' },
+  { key: 'pushedTools', label: 'settings.statusPushedTools' },
+]
 
 function clampRepoScanMaxDepth(value: number) {
   if (!Number.isFinite(value) || value < minRepoScanMaxDepth) {
@@ -304,9 +337,39 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
   )
 }
 
+function StatusToggleChip({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-lg px-3 py-1.5 text-sm transition-all duration-200"
+      style={active ? {
+        background: 'var(--accent-glow)',
+        color: 'var(--text-primary)',
+        border: '1px solid var(--border-accent)',
+        boxShadow: 'var(--glow-accent-sm)',
+      } : {
+        background: 'var(--bg-elevated)',
+        color: 'var(--text-secondary)',
+        border: '1px solid var(--border-base)',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 export default function SettingsPage() {
   const { theme, setTheme } = useThemeContext()
   const { t, lang, setLang } = useLanguage()
+  const { syncFromConfig } = useSkillStatusVisibilityContext()
   const [tab, setTab] = useState<Tab>('tools')
   const [cfg, setCfg] = useState<any>(null)
   const [providers, setProviders] = useState<any[]>([])
@@ -406,9 +469,13 @@ export default function SettingsPage() {
 
   const save = async () => {
     setSaving(true)
-    const nextCfg = syncActiveCloudProfile(cfg)
+    const nextCfg = syncActiveCloudProfile({
+      ...cfg,
+      skillStatusVisibility: normalizeSkillStatusVisibility(cfg?.skillStatusVisibility),
+    })
     await SaveConfig(nextCfg)
     setCfg(nextCfg)
+    syncFromConfig(nextCfg)
     setSaving(false)
   }
 
@@ -483,6 +550,7 @@ export default function SettingsPage() {
   const proxyMode: ProxyMode = (cfg?.proxy?.Mode as ProxyMode) || 'none'
   const cloudRemotePathInput = getCloudRemotePathInputValue(cfg?.cloud?.remotePath)
   const cloudBackupPreviewPath = buildCloudBackupPreviewPath(cfg?.cloud?.bucketName, cfg?.cloud?.remotePath, t('settings.remotePathBucketPlaceholder'))
+  const statusVisibility = normalizeSkillStatusVisibility(cfg?.skillStatusVisibility)
 
   if (!cfg) return <div className="p-8" style={{ color: 'var(--text-muted)' }}>{t('common.loading')}</div>
 
@@ -854,6 +922,65 @@ export default function SettingsPage() {
             <p className="mt-2 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
               {t('settings.themeHint')}
             </p>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('settings.skillStatusVisibility')}</p>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>{t('settings.skillStatusVisibilityHint')}</p>
+              </div>
+            </div>
+            <div
+              className="overflow-hidden rounded-2xl"
+              style={{ border: '1px solid var(--border-base)', background: 'var(--bg-surface)' }}
+            >
+              {STATUS_PAGE_OPTIONS.map((page) => (
+                <div
+                  key={page.key}
+                  className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                  style={{
+                    borderBottom: page.key === STATUS_PAGE_OPTIONS[STATUS_PAGE_OPTIONS.length - 1].key ? 'none' : '1px solid var(--border-base)',
+                  }}
+                >
+                  <div className="min-w-0 flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl" style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border-base)',
+                      color: 'var(--accent-primary)',
+                    }}>
+                      {page.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t(page.label)}</p>
+                      <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>{t(page.description)}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    {STATUS_OPTIONS.filter((status) => DEFAULT_SKILL_STATUS_VISIBILITY[page.key].includes(status.key)).map((status) => (
+                      <StatusToggleChip
+                        key={`${page.key}-${status.key}`}
+                        active={statusVisibility[page.key].includes(status.key)}
+                        label={t(status.label)}
+                        onClick={() => setCfg((prev: any) => ({
+                          ...prev,
+                          skillStatusVisibility: (() => {
+                            const prevVisibility = normalizeSkillStatusVisibility(prev?.skillStatusVisibility)
+                            const currentlyEnabled = prevVisibility[page.key].includes(status.key)
+                            return toggleSkillStatusForPage(
+                              prevVisibility,
+                              page.key,
+                              status.key,
+                              !currentlyEnabled,
+                            )
+                          })(),
+                        }))}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div>

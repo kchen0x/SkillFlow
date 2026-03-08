@@ -19,6 +19,7 @@ import AnimatedDialog from '../components/ui/AnimatedDialog'
 import SkillListControls from '../components/SkillListControls'
 import { toastVariants } from '../lib/motionVariants'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 
 export default function StarredRepos() {
@@ -746,6 +747,7 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
   showRepo?: boolean
 }) {
   const { t } = useLanguage()
+  const visibility = useSkillStatusVisibility('starredRepos')
   if (skills.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
@@ -766,7 +768,9 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
             source={sourceType}
             subtitle={showRepo ? sk.repoName : undefined}
             imported={sk.imported}
-            updatable={sk.updatable}
+            pushedTools={sk.pushedTools}
+            showImported={visibility.includes('imported')}
+            showPushedTools={visibility.includes('pushedTools')}
             showSelection={selectMode}
             selected={selectedPaths.has(sk.path)}
             onToggle={() => selectMode && onToggle(sk.path)}

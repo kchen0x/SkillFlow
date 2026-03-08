@@ -40,7 +40,7 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
         ...其他文件
   meta/                ← JSON 附属文件（与 skills/ 同级）
     <uuid>.json        ← 每个 Skill 一个，包含 Skill 结构体
-  config.json          ← 可同步的应用配置（工具、当前云状态、按服务商分组的云端非敏感配置、代理）
+  config.json          ← 可同步的应用配置（工具、页面级卡片状态显示策略、当前云状态、按服务商分组的云端非敏感配置、代理）
   config_local.json    ← 仅本地保存的路径配置 + 按服务商分组的云端敏感凭据
   star_repos.json      ← StarredRepo[] 数组
   cache/               ← 收藏仓库的临时克隆目录
@@ -57,7 +57,7 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
 |----|------|
 | `core/skill` | `Skill` 模型、`Storage`（增删改查 + 分类）、`Validator`（skill.md 校验）、已安装 Skill 关联索引 |
 | `core/skillkey` | Git Skill 与本地 Skill 的稳定逻辑主键生成 |
-| `core/config` | `AppConfig` 模型、`Service`（JSON 加载/保存）、各工具的 `DefaultToolsDir()` |
+| `core/config` | `AppConfig` 模型、状态显示默认值/归一化、`Service`（JSON 加载/保存）、各工具的 `DefaultToolsDir()` |
 | `core/notify` | `Hub`（缓冲通道发布/订阅）、`EventType` 常量 |
 | `core/install` | `Installer` 接口、`GitHubInstaller`（扫描/下载/SHA）、`LocalInstaller` |
 | `core/sync` | `ToolAdapter` 接口、`FilesystemAdapter`（所有内置工具共用） |
@@ -140,7 +140,9 @@ SkillFlow 必须区分两类身份：
 - `pushed` 比“工具里某处存在”更窄，它特指配置的推送目标中存在。
 - `seenInToolScan` 是观察型状态，用来区分“工具里已经有这个 skill”和“SkillFlow 已经把它推过去了”。
 - 当推送目录也被扫描，或同一个逻辑 skill 同时存在于 push/scan 两处时，`pushed=true` 与 `seenInToolScan=true` 可以同时成立。
-- 当 `seenInToolScan=true` 且 `pushed=false` 时，界面通常应表达为“工具中已检测到”，而不是“已推送”。
+- 当 `seenInToolScan=true` 且 `pushed=false` 时，界面不能误写成“已推送”。当前 UI 通常通过把它放进“扫描路径”分区来表达，而不是在每张卡片上重复放一个 `detected` 徽章。
+- `pushedTools` 是卡片层的派生展示态：后端会聚合当前哪些工具的 `PushDir` 中包含该逻辑 skill，前端只消费这个结果并渲染图标。
+- 前端在真正渲染 badge 前，还会再应用 `AppConfig.SkillStatusVisibility` 里的页面级白名单。每个页面只能切换其默认策略里已有的状态，额外状态即使写进配置也会被归一化丢弃，因此同一套后端状态结果可以按页面稳定隐藏或显示，而不会被越权扩展。
 
 ### 冲突与去重规则
 
@@ -164,6 +166,8 @@ SkillFlow 必须区分两类身份：
 - 前端页面不应再基于 `Name` 或 `Path` 独自判断“是不是同一个 skill”“是否已导入”或“是否已推送”。
 - 后续若引入 catalog / aggregate 层，应将各模块中的不同表示统一归并到同一个逻辑 skill 记录下，并把已安装实例作为其子引用。
 - 当前实现使用 `core/skillkey` 生成逻辑主键，并通过 `core/skill.BuildInstalledIndex` 统一解析 GitHub、仓库收藏、工具扫描中的 `installed` / `imported` / `updatable` 状态。
+- 工具目录中的副本会通过内容哈希侧索引回连到 Git 安装实例，因此被推送出来的目录副本仍能解析回规范化的 `git:<repo-source>#<subpath>` 身份。
+- 后端返回给卡片的数据还会携带聚合后的 `pushedTools` 列表，以便前端在同一张卡片上稳定展示多个并存状态，而不必重新扫描工具目录。
 - Push 冲突现在按 skill-target 配对（`skill + tool + target path`）结构化返回，因此覆盖操作可以精确作用于单个冲突，而不再是按名称猜测的一整批。
 
 ### AppConfig（`core/config/model.go`）
@@ -200,11 +204,22 @@ type AppConfig struct {
     SkillsStorageDir     string        // 默认：~/.skillflow/skills
     DefaultCategory      string        // 默认："Default"
     LogLevel             string        // "debug" | "info" | "error"
+    RepoScanMaxDepth     int
+    SkillStatusVisibility SkillStatusVisibilityConfig // 共享的页面级卡片状态白名单
     Tools                []ToolConfig
     Cloud                CloudConfig
     CloudProfiles        map[string]CloudProviderConfig // 各服务商独立持久化的配置
     Proxy                ProxyConfig
     SkippedUpdateVersion string        // 用于抑制启动时更新提示的版本 tag
+}
+
+type SkillStatusVisibilityConfig struct {
+    MySkills      []string // 默认：可更新、已推送工具
+    MyTools       []string // 默认：已导入、可更新、已推送工具
+    PushToTool    []string // 默认：已推送工具
+    PullFromTool  []string // 默认：已导入
+    StarredRepos  []string // 默认：已导入、已推送工具
+    GitHubInstall []string // 默认：已导入、可更新、已推送工具
 }
 ```
 

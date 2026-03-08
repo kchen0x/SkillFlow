@@ -169,6 +169,11 @@ Before pushing, the app calls `CheckMissingPushDirs()`. If any target tool direc
 
 If a skill already exists in the target directory, a conflict dialog appears for each one (see [Conflict Dialog](#101-conflict-dialog)).
 
+### Skill Grid
+
+- Library cards surface only push-relevant state on this page: which tools already contain that logical skill in their `PushDir`.
+- The pushed-tool indicator uses compact tool icons with ellipsis overflow and hover-to-reveal full lists.
+
 ### Bottom Bar
 
 - **"Start Push (n)"** button — disabled when no tools selected or skill count is zero; shows "Pushing…" while in progress.
@@ -203,8 +208,7 @@ Imports skills from external tool directories into your library.
 - Appears after a successful scan.
 - Search field filters the scanned skill list by name in real time.
 - Two-button sort toggle switches between **A-Z** and **Z-A** ordering by skill name.
-- Each card shows whether the skill is already imported (green "Imported" badge), based on backend logical-key correlation rather than page-local name checks.
-- When the correlated installed instance has a newer remote SHA, the card also shows an amber **Update available** badge.
+- Each card shows only the state relevant to pull decisions: whether that skill is already imported into My Skills.
 - Select individual skills or use "Select All / Deselect All" for the currently visible list.
 - Selection and pull conflicts are tracked by scanned path, so same-name skills from different tool folders remain independent.
 
@@ -270,8 +274,9 @@ Browse and import skills directly from watched Git repositories without installi
 
 - Breadcrumb back button (ChevronLeft) to return to the repo grid.
 - Skills grid with same select/import behavior as flat view.
+- Repo skill cards show only imported and pushed-tool state on this page.
 - Imported badges are resolved from normalized repo source + subpath, so same-name skills from different repos are not conflated.
-- If the correlated installed instance is updatable, the skill card also shows an amber **Update available** badge so the repo view reflects installed-instance update state.
+- Pushed state is rendered as tool-brand icons with hover-to-reveal full tool lists.
 
 ### Repo Sync vs Installed Skill Update
 
@@ -459,6 +464,7 @@ For each built-in or custom tool:
 |---------|-------------|
 | **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
 | **Appearance theme** | Three visual presets shown as preview cards: **Dark** (default, refined graphite with muted mist-blue accents), **Young** (a softened paper-blue evolution of the previous sky-blue Light palette), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
+| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed tools; **My Tools** = imported + updatable + pushed tools; **Push to Tool** = pushed tools; **Pull from Tool** = imported; **Starred Repos** = imported + pushed tools; **GitHub Install** = imported + updatable + pushed tools |
 | **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button that opens at the current path or nearest existing parent |
 | **Skill recursive scan depth** | Maximum recursion depth used when scanning local tool directories, starred repos, and GitHub-install repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
@@ -498,9 +504,8 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Source badge** | GitHub (blue) or Manual (gray) with icon |
-| **Skill name** | Truncated; padded to avoid overlap with action buttons |
-| **Update dot** (red, top-right) | Shown when `hasUpdate = true` and not in select mode |
+| **Status strip** | Source badge plus any coexisting state badges (for example Update available + pushed-tool icons) rendered in one wrapped header area |
+| **Skill name** | Two-line clamp; padded to avoid overlap with action buttons |
 | **Open folder button** (FolderOpenDot, top-right) | `OpenPath(skill.path)` — opens directory in OS file manager; visible on hover only |
 | **Select checkbox** (top-left) | Visible in select mode only |
 | **Hover actions** (bottom-right) | Update (if available) · Copy · Delete — all hidden until hover |
@@ -512,10 +517,9 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Source badge** | Same as above |
-| **"Imported" badge** (green) | Shown when skill already exists in the library |
-| **"Update available" badge** (amber) | Shown when the correlated installed instance has a newer remote SHA |
-| **Skill name** | Truncated |
+| **Status strip** | Source badge plus only the page-selected state badges (for example imported, update-available, or pushed-tool icons) rendered together |
+| **Pushed-tool indicator** | Shows the exact tools whose `PushDir` already contains this logical skill via small tool-brand icons; overflows collapse into an ellipsis with hover-to-reveal full list |
+| **Skill name** | Two-line clamp |
 | **Subtitle** | Category or repo name |
 | **Copy button** (hover) | Same clipboard behavior |
 | **Open folder button** (hover) | Same as dashboard card |
@@ -528,7 +532,8 @@ Reusable card component shown in the My Skills grid and Sync pages.
 | **installed** | The logical skill already exists in **My Skills** as at least one installed instance |
 | **imported** | External-page wording for **installed**; on GitHub / Starred Repos / tool views it means “already in My Skills” |
 | **pushed** | The logical skill already exists in a tool's configured **PushDir** |
-| **seenInToolScan** | The logical skill was detected in one of a tool's configured **ScanDirs**; this means the tool already has it somewhere, but not necessarily because SkillFlow pushed it |
+| **pushedTools** | The exact tool names whose configured **PushDir** currently contains that logical skill; used for icon rendering on cards |
+| **seenInToolScan** | The logical skill was detected in one of a tool's configured **ScanDirs**; this means the tool already has it somewhere, but not necessarily because SkillFlow pushed it. This is currently used for grouping and correlation, not shown as a card badge. |
 | **updatable** | An installed Git-backed skill has a newer remote SHA than its installed `SourceSHA` |
 
 These statuses are resolved by the backend from a unified logical-key model; frontend pages no longer infer them independently from `Name` or `Path`.
@@ -603,6 +608,7 @@ Opened from Dashboard toolbar.
 - Candidate discovery is recursive across the cloned repo, so nested layouts such as `plugins/<plugin>/skills/<name>` are also listed; `skill.md` matching is case-insensitive.
 - Recursive candidate discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Already-installed badges are resolved from normalized repo source + subpath instead of `Name`, and checkbox state is tracked by candidate path so same-name candidates remain independent.
+- Candidate rows can show imported / update-available / pushed-tool state according to the **Settings → General → Card status visibility** policy for GitHub Install, and display the candidate subpath so same-name entries stay distinguishable in the dialog.
 - Separate error alerts for scan errors and install errors.
 
 ### 10.3 Missing Directory Dialog
@@ -736,12 +742,14 @@ Browse the skills currently present inside each enabled tool.
 - Shows deletable tool-local skills under the configured push directory.
 - Push-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - In select mode, **Select All / Deselect All** applies to the currently visible filtered Push Path cards only.
+- Cards show only imported, update-available, and "pushed to other tools" states. The current tool is excluded from the pushed-tool icon list so the card only surfaces cross-tool distribution that adds information.
 
 ### Scan Path Section
 
 - Shows read-only skills discovered only from scan directories.
 - Scan-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Shares the same search and sort controls as Push Path.
+- Scan-path cards use the same compact strip for imported / update-available / pushed-to-other-tools states; the fact that they were found via scan paths is conveyed by the section itself instead of repeating a detected badge on every card.
 
 ---
 

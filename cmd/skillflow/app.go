@@ -404,7 +404,7 @@ func (a *App) gitProxyURL() string {
 
 // --- Skills ---
 
-func (a *App) ListSkills() ([]*skill.Skill, error) {
+func (a *App) ListSkills() ([]InstalledSkillEntry, error) {
 	skills, err := a.storage.ListAll()
 	if err != nil {
 		return nil, err
@@ -414,7 +414,8 @@ func (a *App) ListSkills() ([]*skill.Skill, error) {
 			sk.Category = defaultCategoryName
 		}
 	}
-	return skills, nil
+	installedIndex := skill.BuildInstalledIndex(skills)
+	return a.buildInstalledSkillEntries(skills, a.buildToolPresenceIndex(installedIndex)), nil
 }
 
 func (a *App) ListCategories() ([]string, error) {
@@ -644,6 +645,7 @@ func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 	if err != nil {
 		return nil, err
 	}
+	presence := a.buildToolPresenceIndex(installedIndex)
 	var candidates []install.SkillCandidate
 	for _, ss := range starSkills {
 		candidates = append(candidates, install.SkillCandidate{
@@ -652,7 +654,7 @@ func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 			LogicalKey: skillkey.Git(repoSource, ss.SubPath),
 		})
 	}
-	return resolveGitHubCandidates(candidates, installedIndex), nil
+	return resolveGitHubCandidates(candidates, installedIndex, presence), nil
 }
 
 // InstallFromGitHub imports selected skills from a scanned remote git repo into storage.
@@ -731,7 +733,7 @@ func (a *App) ScanToolSkills(toolName string) ([]ToolSkillCandidate, error) {
 			if err != nil {
 				return nil, err
 			}
-			return resolveToolSkillCandidates(scanned, installedIndex), nil
+			return resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), nil
 		}
 	}
 	return nil, nil
@@ -759,6 +761,7 @@ func (a *App) ListToolSkills(toolName string) ([]ToolSkillEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	presence := a.buildToolPresenceIndex(installedIndex)
 	var pushSkills []*skill.Skill
 
 	if tc.PushDir != "" {
@@ -773,7 +776,7 @@ func (a *App) ListToolSkills(toolName string) ([]ToolSkillEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return aggregateToolSkillEntries(pushSkills, scanSkills, installedIndex), nil
+	return aggregateToolSkillEntries(pushSkills, scanSkills, installedIndex, presence), nil
 }
 
 // DeleteToolSkill removes a skill directory from a tool's push directory.
@@ -945,7 +948,7 @@ func (a *App) PullFromTool(toolName string, skillPaths []string, category string
 		if err != nil {
 			return nil, err
 		}
-		candidates := resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex), skillPaths)
+		candidates := resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), skillPaths)
 		var conflicts []string
 		for _, candidate := range candidates {
 			if candidate.Imported {
@@ -978,7 +981,7 @@ func (a *App) PullFromToolForce(toolName string, skillPaths []string, category s
 		if err != nil {
 			return err
 		}
-		for _, candidate := range resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex), skillPaths) {
+		for _, candidate := range resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), skillPaths) {
 			existing, _ := a.storage.ListAll()
 			for _, e := range existing {
 				logicalKey, logicalErr := skill.LogicalKey(e)
@@ -1504,6 +1507,7 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 	if err != nil {
 		return nil, err
 	}
+	presence := a.buildToolPresenceIndex(installedIndex)
 	var all []coregit.StarSkill
 	for _, r := range repos {
 		source := r.Source
@@ -1511,7 +1515,7 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 			source, _ = coregit.RepoSource(r.URL)
 		}
 		skills, _ := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
-		all = append(all, resolveStarSkills(skills, installedIndex)...)
+		all = append(all, resolveStarSkills(skills, installedIndex, presence)...)
 	}
 	if all == nil {
 		return []coregit.StarSkill{}, nil
@@ -1529,6 +1533,7 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 	if err != nil {
 		return nil, err
 	}
+	presence := a.buildToolPresenceIndex(installedIndex)
 	for _, r := range repos {
 		if !coregit.SameRepo(r.URL, repoURL) {
 			continue
@@ -1541,7 +1546,7 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 		if err != nil {
 			return nil, err
 		}
-		skills = resolveStarSkills(skills, installedIndex)
+		skills = resolveStarSkills(skills, installedIndex, presence)
 		if skills == nil {
 			return []coregit.StarSkill{}, nil
 		}

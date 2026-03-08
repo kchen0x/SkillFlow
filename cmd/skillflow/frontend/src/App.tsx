@@ -16,6 +16,7 @@ import { DownloadAppUpdate, ApplyAppUpdate, GetGitConflictPending, ResolveGitCon
 import { main } from '../wailsjs/go/models'
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext'
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext'
+import { SkillStatusVisibilityProvider } from './contexts/SkillStatusVisibilityContext'
 import type { Translations } from './i18n'
 import { THEME_LABELS, getNextTheme } from './hooks/useTheme'
 import AnimatedDialog from './components/ui/AnimatedDialog'
@@ -316,9 +317,11 @@ export default function App() {
   return (
     <LanguageProvider>
       <ThemeProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
+        <SkillStatusVisibilityProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </SkillStatusVisibilityProvider>
       </ThemeProvider>
     </LanguageProvider>
   )

@@ -15,9 +15,11 @@ import { gridContainerVariants, cardVariants } from '../lib/motionVariants'
 import SkillListControls from '../components/SkillListControls'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 
 export default function Dashboard() {
   const { t } = useLanguage()
+  const visibility = useSkillStatusVisibility('mySkills')
   const [skills, setSkills] = useState<any[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
@@ -48,16 +50,16 @@ export default function Dashboard() {
 
   const filtered = useMemo(
     () => filterAndSortSkills(
-      skills.filter(sk => selectedCat === null || sk.Category === selectedCat),
+      skills.filter(sk => selectedCat === null || sk.category === selectedCat),
       search,
       sortOrder,
-      sk => sk.Name ?? '',
+      sk => sk.name ?? '',
     ),
     [skills, selectedCat, search, sortOrder],
   )
 
   const skillCounts = skills.reduce((acc, sk) => {
-    const category = sk.Category || 'Default'
+    const category = sk.category || 'Default'
     acc[category] = (acc[category] ?? 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -119,7 +121,7 @@ export default function Dashboard() {
   }
 
   const toggleSelectAll = () => {
-    const filteredIDs = filtered.map(sk => sk.ID)
+    const filteredIDs = filtered.map(sk => sk.id)
     setSelectedIDs(prev => {
       const next = new Set(prev)
       if (filteredIDs.every(id => next.has(id))) {
@@ -141,14 +143,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!selectMode) return
-    const visibleIDs = new Set(filtered.map(sk => sk.ID))
+    const visibleIDs = new Set(filtered.map(sk => sk.id))
     setSelectedIDs(prev => {
       const next = new Set([...prev].filter(id => visibleIDs.has(id)))
       return next.size === prev.size ? prev : next
     })
   }, [filtered, selectMode])
 
-  const allSelected = filtered.length > 0 && filtered.every(sk => selectedIDs.has(sk.ID))
+  const allSelected = filtered.length > 0 && filtered.every(sk => selectedIDs.has(sk.id))
 
   const clearHover = () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
@@ -159,9 +161,18 @@ export default function Dashboard() {
   const handleHoverStart = (sk: any, rect: DOMRect) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
     hoverTimer.current = setTimeout(async () => {
-      setHoveredSkill({ skill: sk, rect })
+      setHoveredSkill({
+        skill: {
+          Name: sk.name,
+          Category: sk.category,
+          Source: sk.source,
+          SourceSHA: sk.sourceSha,
+          LatestSHA: sk.latestSha,
+        },
+        rect,
+      })
       setHoveredMeta(null)
-      const meta = await GetSkillMeta(sk.ID)
+      const meta = await GetSkillMeta(sk.id)
       setHoveredMeta(meta)
     }, 300)
   }
@@ -280,22 +291,32 @@ export default function Dashboard() {
             animate="animate"
           >
             {filtered.map(sk => (
-              <motion.div key={sk.ID} variants={filtered.length <= 30 ? cardVariants : undefined}>
+              <motion.div key={sk.id} variants={filtered.length <= 30 ? cardVariants : undefined}>
                 <SkillCard
-                  skill={{ id: sk.ID, name: sk.Name, category: sk.Category, source: sk.Source, hasUpdate: !!sk.LatestSHA, path: sk.Path }}
+                  skill={{
+                    id: sk.id,
+                    name: sk.name,
+                    category: sk.category,
+                    source: sk.source,
+                    hasUpdate: !!sk.updatable,
+                    path: sk.path,
+                    pushedTools: sk.pushedTools,
+                  }}
+                  showUpdatable={visibility.includes('updatable')}
+                  showPushedTools={visibility.includes('pushedTools')}
                   categories={categories}
-                  onDelete={async () => { await DeleteSkill(sk.ID); load() }}
-                  onUpdate={async () => { await UpdateSkill(sk.ID); load() }}
-                  onMoveCategory={async cat => { await MoveSkillCategory(sk.ID, cat); load() }}
-                  dragging={draggingSkillID === sk.ID}
-                  dropTargetActive={draggingSkillID === sk.ID && categoryDragActive}
+                  onDelete={async () => { await DeleteSkill(sk.id); load() }}
+                  onUpdate={async () => { await UpdateSkill(sk.id); load() }}
+                  onMoveCategory={async cat => { await MoveSkillCategory(sk.id, cat); load() }}
+                  dragging={draggingSkillID === sk.id}
+                  dropTargetActive={draggingSkillID === sk.id && categoryDragActive}
                   onDragStateChange={(dragging) => {
-                    setDraggingSkillID(dragging ? sk.ID : null)
+                    setDraggingSkillID(dragging ? sk.id : null)
                     if (!dragging) setCategoryDragActive(false)
                   }}
                   selectMode={selectMode}
-                  selected={selectedIDs.has(sk.ID)}
-                  onToggleSelect={() => toggleSelectID(sk.ID)}
+                  selected={selectedIDs.has(sk.id)}
+                  onToggleSelect={() => toggleSelectID(sk.id)}
                   onHoverStart={rect => handleHoverStart(sk, rect)}
                   onHoverEnd={handleHoverEnd}
                 />

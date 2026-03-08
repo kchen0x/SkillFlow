@@ -20,6 +20,7 @@ type MatchStrength string
 const (
 	MatchStrengthNone     MatchStrength = ""
 	MatchStrengthLogical  MatchStrength = "logical"
+	MatchStrengthContent  MatchStrength = "content"
 	MatchStrengthFallback MatchStrength = "fallback"
 )
 

@@ -40,7 +40,7 @@ SkillFlow is a **Wails v2** desktop app (Go 1.23, Wails v2.11.0). The Go backend
         ...other files
   meta/                ← JSON sidecars (sibling of skills/)
     <uuid>.json        ← one per skill, contains Skill struct
-  config.json          ← synced app config (tools, active cloud state, per-provider non-sensitive cloud profiles, proxy)
+  config.json          ← synced app config (tools, page-level card status visibility, active cloud state, per-provider non-sensitive cloud profiles, proxy)
   config_local.json    ← local-only paths + per-provider sensitive cloud credentials
   star_repos.json      ← StarredRepo[] array
   cache/               ← temporary cloned repos for starred repos
@@ -57,7 +57,7 @@ Installed skill instances are identified by UUID. Cross-module correlation must 
 |---------|---------------|
 | `core/skill` | `Skill` model, `Storage` (CRUD + categories), `Validator` (skill.md check), installed-skill correlation index |
 | `core/skillkey` | Stable logical-key derivation for git-backed skills and content-derived local skills |
-| `core/config` | `AppConfig` model, `Service` (load/save JSON), `DefaultToolsDir()` per tool |
+| `core/config` | `AppConfig` model, status-visibility defaults/normalization, `Service` (load/save JSON), `DefaultToolsDir()` per tool |
 | `core/notify` | `Hub` (buffered channel pub/sub), `EventType` constants |
 | `core/install` | `Installer` interface, `GitHubInstaller` (scan/download/SHA), `LocalInstaller` |
 | `core/sync` | `ToolAdapter` interface, `FilesystemAdapter` (shared by all built-in tools) |
@@ -140,7 +140,9 @@ SkillFlow must distinguish between two different identities:
 - `pushed` is narrower than “exists somewhere in the tool”; it refers specifically to the configured push target.
 - `seenInToolScan` is observational. It helps distinguish “the tool already has this skill” from “SkillFlow already pushed this skill”.
 - A skill may have both `pushed=true` and `seenInToolScan=true` when the push directory is also scanned, or when the same logical skill exists in both places.
-- A skill with `seenInToolScan=true` and `pushed=false` should generally be shown as “already detected in tool”, not “already pushed”.
+- A skill with `seenInToolScan=true` and `pushed=false` should not be mislabeled as “already pushed”. In the current UI, this state is typically expressed by placement in the Scan Path section rather than by a repeated card badge.
+- `pushedTools` is a derived card-view state: the backend aggregates the exact tool names whose `PushDir` currently contains the logical skill, so cards can render tool icons without page-local inference.
+- The frontend applies a page-level whitelist from `AppConfig.SkillStatusVisibility` before rendering badges. Each page can only toggle statuses that belong to its default policy; unsupported statuses are normalized away rather than enabled by config edits.
 
 ### Conflict and dedupe rules
 
@@ -164,6 +166,8 @@ SkillFlow must distinguish between two different identities:
 - Frontend pages should not independently decide “same skill”, “already imported”, or “already pushed” from `Name` or `Path` alone.
 - Any future catalog / aggregate layer should group all module-specific representations under one logical skill record and keep installed instances as child references.
 - The current implementation uses `core/skillkey` to derive logical keys and `core/skill.BuildInstalledIndex` to resolve `installed` / `imported` / `updatable` across GitHub, starred repos, and tool scans.
+- Tool-directory copies are bridged back to git-backed installed skills through a content-hash side index, so pushed folders can still resolve to the canonical `git:<repo-source>#<subpath>` identity.
+- Backend card payloads also carry aggregated `pushedTools` lists so the frontend can show multiple coexisting states on the same card without rescanning tool directories.
 - Push conflict reporting is structured per skill-target pair (`skill + tool + target path`) so overwrite actions can be scoped to one exact conflict instead of a name-only batch guess.
 
 ### AppConfig (`core/config/model.go`)
@@ -200,11 +204,22 @@ type AppConfig struct {
     SkillsStorageDir     string        // default: ~/.skillflow/skills
     DefaultCategory      string        // default: "Default"
     LogLevel             string        // "debug" | "info" | "error"
+    RepoScanMaxDepth     int
+    SkillStatusVisibility SkillStatusVisibilityConfig // shared per-page card-status whitelist
     Tools                []ToolConfig
     Cloud                CloudConfig
     CloudProfiles        map[string]CloudProviderConfig // provider-specific settings persisted independently
     Proxy                ProxyConfig
     SkippedUpdateVersion string        // version tag to suppress startup update prompt
+}
+
+type SkillStatusVisibilityConfig struct {
+    MySkills      []string // default: updatable, pushedTools
+    MyTools       []string // default: imported, updatable, pushedTools
+    PushToTool    []string // default: pushedTools
+    PullFromTool  []string // default: imported
+    StarredRepos  []string // default: imported, pushedTools
+    GitHubInstall []string // default: imported, updatable, pushedTools
 }
 ```
 

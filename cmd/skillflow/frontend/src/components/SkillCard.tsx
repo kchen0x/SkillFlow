@@ -4,10 +4,21 @@ import ContextMenu from './ContextMenu'
 import { OpenPath, ReadSkillFileContent } from '../../wailsjs/go/main/App'
 import { useLanguage } from '../contexts/LanguageContext'
 import { copyTextToClipboard } from '../lib/clipboard'
+import SkillStatusStrip, { type SkillStatusBadge } from './SkillStatusStrip'
 
-interface Skill { id: string; name: string; category: string; source: 'github' | 'manual'; hasUpdate: boolean; path?: string }
+interface Skill {
+  id: string
+  name: string
+  category: string
+  source: 'github' | 'manual'
+  hasUpdate: boolean
+  path?: string
+  pushedTools?: string[]
+}
 interface Props {
   skill: Skill
+  showUpdatable: boolean
+  showPushedTools: boolean
   categories: string[]
   onDelete: () => void
   onUpdate?: () => void
@@ -23,7 +34,7 @@ interface Props {
 }
 
 export default function SkillCard({
-  skill, categories, onDelete, onUpdate, onMoveCategory,
+  skill, showUpdatable, showPushedTools, categories, onDelete, onUpdate, onMoveCategory,
   dragging = false, dropTargetActive = false, onDragStateChange,
   selectMode, selected, onToggleSelect,
   onHoverStart, onHoverEnd,
@@ -35,6 +46,18 @@ export default function SkillCard({
   const dragGhostRef = useRef<HTMLDivElement | null>(null)
 
   const sourceLabel = skill.source === 'github' ? t('common.sourceGitHub') : t('common.sourceManual')
+  const badges: SkillStatusBadge[] = [
+    {
+      key: 'source',
+      label: sourceLabel,
+      tone: skill.source === 'github' ? 'accent' : 'muted',
+    },
+    ...(showUpdatable && skill.hasUpdate ? [{
+      key: 'updatable',
+      label: t('common.updatable'),
+      tone: 'warning' as const,
+    }] : []),
+  ]
 
   const setCardDragImage = (e: React.DragEvent) => {
     if (!cardRef.current) return
@@ -97,7 +120,7 @@ export default function SkillCard({
   }
 
   const menuItems = [
-    ...(skill.hasUpdate ? [{ label: t('skillCard.update'), onClick: () => onUpdate?.() }] : []),
+    ...(showUpdatable && skill.hasUpdate ? [{ label: t('skillCard.update'), onClick: () => onUpdate?.() }] : []),
     ...categories.filter(c => c !== skill.category).map(c => ({
       label: t('skillCard.moveTo', { cat: c }),
       onClick: () => onMoveCategory(c),
@@ -179,39 +202,25 @@ export default function SkillCard({
           </button>
         )}
 
-        {skill.hasUpdate && !selectMode && (
-          <span className="absolute top-2 right-8 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-error)' }} />
-        )}
-        {skill.hasUpdate && selectMode && (
-          <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-error)' }} />
-        )}
-
-        <div className={`flex items-center gap-2 mb-2 ${selectMode ? 'pl-5' : ''}`}>
+        <div className={`mb-2 flex items-start gap-2 ${selectMode ? 'pl-5' : ''}`}>
           {skill.source === 'github'
-            ? <Github size={14} style={{ color: 'var(--text-muted)' }} />
-            : <FolderOpen size={14} style={{ color: 'var(--text-muted)' }} />}
-          <span
-            className="text-xs px-1.5 py-0.5 rounded"
-            style={skill.source === 'github' ? {
-              background: 'rgba(14, 165, 233, 0.15)',
-              color: 'var(--accent-secondary)',
-              border: '1px solid rgba(14, 165, 233, 0.25)',
-            } : {
-              color: 'var(--text-muted)',
-            }}
-          >
-            {sourceLabel}
-          </span>
+            ? <Github size={14} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />
+            : <FolderOpen size={14} style={{ color: 'var(--text-muted)' }} className="mt-1 shrink-0" />}
+          <SkillStatusStrip
+            className="min-w-0 flex-1 pr-14"
+            badges={badges}
+            pushedTools={showPushedTools ? (skill.pushedTools ?? []) : []}
+          />
         </div>
         <p
-          className={`font-medium text-sm truncate ${selectMode ? 'pl-5' : 'pr-5'}`}
+          className={`min-h-[2.75rem] font-medium text-sm leading-snug line-clamp-2 ${selectMode ? 'pl-5' : 'pr-5'}`}
           style={{ color: 'var(--text-primary)' }}
         >
           {skill.name}
         </p>
         {!selectMode && (
           <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            {skill.hasUpdate && (
+            {showUpdatable && skill.hasUpdate && (
               <button
                 onClick={e => { e.stopPropagation(); onUpdate?.() }}
                 className="text-xs flex items-center gap-1 transition-colors"

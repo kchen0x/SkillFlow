@@ -12,15 +12,16 @@ import (
 // sharedConfig is stored in config.json and safe to sync across platforms.
 // It contains no file system paths or sensitive cloud credentials.
 type sharedConfig struct {
-	DefaultCategory      string                         `json:"defaultCategory"`
-	LogLevel             string                         `json:"logLevel"`
-	RepoScanMaxDepth     int                            `json:"repoScanMaxDepth"`
-	Tools                []sharedToolConfig             `json:"tools"`
-	Cloud                sharedCloudState               `json:"cloud"`
-	CloudProfiles        map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
-	Proxy                ProxyConfig                    `json:"proxy"`
-	SkippedUpdateVersion string                         `json:"skippedUpdateVersion,omitempty"`
-	legacyCloudMigrated  bool                           `json:"-"`
+	DefaultCategory       string                         `json:"defaultCategory"`
+	LogLevel              string                         `json:"logLevel"`
+	RepoScanMaxDepth      int                            `json:"repoScanMaxDepth"`
+	SkillStatusVisibility SkillStatusVisibilityConfig    `json:"skillStatusVisibility"`
+	Tools                 []sharedToolConfig             `json:"tools"`
+	Cloud                 sharedCloudState               `json:"cloud"`
+	CloudProfiles         map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
+	Proxy                 ProxyConfig                    `json:"proxy"`
+	SkippedUpdateVersion  string                         `json:"skippedUpdateVersion,omitempty"`
+	legacyCloudMigrated   bool                           `json:"-"`
 }
 
 type sharedCloudState struct {
@@ -109,6 +110,7 @@ func (s *Service) Save(cfg AppConfig) error {
 	}
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
 	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
+	cfg.SkillStatusVisibility = NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility)
 
 	shared, err := s.loadShared()
 	if err != nil {
@@ -169,6 +171,7 @@ func (s *Service) loadShared() (sharedConfig, error) {
 	}
 	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
+	sc.SkillStatusVisibility = NormalizeSkillStatusVisibility(sc.SkillStatusVisibility)
 	sc.CloudProfiles = normalizeCloudProfiles(sc.CloudProfiles)
 
 	var legacy struct {
@@ -211,6 +214,7 @@ func (s *Service) loadLocal() localConfig {
 func (s *Service) saveShared(sc sharedConfig) error {
 	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
+	sc.SkillStatusVisibility = NormalizeSkillStatusVisibility(sc.SkillStatusVisibility)
 	sc.CloudProfiles = splitSharedCloudProfiles(sc.CloudProfiles)
 	data, err := json.MarshalIndent(sc, "", "  ")
 	if err != nil {
@@ -235,10 +239,11 @@ func (s *Service) defaultShared() sharedConfig {
 		tools = append(tools, sharedToolConfig{Name: name, Enabled: true})
 	}
 	return sharedConfig{
-		DefaultCategory:  "Default",
-		LogLevel:         DefaultLogLevel,
-		RepoScanMaxDepth: DefaultRepoScanMaxDepth,
-		Tools:            tools,
+		DefaultCategory:       "Default",
+		LogLevel:              DefaultLogLevel,
+		RepoScanMaxDepth:      DefaultRepoScanMaxDepth,
+		SkillStatusVisibility: DefaultSkillStatusVisibility(),
+		Tools:                 tools,
 	}
 }
 
@@ -297,15 +302,16 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
-		SkillsStorageDir:     local.SkillsStorageDir,
-		DefaultCategory:      shared.DefaultCategory,
-		LogLevel:             NormalizeLogLevel(shared.LogLevel),
-		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
-		Tools:                tools,
-		Cloud:                buildRuntimeCloudConfig(shared.Cloud, cloudProfiles),
-		CloudProfiles:        cloudProfiles,
-		Proxy:                shared.Proxy,
-		SkippedUpdateVersion: shared.SkippedUpdateVersion,
+		SkillsStorageDir:      local.SkillsStorageDir,
+		DefaultCategory:       shared.DefaultCategory,
+		LogLevel:              NormalizeLogLevel(shared.LogLevel),
+		RepoScanMaxDepth:      NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
+		SkillStatusVisibility: NormalizeSkillStatusVisibility(shared.SkillStatusVisibility),
+		Tools:                 tools,
+		Cloud:                 buildRuntimeCloudConfig(shared.Cloud, cloudProfiles),
+		CloudProfiles:         cloudProfiles,
+		Proxy:                 shared.Proxy,
+		SkippedUpdateVersion:  shared.SkippedUpdateVersion,
 	}
 }
 
@@ -319,14 +325,15 @@ func (s *Service) splitShared(cfg AppConfig) sharedConfig {
 	}
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return sharedConfig{
-		DefaultCategory:      cfg.DefaultCategory,
-		LogLevel:             NormalizeLogLevel(cfg.LogLevel),
-		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
-		Tools:                tools,
-		Cloud:                sharedCloudState{Provider: strings.TrimSpace(cfg.Cloud.Provider), Enabled: cfg.Cloud.Enabled, SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes},
-		CloudProfiles:        splitSharedCloudProfiles(profiles),
-		Proxy:                cfg.Proxy,
-		SkippedUpdateVersion: cfg.SkippedUpdateVersion,
+		DefaultCategory:       cfg.DefaultCategory,
+		LogLevel:              NormalizeLogLevel(cfg.LogLevel),
+		RepoScanMaxDepth:      NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+		SkillStatusVisibility: NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility),
+		Tools:                 tools,
+		Cloud:                 sharedCloudState{Provider: strings.TrimSpace(cfg.Cloud.Provider), Enabled: cfg.Cloud.Enabled, SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes},
+		CloudProfiles:         splitSharedCloudProfiles(profiles),
+		Proxy:                 cfg.Proxy,
+		SkippedUpdateVersion:  cfg.SkippedUpdateVersion,
 	}
 }
 

@@ -16,6 +16,7 @@ type CorrelationStatus struct {
 
 type InstalledIndex struct {
 	byLogical map[string]*installedGroup
+	byContent map[string][]*installedGroup
 	byName    map[string][]*installedGroup
 }
 
@@ -28,10 +29,12 @@ type installedGroup struct {
 func BuildInstalledIndex(skills []*Skill) *InstalledIndex {
 	idx := &InstalledIndex{
 		byLogical: map[string]*installedGroup{},
+		byContent: map[string][]*installedGroup{},
 		byName:    map[string][]*installedGroup{},
 	}
 
 	groupsByID := map[string]*installedGroup{}
+	contentGroups := map[string]map[string]*installedGroup{}
 	for _, sk := range skills {
 		if sk == nil {
 			continue
@@ -57,6 +60,15 @@ func BuildInstalledIndex(skills []*Skill) *InstalledIndex {
 		if strings.TrimSpace(group.Name) == "" {
 			group.Name = sk.Name
 		}
+
+		if strings.TrimSpace(sk.Path) != "" {
+			if contentKey, err := skillkey.ContentFromDir(sk.Path); err == nil && strings.TrimSpace(contentKey) != "" {
+				if contentGroups[contentKey] == nil {
+					contentGroups[contentKey] = map[string]*installedGroup{}
+				}
+				contentGroups[contentKey][groupID] = group
+			}
+		}
 	}
 
 	for _, group := range groupsByID {
@@ -65,6 +77,12 @@ func BuildInstalledIndex(skills []*Skill) *InstalledIndex {
 			continue
 		}
 		idx.byName[nameKey] = append(idx.byName[nameKey], group)
+	}
+
+	for contentKey, groups := range contentGroups {
+		for _, group := range groups {
+			idx.byContent[contentKey] = append(idx.byContent[contentKey], group)
+		}
 	}
 
 	return idx
@@ -78,6 +96,9 @@ func (idx *InstalledIndex) Resolve(name, logicalKey string) CorrelationStatus {
 	if logicalKey != "" {
 		if group, ok := idx.byLogical[logicalKey]; ok {
 			return group.status(logicalKey, skillkey.MatchStrengthLogical)
+		}
+		if groups := idx.byContent[logicalKey]; len(groups) == 1 {
+			return groups[0].status(coalesceLogicalKey(groups[0].LogicalKey, logicalKey), skillkey.MatchStrengthContent)
 		}
 	}
 
