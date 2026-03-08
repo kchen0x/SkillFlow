@@ -480,8 +480,9 @@ func (p *GitProvider) ResolveConflictUseRemote(localDir string) error {
 // GetBranch returns the configured branch.
 func parseGitStatusChanges(localDir, output string) []RemoteFile {
 	changes := make([]RemoteFile, 0)
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-		line = strings.TrimSpace(line)
+	normalized := strings.ReplaceAll(output, "\r\n", "\n")
+	for _, line := range strings.Split(normalized, "\n") {
+		line = strings.TrimRight(line, "\r")
 		if len(line) < 3 {
 			continue
 		}
@@ -491,7 +492,7 @@ func parseGitStatusChanges(localDir, output string) []RemoteFile {
 		if idx := strings.LastIndex(path, " -> "); idx >= 0 {
 			path = strings.TrimSpace(path[idx+4:])
 		}
-		if path == "" {
+		if path == "" || path == ".gitignore" || ShouldSkipBackupPath(path) {
 			continue
 		}
 
