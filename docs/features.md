@@ -257,6 +257,15 @@ Browse and import skills directly from watched Git repositories without installi
 - **Delete** (Trash2 icon, red on hover) — removes from starred list.
 - Shows last sync time and any sync error below the repo name.
 
+### Builtin Starter Repos Initialization
+
+- Builtin starter repos are only seeded when `star_repos.json` does not exist yet (first initialization on a device/profile).
+- Current builtin starter repos:
+  - `https://github.com/anthropics/skills.git`
+  - `https://github.com/ComposioHQ/awesome-claude-skills.git`
+  - `https://github.com/affaan-m/everything-claude-code.git`
+- Once the user deletes a builtin repo, the persisted list remains authoritative and later app launches will not auto-add that repo again.
+
 ### Repo Detail View (Drill-down)
 
 - Breadcrumb back button (ChevronLeft) to return to the repo grid.
