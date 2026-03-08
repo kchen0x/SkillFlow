@@ -62,6 +62,11 @@ const CLOUD_PROVIDER_LABEL_KEYS: Record<string, TranslationKey> = {
   git: 'settings.cloudProviderGit',
 }
 
+const CLOUD_PROVIDER_PRIORITY: Record<string, number> = {
+  git: 0,
+  huawei: 1,
+}
+
 const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
   aliyun: {
     access_key_id: 'settings.cloudFieldAccessKeyId',
@@ -135,6 +140,20 @@ function getCloudProviderDisplayName(name: string, t: (key: TranslationKey) => s
 function getCloudFieldLabel(providerName: string | undefined, fieldKey: string, fallback: string, t: (key: TranslationKey) => string) {
   const key = providerName ? CLOUD_FIELD_LABEL_KEYS[providerName]?.[fieldKey] : undefined
   return key ? t(key) : fallback
+}
+
+function orderCloudProviders(providerList: any[]) {
+  return providerList
+    .map((provider, index) => ({ provider, index }))
+    .sort((left, right) => {
+      const leftPriority = CLOUD_PROVIDER_PRIORITY[left.provider?.name] ?? Number.MAX_SAFE_INTEGER
+      const rightPriority = CLOUD_PROVIDER_PRIORITY[right.provider?.name] ?? Number.MAX_SAFE_INTEGER
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority
+      }
+      return left.index - right.index
+    })
+    .map(({ provider }) => provider)
 }
 
 function splitCloudRemoteSegments(value: string | undefined) {
@@ -462,7 +481,7 @@ export default function SettingsPage() {
   useEffect(() => {
     Promise.all([GetConfig(), ListCloudProviders(), GetAppVersion(), GetLogDir()]).then(([c, p, v, logPath]) => {
       setCfg(syncActiveCloudProfile(c))
-      setProviders(p ?? [])
+      setProviders(orderCloudProviders(p ?? []))
       setAppVersion(v as string)
       setLogDir(logPath as string)
     })
@@ -607,12 +626,12 @@ export default function SettingsPage() {
   if (!cfg) return <div className="p-8" style={{ color: 'var(--text-muted)' }}>{t('common.loading')}</div>
 
   return (
-    <div className="p-8 max-w-2xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="min-h-full w-full max-w-6xl p-6 md:p-8">
+      <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
           <Settings size={18} /> {t('settings.title')}
         </h2>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 xl:justify-end">
           {updateResult && (
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{updateResult}</span>
           )}
@@ -635,7 +654,7 @@ export default function SettingsPage() {
 
       {/* Tabs */}
       <div
-        className="flex gap-1 mb-6 rounded-xl p-1 w-fit"
+        className="mb-6 flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-base)' }}
       >
         {(['tools', 'cloud', 'network', 'general'] as Tab[]).map(tabKey => {
@@ -814,7 +833,7 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div>
             <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.cloudProvider')}</p>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {providers.map((p: any) => (
                 <button
                   key={p.name}
@@ -825,7 +844,7 @@ export default function SettingsPage() {
                       cloud: buildCloudFromProfile(synced, p.name),
                     }
                   })}
-                  className="px-4 py-2 rounded-lg text-sm transition-all duration-200"
+                  className="flex min-h-[84px] items-center justify-center rounded-xl px-4 py-3 text-center text-sm leading-snug transition-all duration-200 whitespace-normal"
                   style={cfg.cloud?.provider === p.name ? {
                     background: 'var(--accent-glow)',
                     color: 'var(--accent-primary)',
