@@ -380,16 +380,17 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 |------|------------|---------|
 | **立即备份**（Upload 图标） | 立即备份 | 立即备份 |
 | **恢复 / 拉取**（Download 图标） | 从云端恢复 | 拉取远端 |
-| **刷新**（RefreshCw） | 重新加载文件列表 | 同左 |
+| **刷新**（RefreshCw） | 重新加载最近一次备份的变更结果 | 同左 |
 
 - 云备份未配置时，两个操作按钮均禁用。
 - **"备份完成 / Git 同步完成"**（绿色）/ **"备份/同步失败"**（红色）状态消息。
 
-### 云端文件列表
+### 本次备份变更列表
 
-- 对象存储：文件路径（等宽字体）+ 文件大小（KB）。
-- Git：通过 `git ls-files` 列出的跟踪文件，显示相对路径和文件大小。
-- 对象存储列表会在内部自动翻页，确保 UI 展示的是完整远端文件集合，而不只是第一页。
+- 每次备份或恢复成功后，页面只显示本次操作涉及的文件，不再展示远端全量文件集合。
+- 对象存储与 Git 共用同一种结果列表，按 `新增`、`修改`、`删除` 三种动作展示。
+- 已删除文件显示删除标记，不显示文件大小。
+- 点击刷新会重新读取当前应用会话里最近一次备份结果。
 - 可滚动容器（最大高度限制）。
 - **统一备份范围（所有服务商）** — 备份根目录为应用数据根目录（`skills/`、`meta/`、`prompts/`、`config.json` 等）；`cache/` 与 `.git/` 会被排除。
 - **对象存储自定义前缀** — 对象存储服务商允许用户填写父级 `remotePath`；SkillFlow 最终总是写入 `<存储桶>/<remotePath>/skillflow/`（若父级路径为空，则为 `<存储桶>/skillflow/`）。
@@ -641,13 +642,13 @@ Go 后端通过 Wails runtime 向前端推送的事件：
 |------|---------|------|
 | `backup.started` | 自动备份开始 | — |
 | `backup.progress` | 每上传一个文件 | `{ currentFile: string }` |
-| `backup.completed` | 备份完成 | — |
+| `backup.completed` | 备份完成 | `{ files: Array<{ path, size, action }> }` |
 | `backup.failed` | 备份出错 | — |
 | `update.available` | 发现 Skill 有新提交 | `{ skillID, skillName, currentSHA, latestSHA }` |
 | `star.sync.progress` | 单个仓库同步完成 | `{ repoURL, repoName, syncError }` |
 | `star.sync.done` | 所有仓库同步完成 | — |
 | `git.sync.started` | Git 拉取/推送开始 | — |
-| `git.sync.completed` | Git 同步成功 | — |
+| `git.sync.completed` | Git 同步成功 | 由备份 / 恢复 / 冲突解决触发时为 `{ files: Array<{ path, size, action }> }` |
 | `git.sync.failed` | Git 同步出错 | — |
 | `git.conflict` | 检测到 Git 合并冲突 | `{ message: string, files?: string[] }` |
 

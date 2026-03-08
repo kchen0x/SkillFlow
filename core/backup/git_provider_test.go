@@ -276,3 +276,60 @@ func TestGitProviderResolveConflictUseRemoteWithoutInit(t *testing.T) {
 		t.Fatalf("expected clean worktree after resolution, got: %s", statusOut)
 	}
 }
+
+func TestGitProviderPendingChanges(t *testing.T) {
+	remoteDir := t.TempDir()
+	runGit(t, remoteDir, "init", "--bare")
+
+	localDir := t.TempDir()
+	p := NewGitProvider()
+	if err := p.Init(map[string]string{
+		"repo_url": remoteDir,
+		"branch": "main",
+	}); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	if err := p.ensureRepo(localDir); err != nil {
+		t.Fatalf("ensureRepo failed: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(localDir, "existing.txt"), []byte("one"), 0644); err != nil {
+		t.Fatalf("WriteFile existing.txt failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "delete.txt"), []byte("gone"), 0644); err != nil {
+		t.Fatalf("WriteFile delete.txt failed: %v", err)
+	}
+	runGit(t, localDir, "add", "existing.txt", "delete.txt")
+	runGit(t, localDir, "commit", "-m", "base")
+	runGit(t, localDir, "push", "-u", "origin", "HEAD:main")
+
+	if err := os.WriteFile(filepath.Join(localDir, "existing.txt"), []byte("two"), 0644); err != nil {
+		t.Fatalf("WriteFile existing.txt update failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "added.txt"), []byte("new"), 0644); err != nil {
+		t.Fatalf("WriteFile added.txt failed: %v", err)
+	}
+	if err := os.Remove(filepath.Join(localDir, "delete.txt")); err != nil {
+		t.Fatalf("Remove delete.txt failed: %v", err)
+	}
+
+	changes, err := p.PendingChanges(localDir)
+	if err != nil {
+		t.Fatalf("PendingChanges failed: %v", err)
+	}
+
+	want := map[string]string{
+		"added.txt":    "added",
+		"delete.txt":   "deleted",
+		"existing.txt": "modified",
+	}
+	if len(changes) != len(want) {
+		t.Fatalf("expected %d changes, got %d: %+v", len(want), len(changes), changes)
+	}
+	for _, change := range changes {
+		if want[change.Path] != change.Action {
+			t.Fatalf("unexpected action for %s: got %s want %s", change.Path, change.Action, want[change.Path])
+		}
+	}
+}

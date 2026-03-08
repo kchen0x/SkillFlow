@@ -21,6 +21,12 @@ type SnapshotEntry struct {
 func BuildSnapshot(root string) (Snapshot, error) {
 	snapshot := make(Snapshot)
 
+	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
+		return snapshot, nil
+	} else if err != nil {
+		return nil, err
+	}
+
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

@@ -202,7 +202,7 @@ func (a *App) runBackup() error {
 			return err
 		}
 	}
-	changes, currentSnapshot, err := a.computeBackupChanges(backupDir)
+	changes, currentSnapshot, err := a.computeBackupChanges(provider, backupDir, isGit)
 	if err != nil {
 		a.logErrorf("backup failed: compute changes failed: %v", err)
 		return err
@@ -230,10 +230,7 @@ func (a *App) runBackup() error {
 		a.hub.Publish(notify.Event{Type: notify.EventBackupFailed, Payload: err.Error()})
 		return err
 	} else {
-		if saveErr := backup.SaveSnapshot(a.backupSnapshotPath(), currentSnapshot); saveErr != nil {
-			a.logErrorf("backup snapshot save failed: %v", saveErr)
-		}
-		a.setLastBackupResult(changes)
+		a.recordBackupResult(changes, currentSnapshot)
 		payload := notify.BackupCompletedPayload{Files: changes}
 		a.logInfof("backup completed")
 		if isGit {
@@ -294,6 +291,12 @@ func (a *App) gitPullOnStartup() {
 		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: prepErr.Error()})
 		return
 	}
+	beforeSnapshot, snapErr := backup.BuildSnapshot(backupDir)
+	if snapErr != nil {
+		a.logErrorf("startup git pull failed: build pre-pull snapshot failed: %v", snapErr)
+		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: snapErr.Error()})
+		return
+	}
 	a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
 	if err := gitP.Restore(a.ctx, "", "", backupDir); err != nil {
 		a.logErrorf("startup git pull failed: %v", err)
@@ -306,9 +309,16 @@ func (a *App) gitPullOnStartup() {
 		}
 		return
 	}
+	changes, afterSnapshot, diffErr := a.computeSnapshotChanges(beforeSnapshot, backupDir)
+	if diffErr != nil {
+		a.logErrorf("startup git pull failed: compute post-pull changes failed: %v", diffErr)
+		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: diffErr.Error()})
+		return
+	}
+	a.recordBackupResult(changes, afterSnapshot)
 	a.logInfof("startup git pull completed")
 	a.clearGitConflictPending()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted})
+	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes}})
 	a.reloadStateFromDisk()
 }
 
@@ -361,6 +371,11 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	localCfg := a.config.LoadLocalRuntimeConfig()
 	backupDir := a.backupRootDir(config.AppConfig{SkillsStorageDir: localCfg.SkillsStorageDir})
 	a.logInfof("git conflict resolution started: strategy=%s, backupDir=%s", action, backupDir)
+	beforeSnapshot, snapErr := backup.BuildSnapshot(backupDir)
+	if snapErr != nil {
+		a.logErrorf("git conflict resolution failed: build pre-resolution snapshot failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, snapErr)
+		return snapErr
+	}
 	var err error
 	if useLocal {
 		err = gitP.ResolveConflictUseLocal(backupDir)
@@ -374,8 +389,14 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	a.gitConflictMu.Lock()
 	a.gitConflictPending = false
 	a.gitConflictMu.Unlock()
+	changes, afterSnapshot, diffErr := a.computeSnapshotChanges(beforeSnapshot, backupDir)
+	if diffErr != nil {
+		a.logErrorf("git conflict resolution failed: compute post-resolution changes failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, diffErr)
+		return diffErr
+	}
+	a.recordBackupResult(changes, afterSnapshot)
 	a.reloadStateFromDisk()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted})
+	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes}})
 	a.logInfof("git conflict resolution completed: strategy=%s, backupDir=%s", action, backupDir)
 	return nil
 }
@@ -410,7 +431,14 @@ func (a *App) backupSnapshotPath() string {
 	return filepath.Join(config.AppDataDir(), "cache", "backup_snapshot.json")
 }
 
-func (a *App) computeBackupChanges(backupDir string) ([]backup.RemoteFile, backup.Snapshot, error) {
+func (a *App) computeBackupChanges(provider backup.CloudProvider, backupDir string, isGit bool) ([]backup.RemoteFile, backup.Snapshot, error) {
+	if isGit {
+		if gitProvider, ok := provider.(*backup.GitProvider); ok {
+			changes, err := gitProvider.PendingChanges(backupDir)
+			return changes, nil, err
+		}
+	}
+
 	previousSnapshot, err := backup.LoadSnapshot(a.backupSnapshotPath())
 	if err != nil {
 		return nil, nil, err
@@ -420,6 +448,23 @@ func (a *App) computeBackupChanges(backupDir string) ([]backup.RemoteFile, backu
 		return nil, nil, err
 	}
 	return backup.DiffSnapshots(previousSnapshot, currentSnapshot), currentSnapshot, nil
+}
+
+func (a *App) computeSnapshotChanges(beforeSnapshot backup.Snapshot, root string) ([]backup.RemoteFile, backup.Snapshot, error) {
+	afterSnapshot, err := backup.BuildSnapshot(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	return backup.DiffSnapshots(beforeSnapshot, afterSnapshot), afterSnapshot, nil
+}
+
+func (a *App) recordBackupResult(files []backup.RemoteFile, snapshot backup.Snapshot) {
+	if snapshot != nil {
+		if err := backup.SaveSnapshot(a.backupSnapshotPath(), snapshot); err != nil {
+			a.logErrorf("backup snapshot save failed: %v", err)
+		}
+	}
+	a.setLastBackupResult(files)
 }
 
 func (a *App) setLastBackupResult(files []backup.RemoteFile) {
@@ -1195,6 +1240,11 @@ func (a *App) RestoreFromCloud() error {
 			return err
 		}
 	}
+	beforeSnapshot, err := backup.BuildSnapshot(restoreDir)
+	if err != nil {
+		a.logErrorf("restore from cloud failed: build pre-restore snapshot failed: %v", err)
+		return err
+	}
 	if isGit {
 		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
 	}
@@ -1209,11 +1259,20 @@ func (a *App) RestoreFromCloud() error {
 		}
 		return err
 	}
+	changes, afterSnapshot, err := a.computeSnapshotChanges(beforeSnapshot, restoreDir)
+	if err != nil {
+		a.logErrorf("restore from cloud failed: compute post-restore changes failed: %v", err)
+		if isGit {
+			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+		}
+		return err
+	}
+	a.recordBackupResult(changes, afterSnapshot)
 	a.logInfof("restore from cloud completed")
 	a.reloadStateFromDisk()
 	if isGit {
 		a.clearGitConflictPending()
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted})
+		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes}})
 	}
 	return nil
 }
