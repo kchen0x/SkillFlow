@@ -33,14 +33,15 @@ type maxDepthPuller interface {
 }
 
 type App struct {
-	ctx         context.Context
-	hub         *notify.Hub
-	sysLog      *applog.Logger
-	storage     *skill.Storage
-	config      *config.Service
-	starStorage *coregit.StarStorage
-	cacheDir    string
-	startupOnce sync.Once
+	ctx                context.Context
+	hub                *notify.Hub
+	sysLog             *applog.Logger
+	storage            *skill.Storage
+	config             *config.Service
+	starStorage        *coregit.StarStorage
+	cacheDir           string
+	startupOnce        sync.Once
+	initialWindowState config.WindowState
 
 	// Git sync state
 	gitConflictMu      sync.Mutex
@@ -137,7 +138,8 @@ func (a *App) startBackgroundStartupTasks() {
 	})
 }
 
-func (a *App) beforeClose(_ context.Context) bool {
+func (a *App) beforeClose(ctx context.Context) bool {
+	a.persistCurrentWindowSize(ctx)
 	a.logInfof("application quit started")
 	return false
 }

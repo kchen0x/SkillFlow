@@ -223,6 +223,46 @@ func TestProxyStoredOnlyInLocalConfig(t *testing.T) {
 	assert.Equal(t, cfg.Proxy, loaded.Proxy)
 }
 
+func TestWindowStateStoredOnlyInLocalConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+
+	require.NoError(t, svc.SaveWindowState(config.WindowState{Width: 1440, Height: 920}))
+
+	state, ok := svc.LoadWindowState()
+	require.True(t, ok)
+	assert.Equal(t, config.WindowState{Width: 1440, Height: 920}, state)
+
+	sharedPath := filepath.Join(dir, "config.json")
+	sharedData, err := os.ReadFile(sharedPath)
+	if err == nil {
+		assert.NotContains(t, string(sharedData), `"window"`)
+	} else {
+		assert.ErrorIs(t, err, os.ErrNotExist)
+	}
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"window"`)
+	assert.Contains(t, string(localData), `"width": 1440`)
+	assert.Contains(t, string(localData), `"height": 920`)
+}
+
+func TestSaveConfigPreservesWindowState(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+
+	require.NoError(t, svc.SaveWindowState(config.WindowState{Width: 1320, Height: 860}))
+
+	cfg := config.DefaultConfig(dir)
+	cfg.DefaultCategory = "Saved"
+	require.NoError(t, svc.Save(cfg))
+
+	state, ok := svc.LoadWindowState()
+	require.True(t, ok)
+	assert.Equal(t, config.WindowState{Width: 1320, Height: 860}, state)
+}
+
 func TestCloudSensitiveCredentialsStoredOnlyInLocalConfig(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)

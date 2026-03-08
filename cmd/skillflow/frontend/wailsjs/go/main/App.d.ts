@@ -4,9 +4,9 @@ import {git} from '../models';
 import {main} from '../models';
 import {prompt} from '../models';
 import {config} from '../models';
+import {backup} from '../models';
 import {skill} from '../models';
 import {install} from '../models';
-import {backup} from '../models';
 
 export function AddCustomTool(arg1:string,arg2:string):Promise<void>;
 

@@ -4,7 +4,7 @@ export namespace backup {
 	    path: string;
 	    size: number;
 	    isDir: boolean;
-	    action: string;
+	    action?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RemoteFile(source);

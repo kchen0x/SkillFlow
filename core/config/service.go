@@ -45,6 +45,7 @@ type localConfig struct {
 	CloudCredentialsByProvider map[string]map[string]string `json:"cloudCredentialsByProvider,omitempty"`
 	CloudCredentials           map[string]string            `json:"cloudCredentials,omitempty"`
 	Proxy                      ProxyConfig                  `json:"proxy"`
+	Window                     *WindowState                 `json:"window,omitempty"`
 }
 
 // localToolConfig holds path settings for one tool.
@@ -146,7 +147,9 @@ func (s *Service) Save(cfg AppConfig) error {
 	if err := s.saveShared(s.splitShared(cfg)); err != nil {
 		return err
 	}
-	return s.saveLocal(s.splitLocal(cfg))
+	nextLocal := s.splitLocal(cfg)
+	nextLocal.Window = local.Window
+	return s.saveLocal(nextLocal)
 }
 
 // maybeMigrate converts the old single-file config.json (which contained paths)
@@ -230,6 +233,14 @@ func (s *Service) loadLocal() localConfig {
 	}
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
+	if lc.Window != nil {
+		normalized := NormalizeWindowState(*lc.Window)
+		if normalized.Width == 0 || normalized.Height == 0 {
+			lc.Window = nil
+		} else {
+			lc.Window = &normalized
+		}
+	}
 	return lc
 }
 
@@ -249,11 +260,40 @@ func (s *Service) saveLocal(lc localConfig) error {
 	lc.CloudCredentials = nil
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
+	if lc.Window != nil {
+		normalized := NormalizeWindowState(*lc.Window)
+		if normalized.Width == 0 || normalized.Height == 0 {
+			lc.Window = nil
+		} else {
+			lc.Window = &normalized
+		}
+	}
 	data, err := json.MarshalIndent(lc, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(s.localConfigPath, data, 0644)
+}
+
+func (s *Service) LoadWindowState() (WindowState, bool) {
+	local := s.loadLocal()
+	if local.Window == nil {
+		return WindowState{}, false
+	}
+	return *local.Window, true
+}
+
+func (s *Service) SaveWindowState(state WindowState) error {
+	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+		return err
+	}
+	normalized := NormalizeWindowState(state)
+	if normalized.Width == 0 || normalized.Height == 0 {
+		return nil
+	}
+	local := s.loadLocal()
+	local.Window = &normalized
+	return s.saveLocal(local)
 }
 
 func (s *Service) defaultShared() sharedConfig {

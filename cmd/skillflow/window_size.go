@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"github.com/shinerio/skillflow/core/config"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -44,12 +45,17 @@ func (a *App) fitInitialWindowToScreen(ctx context.Context) {
 
 	targetWidth := clampInitialWindowDimension(preferredWindowWidth, screenWidth-windowWidthMargin)
 	targetHeight := clampInitialWindowDimension(preferredWindowHeight, screenHeight-windowHeightMargin)
+	if persisted, ok := a.config.LoadWindowState(); ok {
+		targetWidth = clampInitialWindowDimension(persisted.Width, screenWidth-windowWidthMargin)
+		targetHeight = clampInitialWindowDimension(persisted.Height, screenHeight-windowHeightMargin)
+	}
 	minWidth := minInt(minWindowWidth, targetWidth)
 	minHeight := minInt(minWindowHeight, targetHeight)
 
 	runtime.WindowSetMinSize(ctx, minWidth, minHeight)
 	runtime.WindowSetSize(ctx, targetWidth, targetHeight)
 	runtime.WindowCenter(ctx)
+	a.initialWindowState = config.NormalizeWindowState(config.WindowState{Width: targetWidth, Height: targetHeight})
 
 	a.logInfof(
 		"initial window sizing completed: screen=%dx%d window=%dx%d min=%dx%d",
@@ -94,4 +100,23 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (a *App) persistCurrentWindowSize(ctx context.Context) {
+	a.logInfof("window size persistence started")
+	width, height := runtime.WindowGetSize(ctx)
+	state := config.NormalizeWindowState(config.WindowState{Width: width, Height: height})
+	if state.Width == 0 || state.Height == 0 {
+		a.logErrorf("window size persistence failed: invalid size width=%d height=%d", width, height)
+		return
+	}
+	if state == a.initialWindowState {
+		a.logDebugf("window size persistence skipped: unchanged width=%d height=%d", state.Width, state.Height)
+		return
+	}
+	if err := a.config.SaveWindowState(state); err != nil {
+		a.logErrorf("window size persistence failed: width=%d height=%d err=%v", state.Width, state.Height, err)
+		return
+	}
+	a.logInfof("window size persistence completed: width=%d height=%d", state.Width, state.Height)
 }

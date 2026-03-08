@@ -42,6 +42,11 @@ type ProxyConfig struct {
 	URL  string    `json:"url"`  // used when Mode == "manual", e.g. "http://127.0.0.1:7890"
 }
 
+type WindowState struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
 type AppConfig struct {
 	SkillsStorageDir      string                         `json:"skillsStorageDir"`
 	DefaultCategory       string                         `json:"defaultCategory"`
@@ -63,6 +68,8 @@ const (
 	DefaultRepoScanMaxDepth = 5
 	MinRepoScanMaxDepth     = 1
 	MaxRepoScanMaxDepth     = 20
+	MinWindowWidth          = 640
+	MinWindowHeight         = 480
 )
 
 func NormalizeLogLevel(level string) string {
@@ -120,4 +127,17 @@ func NormalizeProxyConfig(proxy ProxyConfig) ProxyConfig {
 	}
 	proxy.URL = strings.TrimSpace(proxy.URL)
 	return proxy
+}
+
+func NormalizeWindowState(state WindowState) WindowState {
+	if state.Width < MinWindowWidth {
+		state.Width = 0
+	}
+	if state.Height < MinWindowHeight {
+		state.Height = 0
+	}
+	if state.Width == 0 || state.Height == 0 {
+		return WindowState{}
+	}
+	return state
 }
