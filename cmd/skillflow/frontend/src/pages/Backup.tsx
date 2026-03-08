@@ -134,6 +134,8 @@ export default function Backup() {
             setResultStatus('idle')
             try {
               await RestoreFromCloud()
+              await loadLastChanges()
+              setResultStatus('done')
             } catch {
               setResultStatus('error')
             } finally {

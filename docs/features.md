@@ -374,16 +374,17 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 |--------|---------------------|-----------|
 | **Backup Now** (Upload icon) | 立即备份 | 立即备份 |
 | **Restore / Pull** (Download icon) | 从云端恢复 | 拉取远端 |
-| **Refresh** (RefreshCw) | Reloads the file list | Same |
+| **Refresh** (RefreshCw) | Reloads the latest backup change result | Same |
 
 - Backup Now and Restore are disabled when cloud is not configured.
 - **"Backup complete / Git sync complete"** (green) / **"Backup/sync failed"** (red) status messages.
 
-### Cloud File List
+### Backup Change List
 
-- Object storage: file path (monospace) + size in KB.
-- Git: files tracked by `git ls-files`, each showing relative path + size.
-- Object storage listings are paginated internally, so the UI shows the complete remote file set instead of only the first page.
+- After each successful backup or restore, the page shows only the files involved in that operation, not the full remote file set.
+- Both object storage and Git render the same per-run list with action badges: `Added`, `Modified`, `Deleted`.
+- Deleted entries show a deletion label instead of a file size.
+- Refresh reloads the latest in-memory backup result for the current app session.
 - Scrollable, max-height container.
 - **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `prompts/`, `config.json`, etc.); `cache/` and `.git/` are excluded.
 - **Custom object-storage prefix** — object storage providers let the user choose a parent `remotePath`; SkillFlow always writes under `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
@@ -641,13 +642,13 @@ Events emitted from the Go backend to the frontend via Wails runtime:
 |-------|-----------|---------|
 | `backup.started` | Auto-backup begins | — |
 | `backup.progress` | Each file uploaded | `{ currentFile: string }` |
-| `backup.completed` | Backup finished | — |
+| `backup.completed` | Backup finished | `{ files: Array<{ path, size, action }> }` |
 | `backup.failed` | Backup error | — |
 | `update.available` | New commit found for a skill | `{ skillID, skillName, currentSHA, latestSHA }` |
 | `star.sync.progress` | One repo synced | `{ repoURL, repoName, syncError }` |
 | `star.sync.done` | All repos synced | — |
 | `git.sync.started` | Git pull/push begins | — |
-| `git.sync.completed` | Git sync succeeded | — |
+| `git.sync.completed` | Git sync succeeded | `{ files: Array<{ path, size, action }> }` when triggered by backup/restore/conflict resolution |
 | `git.sync.failed` | Git sync error | — |
 | `git.conflict` | Git merge conflict detected | `{ message: string, files?: string[] }` |
 

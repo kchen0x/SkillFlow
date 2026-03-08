@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -398,6 +399,17 @@ func (p *GitProvider) Restore(_ context.Context, _, _, localDir string) error {
 }
 
 // List returns the files tracked by git in the local working tree.
+func (p *GitProvider) PendingChanges(localDir string) ([]RemoteFile, error) {
+	if err := p.ensureRepo(localDir); err != nil {
+		return nil, err
+	}
+	out, err := p.run(localDir, "status", "--porcelain", "-uall")
+	if err != nil {
+		return nil, fmt.Errorf("git status failed: %s", out)
+	}
+	return parseGitStatusChanges(localDir, out), nil
+}
+
 func (p *GitProvider) List(_ context.Context, _, _ string) ([]RemoteFile, error) {
 	if p.localDir == "" {
 		return nil, nil
@@ -466,4 +478,49 @@ func (p *GitProvider) ResolveConflictUseRemote(localDir string) error {
 }
 
 // GetBranch returns the configured branch.
+func parseGitStatusChanges(localDir, output string) []RemoteFile {
+	changes := make([]RemoteFile, 0)
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		line = strings.TrimSpace(line)
+		if len(line) < 3 {
+			continue
+		}
+
+		status := line[:2]
+		path := strings.TrimSpace(line[3:])
+		if idx := strings.LastIndex(path, " -> "); idx >= 0 {
+			path = strings.TrimSpace(path[idx+4:])
+		}
+		if path == "" {
+			continue
+		}
+
+		action := "modified"
+		switch {
+		case status == "??":
+			action = "added"
+		case strings.Contains(status, "D"):
+			action = "deleted"
+		case strings.Contains(status, "A"):
+			action = "added"
+		}
+
+		var size int64
+		if action != "deleted" {
+			if info, err := os.Stat(filepath.Join(localDir, filepath.FromSlash(path))); err == nil {
+				size = info.Size()
+			}
+		}
+
+		changes = append(changes, RemoteFile{Path: path, Size: size, Action: action})
+	}
+	sort.Slice(changes, func(i, j int) bool {
+		if changes[i].Path == changes[j].Path {
+			return changes[i].Action < changes[j].Action
+		}
+		return changes[i].Path < changes[j].Path
+	})
+	return changes
+}
+
 func (p *GitProvider) GetBranch() string { return p.branch }
