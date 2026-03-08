@@ -622,7 +622,7 @@ export default function SettingsPage() {
         className="flex gap-1 mb-6 rounded-xl p-1 w-fit"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-base)' }}
       >
-        {(['tools', 'cloud', 'general', 'network'] as Tab[]).map(tabKey => {
+        {(['tools', 'cloud', 'network', 'general'] as Tab[]).map(tabKey => {
           const labels: Record<Tab, string> = {
             tools: t('settings.tabTools'),
             cloud: t('settings.tabCloud'),

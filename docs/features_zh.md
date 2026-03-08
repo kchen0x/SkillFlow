@@ -429,7 +429,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 
 ## 7. 设置
 
-配置面板，分四个标签页。
+配置面板，当前标签顺序为：工具、云存储、代理、通用。
 
 ### 工具路径标签页
 

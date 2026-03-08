@@ -429,7 +429,7 @@ When the **git** provider is selected:
 
 ## 7. Settings
 
-Configuration panel with four tabs.
+Configuration panel with four tabs in this order: Tools, Cloud, Proxy, General.
 
 ### Tools Tab
 
