@@ -440,6 +440,8 @@ When the **git** provider is selected:
 
 Configuration panel with four tabs in this order: Tools, Cloud, Proxy, General.
 
+The Settings page content expands with the window up to a wider desktop-friendly maximum width instead of staying pinned to a narrow fixed column.
+
 ### Tools Tab
 
 For each built-in or custom tool:
@@ -461,7 +463,7 @@ For each built-in or custom tool:
 
 | Control | Description |
 |---------|-------------|
-| **Provider buttons** | Select cloud provider: Aliyun OSS / AWS S3 / Azure Blob Storage / Google Cloud Storage / Tencent COS / Huawei OBS / **git**. Each provider restores its own saved bucket/path/credential draft when selected |
+| **Provider buttons** | Responsive provider cards shown in a wrapping grid. The order is fixed to **git** first, then the remaining providers in their backend order. Each provider restores its own saved bucket/path/credential draft when selected |
 | **Bucket name** | Object storage bucket name (hidden when git provider is selected) |
 | **Remote path** | Object storage parent path (optional). Users enter the parent folder only; SkillFlow always appends `/skillflow/` to build the final backup prefix |
 | **Final backup path preview** | Real-time rendered object-storage destination shown as `<bucket>/<remotePath>/skillflow/` so users can verify the exact remote backup location before saving |
@@ -811,4 +813,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-08*
+*Last updated: 2026-03-09*
