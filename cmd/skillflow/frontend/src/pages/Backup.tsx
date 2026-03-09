@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BackupNow, GetConfig, GetLastBackupChanges, RestoreFromCloud } from '../../wailsjs/go/main/App'
+import { BackupNow, GetConfig, GetLastBackupChanges, GetLastBackupCompletedAt, RestoreFromCloud } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { Cloud, Download, RefreshCw, Upload } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -22,12 +22,15 @@ function normalizeChanges(input: any): BackupChange[] {
     .filter((item: BackupChange) => item.path !== '')
 }
 
-function parseCompletedPayload(data: string): BackupChange[] {
+function parseCompletedPayload(data: string): { files: BackupChange[]; completedAt: string } {
   try {
     const payload = JSON.parse(data)
-    return normalizeChanges(payload?.files ?? payload?.Files ?? [])
+    return {
+      files: normalizeChanges(payload?.files ?? payload?.Files ?? []),
+      completedAt: payload?.completedAt ?? payload?.CompletedAt ?? '',
+    }
   } catch {
-    return []
+    return { files: [], completedAt: '' }
   }
 }
 
@@ -51,7 +54,7 @@ function actionTone(action: string) {
 }
 
 export default function Backup() {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [files, setFiles] = useState<BackupChange[]>([])
   const [resultStatus, setResultStatus] = useState<'idle' | 'done' | 'error'>('idle')
   const [pushing, setPushing] = useState(false)
@@ -59,10 +62,22 @@ export default function Backup() {
   const [currentFile, setCurrentFile] = useState('')
   const [cloudEnabled, setCloudEnabled] = useState(false)
   const [isGit, setIsGit] = useState(false)
+  const [lastCompletedAt, setLastCompletedAt] = useState('')
+
+  const formatCompletedAt = (value: string) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    return new Intl.DateTimeFormat(lang === 'zh' ? 'zh-CN' : 'en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    }).format(date)
+  }
 
   const loadLastChanges = async () => {
-    const result = await GetLastBackupChanges()
+    const [result, completedAt] = await Promise.all([GetLastBackupChanges(), GetLastBackupCompletedAt()])
     setFiles(normalizeChanges(result))
+    setLastCompletedAt(completedAt ?? '')
   }
 
   useEffect(() => {
@@ -76,14 +91,18 @@ export default function Backup() {
       try { setCurrentFile(JSON.parse(data).currentFile ?? '') } catch {}
     })
     EventsOn('backup.completed', (data: string) => {
+      const payload = parseCompletedPayload(data)
       setResultStatus('done')
-      setFiles(parseCompletedPayload(data))
+      setFiles(payload.files)
+      setLastCompletedAt(payload.completedAt)
       setCurrentFile('')
     })
     EventsOn('backup.failed', () => setResultStatus('error'))
     EventsOn('git.sync.completed', (data: string) => {
+      const payload = parseCompletedPayload(data)
       setResultStatus('done')
-      setFiles(parseCompletedPayload(data))
+      setFiles(payload.files)
+      setLastCompletedAt(payload.completedAt)
       setCurrentFile('')
     })
     EventsOn('git.sync.failed', () => setResultStatus('error'))
@@ -167,6 +186,12 @@ export default function Backup() {
       {resultStatus === 'error' && (
         <p className="mb-4 text-sm" style={{ color: 'var(--color-error)' }}>
           {isGit ? t('backup.gitFailed') : t('backup.failed')}
+        </p>
+      )}
+
+      {lastCompletedAt && (
+        <p className="mb-4 text-sm" style={{ color: 'var(--text-muted)' }}>
+          {t('backup.lastSyncAt', { time: formatCompletedAt(lastCompletedAt) })}
         </p>
       )}
 

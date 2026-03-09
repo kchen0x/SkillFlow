@@ -229,6 +229,7 @@ export const en = {
   'backup.failed': 'Backup failed. Check cloud storage config.',
   'backup.gitChanges': 'Git Changes This Backup',
   'backup.cloudChanges': 'Cloud Changes This Backup',
+  'backup.lastSyncAt': 'Last sync completed at: {time}',
   'backup.noChanges': 'No file changes were included in this backup.',
   'backup.deleted': 'Deleted',
   'backup.action.added': 'Added',

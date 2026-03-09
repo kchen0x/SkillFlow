@@ -37,7 +37,8 @@ type BackupProgressPayload struct {
 }
 
 type BackupCompletedPayload struct {
-	Files []backup.RemoteFile `json:"files"`
+	Files       []backup.RemoteFile `json:"files"`
+	CompletedAt string              `json:"completedAt,omitempty"`
 }
 
 type UpdateAvailablePayload struct {

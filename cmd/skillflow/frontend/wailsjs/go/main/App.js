@@ -102,6 +102,10 @@ export function GetLastBackupChanges() {
   return window['go']['main']['App']['GetLastBackupChanges']();
 }
 
+export function GetLastBackupCompletedAt() {
+  return window['go']['main']['App']['GetLastBackupCompletedAt']();
+}
+
 export function GetLogDir() {
   return window['go']['main']['App']['GetLogDir']();
 }
