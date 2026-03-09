@@ -548,3 +548,4 @@ export namespace skill {
 	}
 
 }
+

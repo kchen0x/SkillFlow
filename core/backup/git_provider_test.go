@@ -234,7 +234,7 @@ func TestGitProviderResolveConflictUseRemoteWithoutInit(t *testing.T) {
 	runGit(t, localDir, "add", "-A")
 	runGit(t, localDir, "commit", "-m", "local change")
 
-	pullOut, err := runGitWithError(localDir, "pull", "origin", "master", "--allow-unrelated-histories")
+	pullOut, err := runGitWithError(localDir, "pull", "--no-rebase", "--allow-unrelated-histories", "origin", "master")
 	if err == nil {
 		t.Fatal("expected git pull conflict")
 	}
@@ -285,7 +285,7 @@ func TestGitProviderPendingChanges(t *testing.T) {
 	p := NewGitProvider()
 	if err := p.Init(map[string]string{
 		"repo_url": remoteDir,
-		"branch": "main",
+		"branch":   "main",
 	}); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
