@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_aliyun
+
 package backup
 
 import (
@@ -17,6 +19,10 @@ type AliyunProvider struct {
 }
 
 func NewAliyunProvider() *AliyunProvider { return &AliyunProvider{} }
+
+func init() {
+	RegisterProviderFactory(func() CloudProvider { return NewAliyunProvider() })
+}
 
 func (a *AliyunProvider) Name() string { return "aliyun" }
 

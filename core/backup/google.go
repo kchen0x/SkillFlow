@@ -1,23 +1,27 @@
+//go:build !provider_select || backup_google
+
 package backup
 
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"cloud.google.com/go/storage"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+	gcsapi "google.golang.org/api/storage/v1"
 )
 
 type GoogleProvider struct {
-	client *storage.Client
+	service *gcsapi.Service
 }
 
 func NewGoogleProvider() *GoogleProvider { return &GoogleProvider{} }
+
+func init() {
+	RegisterProviderFactory(func() CloudProvider { return NewGoogleProvider() })
+}
 
 func (g *GoogleProvider) Name() string { return "google" }
 
@@ -33,26 +37,26 @@ func (g *GoogleProvider) RequiredCredentials() []CredentialField {
 }
 
 func (g *GoogleProvider) Init(creds map[string]string) error {
-	if g.client != nil {
-		_ = g.client.Close()
-	}
-
 	opt, err := googleCredentialOption(creds["service_account_json"])
 	if err != nil {
 		return err
 	}
 
-	client, err := storage.NewClient(context.Background(), opt)
+	service, err := gcsapi.NewService(
+		context.Background(),
+		opt,
+		option.WithScopes(gcsapi.DevstorageFullControlScope),
+	)
 	if err != nil {
-		return fmt.Errorf("init google cloud storage client failed: %w", err)
+		return fmt.Errorf("init google cloud storage service failed: %w", err)
 	}
 
-	g.client = client
+	g.service = service
 	return nil
 }
 
 func (g *GoogleProvider) Sync(ctx context.Context, localDir, bucket, remotePath string, onProgress func(string)) error {
-	bucketHandle, err := g.bucketHandle(bucket)
+	bucketName, err := g.bucketName(bucket)
 	if err != nil {
 		return err
 	}
@@ -83,92 +87,86 @@ func (g *GoogleProvider) Sync(ctx context.Context, localDir, bucket, remotePath 
 		}
 		defer src.Close()
 
-		writer := bucketHandle.Object(key).NewWriter(ctx)
-		if _, err := io.Copy(writer, src); err != nil {
-			_ = writer.Close()
-			return err
-		}
-		return writer.Close()
+		_, err = g.service.Objects.Insert(bucketName, &gcsapi.Object{Name: key}).Context(ctx).Media(src).Do()
+		return err
 	})
 }
 
 func (g *GoogleProvider) Restore(ctx context.Context, bucket, remotePath, localDir string) error {
-	bucketHandle, err := g.bucketHandle(bucket)
+	bucketName, err := g.bucketName(bucket)
 	if err != nil {
 		return err
 	}
 
-	it := bucketHandle.Objects(ctx, &storage.Query{Prefix: remotePath})
-	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return err
-		}
+	listCall := g.service.Objects.List(bucketName).Prefix(remotePath)
+	return listCall.Pages(ctx, func(objects *gcsapi.Objects) error {
+		for _, object := range objects.Items {
+			if object == nil {
+				continue
+			}
 
-		rel := strings.TrimPrefix(attrs.Name, remotePath)
-		if rel == "" || ShouldSkipBackupPath(rel) {
-			continue
-		}
+			rel := strings.TrimPrefix(object.Name, remotePath)
+			if rel == "" || ShouldSkipBackupPath(rel) {
+				continue
+			}
 
-		local := filepath.Join(localDir, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
-			return err
-		}
+			local := filepath.Join(localDir, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
+				return err
+			}
 
-		reader, err := bucketHandle.Object(attrs.Name).NewReader(ctx)
-		if err != nil {
-			return err
+			resp, err := g.service.Objects.Get(bucketName, object.Name).Context(ctx).Download()
+			if err != nil {
+				return err
+			}
+			if err := writeReaderToFile(local, resp.Body); err != nil {
+				return err
+			}
 		}
-		if err := writeReaderToFile(local, reader); err != nil {
-			return err
-		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (g *GoogleProvider) List(ctx context.Context, bucket, remotePath string) ([]RemoteFile, error) {
-	bucketHandle, err := g.bucketHandle(bucket)
+	bucketName, err := g.bucketName(bucket)
 	if err != nil {
 		return nil, err
 	}
 
-	it := bucketHandle.Objects(ctx, &storage.Query{Prefix: remotePath})
 	var files []RemoteFile
-	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
+	listCall := g.service.Objects.List(bucketName).Prefix(remotePath)
+	if err := listCall.Pages(ctx, func(objects *gcsapi.Objects) error {
+		for _, object := range objects.Items {
+			if object == nil {
+				continue
+			}
 
-		rel := strings.TrimPrefix(attrs.Name, remotePath)
-		if rel == "" || ShouldSkipBackupPath(rel) {
-			continue
+			rel := strings.TrimPrefix(object.Name, remotePath)
+			if rel == "" || ShouldSkipBackupPath(rel) {
+				continue
+			}
+			files = append(files, RemoteFile{
+				Path: rel,
+				Size: int64(object.Size),
+			})
 		}
-		files = append(files, RemoteFile{
-			Path: rel,
-			Size: attrs.Size,
-		})
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return files, nil
 }
 
-func (g *GoogleProvider) bucketHandle(bucket string) (*storage.BucketHandle, error) {
-	if g.client == nil {
-		return nil, fmt.Errorf("google cloud storage client is not initialized")
+func (g *GoogleProvider) bucketName(bucket string) (string, error) {
+	if g.service == nil {
+		return "", fmt.Errorf("google cloud storage service is not initialized")
 	}
 	bucketName := strings.TrimSpace(bucket)
 	if bucketName == "" {
-		return nil, fmt.Errorf("google cloud storage bucket name is required")
+		return "", fmt.Errorf("google cloud storage bucket name is required")
 	}
-	return g.client.Bucket(bucketName), nil
+	return bucketName, nil
 }
 
 func googleCredentialOption(raw string) (option.ClientOption, error) {

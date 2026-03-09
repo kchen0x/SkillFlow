@@ -375,6 +375,9 @@ function PromptCard({ item, copied, dragging, dropTargetActive, onDragStateChang
   const { preview, truncated } = getPromptPreview(item.content)
   const tooltipTitle = item.description ? `${item.name}
 ${item.description}` : item.name
+  const stopActionPointer = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+  }
 
   if (dragging && dropTargetActive) {
     return (
@@ -399,6 +402,10 @@ ${item.description}` : item.name
       className={`card-base relative flex min-h-[118px] flex-col p-4 group cursor-grab ${dragging ? 'opacity-55 scale-[0.96]' : ''}`}
     >
       <button
+        type="button"
+        draggable={false}
+        onPointerDown={stopActionPointer}
+        onDragStart={(event) => event.preventDefault()}
         onClick={(event) => {
           event.stopPropagation()
           onCopy()
@@ -428,6 +435,10 @@ ${item.description}` : item.name
           <span className="truncate text-[11px]" style={{ color: 'var(--accent-primary)' }}>{t('prompts.viewMore')}</span>
         )}
         <button
+          type="button"
+          draggable={false}
+          onPointerDown={stopActionPointer}
+          onDragStart={(event) => event.preventDefault()}
           onClick={(event) => {
             event.stopPropagation()
             onDelete()

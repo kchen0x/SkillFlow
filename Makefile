@@ -9,8 +9,17 @@ endif
 
 APP_DIR := cmd/skillflow
 APP_DIR_WIN := $(subst /,\,$(APP_DIR))
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+COMMA := ,
 
-.PHONY: all dev build test tidy generate install-frontend clean help
+WAILS_BUILD_TAGS ?=
+WAILS_BUILD_LDFLAGS ?= -s -w
+NORMALIZE_PROVIDERS = $(strip $(subst $(COMMA),$(SPACE),$(1)))
+PROVIDER_BUILD_TAGS = $(strip provider_select $(foreach provider,$(call NORMALIZE_PROVIDERS,$(1)),backup_$(provider)))
+WAILS_BUILD_FLAGS = -trimpath $(if $(strip $(WAILS_BUILD_TAGS)),-tags "$(WAILS_BUILD_TAGS)") $(if $(strip $(WAILS_BUILD_LDFLAGS)),-ldflags "$(WAILS_BUILD_LDFLAGS)")
+
+.PHONY: all dev build build-cloud test test-cloud tidy generate install-frontend clean help
 
 all: build
 
@@ -20,7 +29,17 @@ dev:
 
 ## build: Build production binary
 build:
-	cd $(APP_DIR) && $(WAILS) build
+	cd $(APP_DIR) && $(WAILS) build $(WAILS_BUILD_FLAGS)
+ifneq ($(OS),Windows_NT)
+	@if [ -f $(APP_DIR)/build/darwin/iconfile.icns ] && [ -d $(APP_DIR)/build/bin/SkillFlow.app ]; then \
+		cp $(APP_DIR)/build/darwin/iconfile.icns $(APP_DIR)/build/bin/SkillFlow.app/Contents/Resources/iconfile.icns; \
+	fi
+endif
+
+## build-cloud: Build with only selected cloud providers, e.g. make build-cloud PROVIDERS="aws,google"
+build-cloud:
+	$(if $(strip $(PROVIDERS)),,$(error Usage: make build-cloud PROVIDERS="aws,google"))
+	cd $(APP_DIR) && $(WAILS) build -trimpath -tags "$(strip $(WAILS_BUILD_TAGS) $(call PROVIDER_BUILD_TAGS,$(PROVIDERS)))" $(if $(strip $(WAILS_BUILD_LDFLAGS)),-ldflags "$(WAILS_BUILD_LDFLAGS)")
 ifneq ($(OS),Windows_NT)
 	@if [ -f $(APP_DIR)/build/darwin/iconfile.icns ] && [ -d $(APP_DIR)/build/bin/SkillFlow.app ]; then \
 		cp $(APP_DIR)/build/darwin/iconfile.icns $(APP_DIR)/build/bin/SkillFlow.app/Contents/Resources/iconfile.icns; \
@@ -30,6 +49,11 @@ endif
 ## test: Run all Go tests
 test:
 	go test ./core/...
+
+## test-cloud: Run Go tests with only selected cloud providers, e.g. make test-cloud PROVIDERS="aws,google"
+test-cloud:
+	$(if $(strip $(PROVIDERS)),,$(error Usage: make test-cloud PROVIDERS="aws,google"))
+	go test -tags "$(strip $(WAILS_BUILD_TAGS) $(call PROVIDER_BUILD_TAGS,$(PROVIDERS)))" ./core/...
 
 ## tidy: Sync Go module dependencies
 tidy:

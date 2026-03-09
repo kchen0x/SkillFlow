@@ -800,6 +800,7 @@ Store reusable system prompts inside the synced `prompts/` directory.
 - Each card shows **name**, optional **description**, and the opening content excerpt by default.
 - When the content is longer than the preview window, the card displays **Click to view more**.
 - Top-right action button copies the full prompt content to the desktop clipboard in one click, preserving multi-line content on Windows.
+- Prompt copy now falls back across desktop runtime, browser clipboard, and document copy APIs so the action still succeeds when one clipboard path is unavailable.
 - Bottom-right **Delete** action opens a confirmation dialog before removing both the card and the underlying prompt folder.
 
 ### Prompt Editor
@@ -815,4 +816,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-10*
+*Last updated: 2026-03-09*

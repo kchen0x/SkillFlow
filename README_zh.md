@@ -131,16 +131,22 @@ cd SkillFlow
 make install-frontend   # 安装前端依赖
 make dev                # 热重载开发模式
 make test               # 运行 Go 测试
-make build              # 构建生产版本 → build/bin/
+make build              # 裁剪后的全量构建（包含所有 provider）→ build/bin/
+make build-cloud PROVIDERS="aws,google"  # 只构建指定云 provider + Git 备份
 ```
+
+`make build` 现在默认带上 `-trimpath -ldflags "-s -w"`，在保持默认全量 provider 功能不变的前提下缩小发布体积。  
+如果要按需构建云备份能力，可使用 `make build-cloud PROVIDERS="aliyun,aws,azure,google,tencent,huawei"`；Git 备份会始终保留在所有构建中。
 
 常用 `make` 目标：
 
 | 目标 | 说明 |
 |------|------|
 | `make dev` | 热重载开发模式（Go + 前端） |
-| `make build` | 构建生产版本二进制 |
+| `make build` | 构建裁剪后的全量生产版本二进制 |
+| `make build-cloud PROVIDERS="aws,google"` | 只构建指定云 provider 的裁剪版二进制 |
 | `make test` | 运行所有 Go 测试 |
+| `make test-cloud PROVIDERS="aws,google"` | 仅按指定云 provider 运行 Go 测试 |
 | `make tidy` | 同步 Go 模块依赖 |
 | `make generate` | App 方法变更后重新生成 TypeScript 绑定 |
 | `make clean` | 删除构建产物 |

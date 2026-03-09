@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_tencent
+
 package backup
 
 import (
@@ -19,6 +21,10 @@ type TencentProvider struct {
 }
 
 func NewTencentProvider() *TencentProvider { return &TencentProvider{} }
+
+func init() {
+	RegisterProviderFactory(func() CloudProvider { return NewTencentProvider() })
+}
 
 func (t *TencentProvider) Name() string { return "tencent" }
 

@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_aws
+
 package backup
 
 import (
@@ -9,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -20,6 +21,10 @@ type AWSProvider struct {
 }
 
 func NewAWSProvider() *AWSProvider { return &AWSProvider{} }
+
+func init() {
+	RegisterProviderFactory(func() CloudProvider { return NewAWSProvider() })
+}
 
 func (a *AWSProvider) Name() string { return "aws" }
 
@@ -37,17 +42,13 @@ func (a *AWSProvider) Init(creds map[string]string) error {
 		return fmt.Errorf("aws s3 region is required")
 	}
 
-	cfg, err := config.LoadDefaultConfig(
-		context.Background(),
-		config.WithRegion(region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+	cfg := aws.Config{
+		Region: region,
+		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
 			strings.TrimSpace(creds["access_key_id"]),
 			strings.TrimSpace(creds["secret_access_key"]),
 			"",
 		)),
-	)
-	if err != nil {
-		return fmt.Errorf("init aws s3 client failed: %w", err)
 	}
 
 	a.client = s3.NewFromConfig(cfg)

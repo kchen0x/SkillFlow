@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_azure
+
 package backup
 
 import "testing"

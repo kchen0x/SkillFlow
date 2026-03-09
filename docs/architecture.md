@@ -13,7 +13,7 @@ SkillFlow is a **Wails v2** desktop app (Go 1.23, Wails v2.11.0). The Go backend
 **Tech stack:**
 - Backend: Go 1.23, Wails v2
 - Frontend: React 18, TypeScript, React Router v7, Tailwind CSS, Lucide React, Radix UI
-- Build: Wails CLI, Vite
+- Build: Wails CLI, Vite, optional cloud-provider build tags
 
 ---
 
@@ -21,6 +21,7 @@ SkillFlow is a **Wails v2** desktop app (Go 1.23, Wails v2.11.0). The Go backend
 
 - **`core/sync` package name conflicts with Go stdlib `sync`** — always import it with alias: `toolsync "github.com/shinerio/skillflow/core/sync"`
 - **Wails bindings are auto-generated** — after adding/removing exported methods on `App`, run `wails generate module` to update `frontend/wailsjs/go/main/App.{js,d.ts}`
+- **Cloud backup providers are build-tag aware** — default builds include every provider, while selective builds can pass `provider_select` plus `backup_<provider>` tags (for example `backup_aws backup_google`) to compile only the needed cloud providers; Git backup remains always included
 - **`package main` files at root** — `app.go`, `adapters.go`, `providers.go`, `events.go` are all `package main` alongside `main.go` because Wails requires the app struct in the same package as `main`
 - **No REST API** — direct Wails method bindings; faster and simpler
 - **Installed skill instances are UUID-based, but cross-module identity must use a stable logical key** — see [Unified Skill Identity & State Model](#unified-skill-identity--state-model)
@@ -61,7 +62,7 @@ Installed skill instances are identified by UUID. Cross-module correlation must 
 | `core/notify` | `Hub` (buffered channel pub/sub), `EventType` constants |
 | `core/install` | `Installer` interface, `GitHubInstaller` (scan/download/SHA), `LocalInstaller` |
 | `core/sync` | `ToolAdapter` interface, `FilesystemAdapter` (shared by all built-in tools) |
-| `core/backup` | `CloudProvider` interface, Aliyun/AWS/Azure/Google/Tencent/Huawei/Git implementations |
+| `core/backup` | `CloudProvider` interface, provider factory catalog, and Aliyun/AWS/Azure/Google/Tencent/Huawei/Git implementations |
 | `core/update` | `Checker` (GitHub Commits API SHA comparison) |
 | `core/registry` | Global maps for Installer/ToolAdapter/CloudProvider — registered at startup |
 | `core/git` | Git clone/update, repo scanning for skills, starred repo storage |

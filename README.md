@@ -129,16 +129,22 @@ cd SkillFlow
 make install-frontend   # install frontend dependencies
 make dev                # hot-reload dev mode
 make test               # run Go tests
-make build              # production binary → build/bin/
+make build              # stripped full build (all providers) → build/bin/
+make build-cloud PROVIDERS="aws,google"  # stripped build with only selected cloud providers + Git backup
 ```
+
+`make build` now passes `-trimpath -ldflags "-s -w"` for smaller release binaries while keeping the default full provider set.  
+Use `make build-cloud PROVIDERS="aliyun,aws,azure,google,tencent,huawei"` to compile only the cloud providers you need for a given package; Git backup stays included in all builds.
 
 Common `make` targets:
 
 | Target | Description |
 |--------|-------------|
 | `make dev` | Hot-reload dev mode (Go + frontend) |
-| `make build` | Build production binary |
+| `make build` | Build stripped production binary with all providers |
+| `make build-cloud PROVIDERS="aws,google"` | Build stripped binary with selected cloud providers only |
 | `make test` | Run all Go tests |
+| `make test-cloud PROVIDERS="aws,google"` | Run Go tests with selected cloud providers only |
 | `make tidy` | Sync Go module dependencies |
 | `make generate` | Regenerate TypeScript bindings after App method changes |
 | `make clean` | Remove build artifacts |

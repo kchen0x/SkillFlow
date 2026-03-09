@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_aws
+
 package backup
 
 import "testing"

@@ -4,12 +4,13 @@
 
 本文档面向贡献者，涵盖内部架构、包设计、数据模型和扩展指南。
 
-## 新增云 Provider 说明
+## 云 Provider 构建说明
 
-- `core/backup` 现已包含 AWS S3、Azure Blob Storage、Google Cloud Storage 三个新增 provider，实现方式与现有对象存储 provider 一样，统一遵循 `CloudProvider` 接口。
-- `registerProviders()` 现在会在启动时一并注册 Aliyun、AWS、Azure、Google、Tencent、Huawei 与 Git provider。
-- `CloudConfig.Provider` 的可选值已扩展为 `aliyun`、`aws`、`azure`、`google`、`tencent`、`huawei`、`git`。
-- 可同步连接字段新增 `region`、`account_name`、`service_url`；敏感字段如 `account_key`、`service_account_json` 仍只落在 `config_local.json`。
+- `core/backup` 包含 Aliyun、AWS、Azure、Google、Tencent、Huawei 与 Git provider，统一遵循 `CloudProvider` 接口。
+- 默认构建会包含全部 provider；按需构建时可传入 `provider_select` 和 `backup_<provider>` build tags（例如 `backup_aws backup_google`）只编译需要的云 provider。
+- Git 备份始终保留，不受云 provider 选择影响。
+- `CloudConfig.Provider` 的可选值为 `aliyun`、`aws`、`azure`、`google`、`tencent`、`huawei`、`git`。
+- 可同步连接字段包含 `region`、`account_name`、`service_url`；敏感字段如 `account_key`、`service_account_json` 仍只落在 `config_local.json`。
 
 ---
 
@@ -20,7 +21,7 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
 **技术栈：**
 - 后端：Go 1.23、Wails v2
 - 前端：React 18、TypeScript、React Router v7、Tailwind CSS、Lucide React、Radix UI
-- 构建：Wails CLI、Vite
+- 构建：Wails CLI、Vite、可选云 provider build tags
 
 ---
 
@@ -28,6 +29,7 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
 
 - **`core/sync` 包名与 Go 标准库 `sync` 冲突** — 必须使用别名导入：`toolsync "github.com/shinerio/skillflow/core/sync"`
 - **Wails 绑定为自动生成** — 在 `App` 上增删导出方法后，需运行 `wails generate module` 更新 `frontend/wailsjs/go/main/App.{js,d.ts}`
+- **云备份 provider 支持 build tags** — 默认构建包含全部 provider；按需构建可传入 `provider_select` 以及 `backup_<provider>` 标签，只编译所需云 provider；Git 备份始终保留
 - **根目录下的 `package main` 文件** — `app.go`、`adapters.go`、`providers.go`、`events.go` 均与 `main.go` 同属 `package main`，因为 Wails 要求 App 结构体与 `main` 位于同一包
 - **无 REST API** — 直接使用 Wails 方法绑定，更快更简洁
 - **已安装 Skill 实例使用 UUID，但跨模块关联必须使用稳定的逻辑主键** — 见下文的[统一的 Skill 身份与状态模型](#统一的-skill-身份与状态模型)
@@ -68,7 +70,7 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
 | `core/notify` | `Hub`（缓冲通道发布/订阅）、`EventType` 常量 |
 | `core/install` | `Installer` 接口、`GitHubInstaller`（扫描/下载/SHA）、`LocalInstaller` |
 | `core/sync` | `ToolAdapter` 接口、`FilesystemAdapter`（所有内置工具共用） |
-| `core/backup` | `CloudProvider` 接口、阿里云/腾讯云/华为云实现 |
+| `core/backup` | `CloudProvider` 接口、provider factory catalog，以及阿里云/AWS/Azure/Google/腾讯云/华为云/Git 实现 |
 | `core/update` | `Checker`（GitHub Commits API SHA 对比） |
 | `core/registry` | Installer/ToolAdapter/CloudProvider 的全局映射 — 启动时注册 |
 | `core/git` | Git 克隆/更新、仓库 Skill 扫描、收藏仓库存储 |

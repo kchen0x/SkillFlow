@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_tencent
+
 package backup
 
 import "testing"

@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_google
+
 package backup
 
 import (

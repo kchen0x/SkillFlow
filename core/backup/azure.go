@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_azure
+
 package backup
 
 import (
@@ -15,6 +17,10 @@ type AzureProvider struct {
 }
 
 func NewAzureProvider() *AzureProvider { return &AzureProvider{} }
+
+func init() {
+	RegisterProviderFactory(func() CloudProvider { return NewAzureProvider() })
+}
 
 func (a *AzureProvider) Name() string { return "azure" }
 

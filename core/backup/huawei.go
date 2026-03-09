@@ -1,3 +1,5 @@
+//go:build !provider_select || backup_huawei
+
 package backup
 
 import (
@@ -15,6 +17,10 @@ type HuaweiProvider struct {
 }
 
 func NewHuaweiProvider() *HuaweiProvider { return &HuaweiProvider{} }
+
+func init() {
+	RegisterProviderFactory(func() CloudProvider { return NewHuaweiProvider() })
+}
 
 func (h *HuaweiProvider) Name() string { return "huawei" }
 

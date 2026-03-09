@@ -1,19 +1,14 @@
 import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
+import { copyTextWithDocumentCommand, copyTextWithFallbacks } from './clipboardCore'
 
 export async function copyTextToClipboard(text: string): Promise<void> {
-  try {
-    const ok = await ClipboardSetText(text)
-    if (ok) {
-      return
-    }
-  } catch {
-    // Fall back to the browser clipboard when the runtime API is unavailable.
-  }
-
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-
-  throw new Error('clipboard unavailable')
+  await copyTextWithFallbacks(text, {
+    runtimeWriteText: async (value) => ClipboardSetText(value),
+    browserWriteText: typeof navigator !== 'undefined' && navigator.clipboard?.writeText
+      ? (value) => navigator.clipboard.writeText(value)
+      : undefined,
+    execCommandCopy: typeof document !== 'undefined'
+      ? (value) => copyTextWithDocumentCommand(value, document)
+      : undefined,
+  })
 }
