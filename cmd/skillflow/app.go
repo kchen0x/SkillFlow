@@ -42,6 +42,7 @@ type App struct {
 	cacheDir           string
 	startupOnce        sync.Once
 	initialWindowState config.WindowState
+	autostartFactory   func() (launchAtLoginController, error)
 
 	// Git sync state
 	gitConflictMu      sync.Mutex
@@ -1258,6 +1259,19 @@ func (a *App) SaveConfig(cfg config.AppConfig) error {
 	}
 	if prevCfg.LaunchAtLogin != cfg.LaunchAtLogin {
 		if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
+			persistedCfg := cfg
+			rollbackCfg := cfg
+			rollbackCfg.LaunchAtLogin = prevCfg.LaunchAtLogin
+			if rollbackErr := a.config.Save(rollbackCfg); rollbackErr != nil {
+				a.logErrorf("save config rollback failed: restore launch-at-login setting=%t err=%v", prevCfg.LaunchAtLogin, rollbackErr)
+			} else if rollbackErr := a.syncLaunchAtLogin(prevCfg.LaunchAtLogin); rollbackErr != nil {
+				a.logErrorf("save config rollback failed: restore launch-at-login state=%t err=%v", prevCfg.LaunchAtLogin, rollbackErr)
+				persistedCfg = rollbackCfg
+			} else {
+				persistedCfg = rollbackCfg
+			}
+			a.setLoggerLevel(persistedCfg.LogLevel)
+			a.startAutoSyncTimer(persistedCfg.Cloud.SyncIntervalMinutes)
 			a.logErrorf("save config failed: apply launch-at-login failed: %v", err)
 			return err
 		}
