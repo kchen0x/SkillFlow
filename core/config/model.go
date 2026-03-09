@@ -49,6 +49,7 @@ type WindowState struct {
 
 type AppConfig struct {
 	SkillsStorageDir      string                         `json:"skillsStorageDir"`
+	AutoPushTools         []string                       `json:"autoPushTools"`
 	LaunchAtLogin         bool                           `json:"launchAtLogin"`
 	DefaultCategory       string                         `json:"defaultCategory"`
 	LogLevel              string                         `json:"logLevel"` // "debug" | "info" | "error"
@@ -82,6 +83,29 @@ func NormalizeLogLevel(level string) string {
 	default:
 		return DefaultLogLevel
 	}
+}
+
+func NormalizeToolNameList(names []string) []string {
+	if len(names) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(names))
+	normalized := make([]string, 0, len(names))
+	for _, name := range names {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 func NormalizeRepoScanMaxDepth(depth int) int {

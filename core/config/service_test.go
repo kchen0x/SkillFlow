@@ -28,6 +28,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
 	cfg.DefaultCategory = "MyCategory"
+	cfg.AutoPushTools = []string{"codex", "gemini-cli"}
 	cfg.RepoScanMaxDepth = 7
 	cfg.Proxy = config.ProxyConfig{
 		Mode: config.ProxyModeManual,
@@ -40,9 +41,33 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	loaded, err := svc.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "MyCategory", loaded.DefaultCategory)
+	assert.Equal(t, []string{"codex", "gemini-cli"}, loaded.AutoPushTools)
 	assert.Equal(t, 7, loaded.RepoScanMaxDepth)
 	assert.Equal(t, cfg.Proxy, loaded.Proxy)
 	assert.Equal(t, "v1.2.3", loaded.SkippedUpdateVersion)
+}
+
+func TestAutoPushToolsStoredOnlyInLocalConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.AutoPushTools = []string{" codex ", "gemini-cli", "codex", ""}
+
+	require.NoError(t, svc.Save(cfg))
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(sharedData), "autoPushTools")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"autoPushTools"`)
+	assert.Contains(t, string(localData), `"codex"`)
+	assert.Contains(t, string(localData), `"gemini-cli"`)
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"codex", "gemini-cli"}, loaded.AutoPushTools)
 }
 
 func TestSkippedUpdateVersionPersistsInSharedConfig(t *testing.T) {

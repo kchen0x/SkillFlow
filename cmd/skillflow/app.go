@@ -785,6 +785,7 @@ func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandid
 	if err != nil {
 		return err
 	}
+	imported := make([]*skill.Skill, 0, len(candidates))
 	for _, c := range candidates {
 		logicalKey := c.LogicalKey
 		if logicalKey == "" {
@@ -801,7 +802,9 @@ func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandid
 		}
 		sk.SourceSHA = sha
 		_ = a.storage.UpdateMeta(sk)
+		imported = append(imported, sk)
 	}
+	a.autoPushImportedSkills("github.install", imported)
 	go a.autoBackup()
 	return nil
 }
@@ -812,8 +815,90 @@ func (a *App) ImportLocal(dir, category string) (*skill.Skill, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.autoPushImportedSkills("local.import", []*skill.Skill{sk})
 	go a.autoBackup()
 	return sk, nil
+}
+
+func (a *App) autoPushTargets(cfg config.AppConfig) []config.ToolConfig {
+	if len(cfg.AutoPushTools) == 0 {
+		return nil
+	}
+	selected := make(map[string]struct{}, len(cfg.AutoPushTools))
+	for _, name := range cfg.AutoPushTools {
+		selected[name] = struct{}{}
+	}
+	targets := make([]config.ToolConfig, 0, len(selected))
+	for _, tool := range cfg.Tools {
+		if !tool.Enabled {
+			continue
+		}
+		if _, ok := selected[tool.Name]; ok {
+			targets = append(targets, tool)
+		}
+	}
+	return targets
+}
+
+func (a *App) autoPushImportedSkills(source string, imported []*skill.Skill) {
+	if len(imported) == 0 {
+		return
+	}
+	cfg, err := a.config.Load()
+	if err != nil {
+		a.logErrorf("auto push imported skills failed: source=%s load config failed: %v", source, err)
+		return
+	}
+	targets := a.autoPushTargets(cfg)
+	if len(targets) == 0 {
+		a.logDebugf("auto push imported skills skipped: source=%s reason=no-target-tools", source)
+		return
+	}
+
+	a.logInfof("auto push imported skills started: source=%s skillCount=%d toolCount=%d", source, len(imported), len(targets))
+	totalPushed := 0
+	failures := 0
+
+	for _, tool := range targets {
+		if strings.TrimSpace(tool.PushDir) == "" {
+			failures++
+			err := fmt.Errorf("push dir not configured")
+			a.logErrorf("auto push tool failed: source=%s tool=%s err=%v", source, tool.Name, err)
+			continue
+		}
+
+		toPush := make([]*skill.Skill, 0, len(imported))
+		skippedExisting := 0
+		for _, sk := range imported {
+			targetPath := filepath.Join(tool.PushDir, sk.Name)
+			if _, statErr := os.Stat(targetPath); statErr == nil {
+				skippedExisting++
+				a.logDebugf("auto push tool skipped existing target: source=%s tool=%s skill=%s target=%s", source, tool.Name, sk.Name, targetPath)
+				continue
+			} else if !os.IsNotExist(statErr) {
+				skippedExisting++
+				failures++
+				a.logErrorf("auto push tool failed: source=%s tool=%s skill=%s target=%s err=%v", source, tool.Name, sk.Name, targetPath, statErr)
+				continue
+			}
+			toPush = append(toPush, sk)
+		}
+
+		a.logInfof("auto push tool started: source=%s tool=%s skillCount=%d", source, tool.Name, len(toPush))
+		if len(toPush) == 0 {
+			a.logInfof("auto push tool completed: source=%s tool=%s pushed=%d skippedExisting=%d", source, tool.Name, 0, skippedExisting)
+			continue
+		}
+		if err := getAdapter(tool).Push(a.ctx, toPush, tool.PushDir); err != nil {
+			failures++
+			a.logErrorf("auto push tool failed: source=%s tool=%s pushDir=%s err=%v", source, tool.Name, tool.PushDir, err)
+			continue
+		}
+		totalPushed += len(toPush)
+		a.logInfof("auto push tool completed: source=%s tool=%s pushed=%d skippedExisting=%d", source, tool.Name, len(toPush), skippedExisting)
+	}
+
+	a.logInfof("auto push imported skills completed: source=%s skillCount=%d toolCount=%d pushed=%d failures=%d", source, len(imported), len(targets), totalPushed, failures)
 }
 
 // --- Sync ---
@@ -1062,15 +1147,23 @@ func (a *App) PullFromTool(toolName string, skillPaths []string, category string
 		}
 		candidates := resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), skillPaths)
 		var conflicts []string
+		imported := make([]*skill.Skill, 0, len(candidates))
 		for _, candidate := range candidates {
 			if candidate.Imported {
 				conflicts = append(conflicts, candidate.Path)
 				continue
 			}
-			if _, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", ""); err == skill.ErrSkillExists {
+			sk, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
+			if err == skill.ErrSkillExists {
 				conflicts = append(conflicts, candidate.Path)
+				continue
 			}
+			if err != nil {
+				return nil, err
+			}
+			imported = append(imported, sk)
 		}
+		a.autoPushImportedSkills("tool.pull", imported)
 		go a.autoBackup()
 		return conflicts, nil
 	}
@@ -1093,6 +1186,7 @@ func (a *App) PullFromToolForce(toolName string, skillPaths []string, category s
 		if err != nil {
 			return err
 		}
+		imported := make([]*skill.Skill, 0, len(skillPaths))
 		for _, candidate := range resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), skillPaths) {
 			existing, _ := a.storage.ListAll()
 			for _, e := range existing {
@@ -1101,8 +1195,13 @@ func (a *App) PullFromToolForce(toolName string, skillPaths []string, category s
 					_ = a.storage.Delete(e.ID)
 				}
 			}
-			_, _ = a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
+			sk, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
+			if err != nil {
+				return err
+			}
+			imported = append(imported, sk)
 		}
+		a.autoPushImportedSkills("tool.pull.force", imported)
 		go a.autoBackup()
 	}
 	return nil
@@ -1783,6 +1882,7 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	if err != nil {
 		return err
 	}
+	imported := make([]*skill.Skill, 0, len(skillPaths))
 	for _, skillPath := range skillPaths {
 		subPath, _ := filepath.Rel(repoLocalDir, skillPath)
 		subPath = filepath.ToSlash(subPath)
@@ -1800,7 +1900,9 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 		sha, _ := coregit.GetSubPathSHA(a.ctx, repoLocalDir, subPath)
 		sk.SourceSHA = sha
 		_ = a.storage.UpdateMeta(sk)
+		imported = append(imported, sk)
 	}
+	a.autoPushImportedSkills("starred.import", imported)
 	go a.autoBackup()
 	return nil
 }

@@ -69,6 +69,14 @@ Central library for managing your skill collection.
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
 | **Remote Install** (Github) | Opens the GitHub Install dialog |
 
+### Auto Push Targets
+
+- A dedicated strip under the toolbar lets users pick one or more enabled tools as **auto-push targets** using the same icon-chip selection style as **Push to Tools**.
+- The selection is persisted locally on the current device and reused for future imports into **My Skills**.
+- Any newly added skill in **My Skills** is automatically copied to the selected tools after the library import succeeds. This applies to local folder import, GitHub install, Pull from Tools, and Starred Repo import.
+- Auto-push is non-destructive: if a selected tool already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
+- Turning a tool off in this strip does not delete anything that was already pushed earlier; removing tool copies still requires manual deletion from **My Tools** or the tool directory.
+
 ### Select Mode (activated by "Batch Delete")
 
 | Control | Action |
@@ -815,4 +823,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-10*
+*Last updated: 2026-03-09*

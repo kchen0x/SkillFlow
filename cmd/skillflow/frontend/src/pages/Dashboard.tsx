@@ -3,19 +3,20 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ListSkills, ListCategories, MoveSkillCategory,
   DeleteSkill, DeleteSkills, ImportLocal, UpdateSkill, CheckUpdates,
-  OpenFolderDialog, GetSkillMeta,
+  OpenFolderDialog, GetSkillMeta, GetConfig, SaveConfig,
 } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import CategoryPanel from '../components/CategoryPanel'
 import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
 import GitHubInstallDialog from '../components/GitHubInstallDialog'
-import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare } from 'lucide-react'
+import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine } from 'lucide-react'
 import { gridContainerVariants, cardVariants } from '../lib/motionVariants'
 import SkillListControls from '../components/SkillListControls'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
+import { ToolIcon } from '../config/toolIcons'
 
 export default function Dashboard() {
   const { t } = useLanguage()
@@ -31,6 +32,10 @@ export default function Dashboard() {
   const [categoryDragActive, setCategoryDragActive] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIDs, setSelectedIDs] = useState<Set<string>>(new Set())
+  const [toolOptions, setToolOptions] = useState<any[]>([])
+  const [autoPushTools, setAutoPushTools] = useState<Set<string>>(new Set())
+  const [dashboardCfg, setDashboardCfg] = useState<any | null>(null)
+  const [savingAutoPush, setSavingAutoPush] = useState(false)
 
   // Hover tooltip state
   const [hoveredSkill, setHoveredSkill] = useState<{ skill: any; rect: DOMRect } | null>(null)
@@ -38,9 +43,12 @@ export default function Dashboard() {
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async () => {
-    const [s, c] = await Promise.all([ListSkills(), ListCategories()])
+    const [s, c, cfg] = await Promise.all([ListSkills(), ListCategories(), GetConfig()])
     setSkills(s ?? [])
     setCategories(c ?? [])
+    setDashboardCfg(cfg)
+    setToolOptions((cfg?.tools ?? []).filter((tool: any) => tool.enabled))
+    setAutoPushTools(new Set(cfg?.autoPushTools ?? []))
   }, [])
 
   useEffect(() => {
@@ -151,6 +159,35 @@ export default function Dashboard() {
   }, [filtered, selectMode])
 
   const allSelected = filtered.length > 0 && filtered.every(sk => selectedIDs.has(sk.id))
+
+  const toggleAutoPushTool = async (name: string) => {
+    if (!dashboardCfg || savingAutoPush) return
+
+    const nextSet = new Set(autoPushTools)
+    if (nextSet.has(name)) nextSet.delete(name)
+    else nextSet.add(name)
+
+    const nextCfg = {
+      ...dashboardCfg,
+      autoPushTools: Array.from(nextSet),
+    }
+
+    setAutoPushTools(new Set(nextSet))
+    setDashboardCfg(nextCfg)
+    setSavingAutoPush(true)
+
+    try {
+      await SaveConfig(nextCfg)
+    } catch (error) {
+      console.error('Save auto push tools failed:', error)
+      const latestCfg = await GetConfig()
+      setDashboardCfg(latestCfg)
+      setToolOptions((latestCfg?.tools ?? []).filter((tool: any) => tool.enabled))
+      setAutoPushTools(new Set(latestCfg?.autoPushTools ?? []))
+    } finally {
+      setSavingAutoPush(false)
+    }
+  }
 
   const clearHover = () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
@@ -279,6 +316,64 @@ export default function Dashboard() {
                 <Github size={14} /> {t('dashboard.remoteInstall')}
               </button>
             </div>
+          )}
+        </div>
+
+        <div
+          className="px-6 py-4 flex flex-col gap-3"
+          style={{
+            borderBottom: '1px solid var(--border-base)',
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-glow) 42%, transparent) 0%, color-mix(in srgb, var(--bg-elevated) 94%, transparent) 100%)',
+          }}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                <ArrowUpFromLine size={15} />
+                {t('dashboard.autoPushTitle')}
+              </div>
+              <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+                {t('dashboard.autoPushDesc')}
+              </p>
+            </div>
+            {savingAutoPush && (
+              <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                {t('common.saving')}
+              </span>
+            )}
+          </div>
+
+          {toolOptions.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {toolOptions.map(tool => {
+                const active = autoPushTools.has(tool.name)
+                return (
+                  <button
+                    key={tool.name}
+                    onClick={() => void toggleAutoPushTool(tool.name)}
+                    disabled={savingAutoPush}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${active ? 'font-semibold -translate-y-px' : ''}`}
+                    style={active ? {
+                      background: 'var(--active-surface)',
+                      color: 'var(--active-text)',
+                      border: '1px solid var(--active-border)',
+                      boxShadow: 'var(--active-shadow)',
+                    } : {
+                      background: 'var(--bg-elevated)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid var(--border-base)',
+                    }}
+                  >
+                    <ToolIcon name={tool.name} size={20} />
+                    <span>{tool.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              {t('dashboard.autoPushEmpty')}
+            </p>
           )}
         </div>
 
