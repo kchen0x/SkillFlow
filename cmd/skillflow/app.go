@@ -186,6 +186,19 @@ func (a *App) autoBackup() {
 	_ = a.runBackup()
 }
 
+func (a *App) scheduleAutoBackup() {
+	cfg, err := a.config.Load()
+	if err != nil {
+		a.logErrorf("auto backup scheduling failed: load config failed: %v", err)
+		return
+	}
+	if !cfg.Cloud.Enabled || strings.TrimSpace(cfg.Cloud.Provider) == "" {
+		a.logDebugf("auto backup scheduling skipped: reason=cloud-disabled")
+		return
+	}
+	go a.autoBackup()
+}
+
 func (a *App) runBackup() error {
 	cfg, err := a.config.Load()
 	if err != nil || !cfg.Cloud.Enabled || cfg.Cloud.Provider == "" {
@@ -284,6 +297,7 @@ func (a *App) gitPullOnStartup() {
 	if err != nil || !cfg.Cloud.Enabled || cfg.Cloud.Provider != backup.GitProviderName {
 		return
 	}
+	beforeRestore := a.captureCloudRestoreState()
 	a.logInfof("startup git pull started")
 	p, ok := registry.GetCloudProvider(backup.GitProviderName)
 	if !ok {
@@ -324,10 +338,14 @@ func (a *App) gitPullOnStartup() {
 		return
 	}
 	a.recordBackupResult(changes, afterSnapshot)
+	if err := a.handleRestoredCloudState(beforeRestore, "startup.git.pull"); err != nil {
+		a.logErrorf("startup git pull failed: restore compensation failed: %v", err)
+		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+		return
+	}
 	a.logInfof("startup git pull completed")
 	a.clearGitConflictPending()
 	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
-	a.reloadStateFromDisk()
 }
 
 // startAutoSyncTimer starts (or restarts) a periodic auto-backup ticker.
@@ -595,7 +613,7 @@ func (a *App) DeleteSkill(skillID string) error {
 	if err := a.storage.Delete(skillID); err != nil {
 		return err
 	}
-	go a.autoBackup()
+	a.scheduleAutoBackup()
 	return nil
 }
 
@@ -605,7 +623,7 @@ func (a *App) DeleteSkills(skillIDs []string) error {
 			return err
 		}
 	}
-	go a.autoBackup()
+	a.scheduleAutoBackup()
 	return nil
 }
 
@@ -806,7 +824,7 @@ func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandid
 		imported = append(imported, sk)
 	}
 	a.autoPushImportedSkills("github.install", imported)
-	go a.autoBackup()
+	a.scheduleAutoBackup()
 	return nil
 }
 
@@ -817,7 +835,7 @@ func (a *App) ImportLocal(dir, category string) (*skill.Skill, error) {
 		return nil, err
 	}
 	a.autoPushImportedSkills("local.import", []*skill.Skill{sk})
-	go a.autoBackup()
+	a.scheduleAutoBackup()
 	return sk, nil
 }
 
@@ -1165,7 +1183,7 @@ func (a *App) PullFromTool(toolName string, skillPaths []string, category string
 			imported = append(imported, sk)
 		}
 		a.autoPushImportedSkills("tool.pull", imported)
-		go a.autoBackup()
+		a.scheduleAutoBackup()
 		return conflicts, nil
 	}
 	return nil, nil
@@ -1203,7 +1221,7 @@ func (a *App) PullFromToolForce(toolName string, skillPaths []string, category s
 			imported = append(imported, sk)
 		}
 		a.autoPushImportedSkills("tool.pull.force", imported)
-		go a.autoBackup()
+		a.scheduleAutoBackup()
 	}
 	return nil
 }
@@ -1408,6 +1426,7 @@ func (a *App) RestoreFromCloud() error {
 		a.logErrorf("restore from cloud failed: %v", err)
 		return err
 	}
+	beforeRestore := a.captureCloudRestoreState()
 	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
 	if !ok {
 		return fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
@@ -1453,7 +1472,13 @@ func (a *App) RestoreFromCloud() error {
 	}
 	a.recordBackupResult(changes, afterSnapshot)
 	a.logInfof("restore from cloud completed")
-	a.reloadStateFromDisk()
+	if err := a.handleRestoredCloudState(beforeRestore, "cloud.restore"); err != nil {
+		a.logErrorf("restore from cloud failed: restore compensation failed: %v", err)
+		if isGit {
+			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+		}
+		return err
+	}
 	if isGit {
 		a.clearGitConflictPending()
 		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
@@ -1572,7 +1597,7 @@ func (a *App) UpdateSkill(skillID string) error {
 	sk.SourceSHA = sk.LatestSHA
 	sk.LatestSHA = ""
 	_ = a.storage.UpdateMeta(sk)
-	go a.autoBackup()
+	a.scheduleAutoBackup()
 	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
 	return nil
 }
@@ -1959,6 +1984,6 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 		imported = append(imported, sk)
 	}
 	a.autoPushImportedSkills("starred.import", imported)
-	go a.autoBackup()
+	a.scheduleAutoBackup()
 	return nil
 }
