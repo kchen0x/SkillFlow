@@ -182,8 +182,31 @@ func (a *App) quitApp() {
 
 // autoBackup triggers cloud backup after any mutating operation if cloud is enabled.
 func (a *App) autoBackup() {
+	cfg, ok := a.loadAutoBackupConfig()
+	if !ok {
+		return
+	}
+	a.autoBackupWithConfig(cfg)
+}
+
+func (a *App) loadAutoBackupConfig() (config.AppConfig, bool) {
+	if a.config == nil {
+		return config.AppConfig{}, false
+	}
+	cfg, err := a.config.Load()
+	if err != nil {
+		a.logErrorf("auto backup skipped: load config failed: %v", err)
+		return config.AppConfig{}, false
+	}
+	if !cfg.Cloud.Enabled || cfg.Cloud.Provider == "" {
+		return config.AppConfig{}, false
+	}
+	return cfg, true
+}
+
+func (a *App) autoBackupWithConfig(cfg config.AppConfig) {
 	a.logDebugf("auto backup triggered")
-	_ = a.runBackup()
+	_ = a.runBackupWithConfig(cfg)
 }
 
 func (a *App) scheduleAutoBackup() {
@@ -207,6 +230,10 @@ func (a *App) runBackup() error {
 		}
 		return err
 	}
+	return a.runBackupWithConfig(cfg)
+}
+
+func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 	a.logInfof("backup started (provider=%s)", cfg.Cloud.Provider)
 	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
 	if !ok {
@@ -217,6 +244,7 @@ func (a *App) runBackup() error {
 	}
 	isGit := cfg.Cloud.Provider == backup.GitProviderName
 	backupDir := a.backupRootDir(cfg)
+	var err error
 	if isGit {
 		backupDir, err = a.prepareGitBackupRoot(cfg)
 		if err != nil {

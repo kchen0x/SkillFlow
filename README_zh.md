@@ -4,6 +4,8 @@
 
 一款跨平台桌面应用，用于统一管理多个 AI 编程工具中的 LLM Skills（提示词库 / 斜杠命令），支持 GitHub 安装、云端备份和跨工具同步。
 
+![skilflow](docs/skillflow.gif)
+
 ## 下载安装
 
 从 **[GitHub Releases →](https://github.com/shinerio/SkillFlow/releases/latest)** 下载最新版本

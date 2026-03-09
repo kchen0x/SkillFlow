@@ -4,6 +4,8 @@
 
 A cross-platform desktop app for managing LLM Skills (prompt libraries / slash commands) across multiple AI coding tools — with GitHub install, cloud backup, and cross-tool sync.
 
+![skilflow](docs/skillflow.gif)
+
 ## Download & Install
 
 Get the latest release from **[GitHub Releases →](https://github.com/shinerio/SkillFlow/releases/latest)**
