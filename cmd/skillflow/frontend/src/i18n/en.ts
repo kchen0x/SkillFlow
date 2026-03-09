@@ -306,6 +306,8 @@ export const en = {
   'settings.statusPushedTools': 'Pushed tools',
   'settings.logLevel': 'Log Level',
   'settings.logLevelHint': 'Debug is most verbose, Info logs key events, Error logs failures only.',
+  'settings.launchAtLogin': 'Launch at Login',
+  'settings.launchAtLoginHint': 'Automatically start SkillFlow after you sign in on this device.',
   'settings.logDir': 'Log Directory',
   'settings.openLogDir': 'Open Log Directory',
   'settings.logDirHint': 'Max 2 log files, 1MB each, auto-rotated when size limit is reached.',

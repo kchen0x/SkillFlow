@@ -1084,6 +1084,16 @@ export default function SettingsPage() {
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.logLevelHint')}</p>
           </div>
           <div>
+            <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.launchAtLogin')}</p>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Toggle
+                enabled={!!cfg.launchAtLogin}
+                onToggle={() => setCfg((p: any) => ({ ...p, launchAtLogin: !p.launchAtLogin }))}
+              />
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{t('settings.launchAtLoginHint')}</span>
+            </label>
+          </div>
+          <div>
             <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.logDir')}</p>
             <div className="flex items-center gap-2">
               <button

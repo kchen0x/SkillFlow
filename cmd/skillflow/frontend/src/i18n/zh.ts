@@ -297,6 +297,8 @@ export const zh = {
   'settings.statusPushedTools': '已推送工具',
   'settings.logLevel': '日志打印级别',
   'settings.logLevelHint': 'Debug 记录最详细，Info 记录常规信息，Error 仅记录错误。',
+  'settings.launchAtLogin': '开机自启',
+  'settings.launchAtLoginHint': '在当前设备登录系统后自动启动 SkillFlow。',
   'settings.logDir': '日志目录',
   'settings.openLogDir': '打开日志目录',
   'settings.logDirHint': '日志文件最多 2 个，单文件最大 1MB，超限自动滚动覆盖旧日志。',

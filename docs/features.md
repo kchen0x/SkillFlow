@@ -484,6 +484,7 @@ For each built-in or custom tool:
 | **Skill recursive scan depth** | Maximum recursion depth used when scanning local tool directories, starred repos, and GitHub-install repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
 | **Log level buttons** | Toggle runtime log level between `debug`, `info`, and `error` (default: `error`); takes effect after saving settings |
+| **Launch at login toggle** | Enables/disables OS login-item registration so SkillFlow auto-starts after sign-in on the current device; stored only in local `config_local.json` |
 | **Open log directory** | One-click open the local log folder in system file manager; missing targets fall back to the nearest existing parent directory |
 
 Log files are stored under the app log directory, with rolling limits:
