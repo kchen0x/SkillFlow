@@ -84,6 +84,9 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.initLogger(cfg.LogLevel)
 	a.logInfof("application startup, version=%s, dataDir=%s", Version, dataDir)
+	if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
+		a.logErrorf("application startup launch-at-login reconcile failed: %v", err)
+	}
 	a.storage = skill.NewStorage(cfg.SkillsStorageDir)
 	a.cacheDir = filepath.Join(dataDir, "cache")
 	a.starStorage = coregit.NewStarStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
@@ -1142,6 +1145,11 @@ func (a *App) GetConfig() (config.AppConfig, error) {
 
 func (a *App) SaveConfig(cfg config.AppConfig) error {
 	a.logInfof("save config requested")
+	prevCfg, err := a.config.Load()
+	if err != nil {
+		a.logErrorf("save config failed: load current config failed: %v", err)
+		return err
+	}
 	cfg.DefaultCategory = defaultCategoryName
 	cfg.LogLevel = config.NormalizeLogLevel(cfg.LogLevel)
 	cfg.RepoScanMaxDepth = config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
@@ -1149,8 +1157,14 @@ func (a *App) SaveConfig(cfg config.AppConfig) error {
 		a.logErrorf("save config failed: %v", err)
 		return err
 	}
+	if prevCfg.LaunchAtLogin != cfg.LaunchAtLogin {
+		if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
+			a.logErrorf("save config failed: apply launch-at-login failed: %v", err)
+			return err
+		}
+	}
 	a.setLoggerLevel(cfg.LogLevel)
-	a.logInfof("save config completed: logLevel=%s repoScanMaxDepth=%d", cfg.LogLevel, cfg.RepoScanMaxDepth)
+	a.logInfof("save config completed: logLevel=%s repoScanMaxDepth=%d launchAtLogin=%t", cfg.LogLevel, cfg.RepoScanMaxDepth, cfg.LaunchAtLogin)
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 	return nil
 }

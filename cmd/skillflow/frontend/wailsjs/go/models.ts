@@ -119,6 +119,7 @@ export namespace config {
 	}
 	export class AppConfig {
 	    skillsStorageDir: string;
+	    launchAtLogin: boolean;
 	    defaultCategory: string;
 	    logLevel: string;
 	    repoScanMaxDepth: number;
@@ -136,6 +137,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.skillsStorageDir = source["skillsStorageDir"];
+	        this.launchAtLogin = source["launchAtLogin"];
 	        this.defaultCategory = source["defaultCategory"];
 	        this.logLevel = source["logLevel"];
 	        this.repoScanMaxDepth = source["repoScanMaxDepth"];
@@ -546,4 +548,3 @@ export namespace skill {
 	}
 
 }
-

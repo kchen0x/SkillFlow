@@ -223,6 +223,27 @@ func TestProxyStoredOnlyInLocalConfig(t *testing.T) {
 	assert.Equal(t, cfg.Proxy, loaded.Proxy)
 }
 
+func TestLaunchAtLoginStoredOnlyInLocalConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.LaunchAtLogin = true
+
+	require.NoError(t, svc.Save(cfg))
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(sharedData), "launchAtLogin")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"launchAtLogin": true`)
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.True(t, loaded.LaunchAtLogin)
+}
+
 func TestWindowStateStoredOnlyInLocalConfig(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)

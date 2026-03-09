@@ -41,6 +41,7 @@ type sharedToolConfig struct {
 // It holds all file system paths and sensitive cloud credentials.
 type localConfig struct {
 	SkillsStorageDir           string                       `json:"skillsStorageDir"`
+	LaunchAtLogin              bool                         `json:"launchAtLogin"`
 	Tools                      []localToolConfig            `json:"tools"`
 	CloudCredentialsByProvider map[string]map[string]string `json:"cloudCredentialsByProvider,omitempty"`
 	CloudCredentials           map[string]string            `json:"cloudCredentials,omitempty"`
@@ -367,6 +368,7 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
 		SkillsStorageDir:      local.SkillsStorageDir,
+		LaunchAtLogin:         local.LaunchAtLogin,
 		DefaultCategory:       shared.DefaultCategory,
 		LogLevel:              NormalizeLogLevel(shared.LogLevel),
 		RepoScanMaxDepth:      NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
@@ -415,6 +417,7 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return localConfig{
 		SkillsStorageDir:           cfg.SkillsStorageDir,
+		LaunchAtLogin:              cfg.LaunchAtLogin,
 		Tools:                      tools,
 		CloudCredentialsByProvider: splitLocalCloudCredentialsByProvider(profiles),
 		Proxy:                      NormalizeProxyConfig(cfg.Proxy),

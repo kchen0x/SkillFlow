@@ -49,6 +49,7 @@ type WindowState struct {
 
 type AppConfig struct {
 	SkillsStorageDir      string                         `json:"skillsStorageDir"`
+	LaunchAtLogin         bool                           `json:"launchAtLogin"`
 	DefaultCategory       string                         `json:"defaultCategory"`
 	LogLevel              string                         `json:"logLevel"` // "debug" | "info" | "error"
 	RepoScanMaxDepth      int                            `json:"repoScanMaxDepth"`
