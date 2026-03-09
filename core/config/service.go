@@ -41,6 +41,7 @@ type sharedToolConfig struct {
 // It holds all file system paths and sensitive cloud credentials.
 type localConfig struct {
 	SkillsStorageDir           string                       `json:"skillsStorageDir"`
+	AutoPushTools              []string                     `json:"autoPushTools"`
 	LaunchAtLogin              bool                         `json:"launchAtLogin"`
 	Tools                      []localToolConfig            `json:"tools"`
 	CloudCredentialsByProvider map[string]map[string]string `json:"cloudCredentialsByProvider,omitempty"`
@@ -126,6 +127,7 @@ func (s *Service) Save(cfg AppConfig) error {
 		return err
 	}
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
+	cfg.AutoPushTools = NormalizeToolNameList(cfg.AutoPushTools)
 	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
 	cfg.SkillStatusVisibility = NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility)
 	cfg.Proxy = NormalizeProxyConfig(cfg.Proxy)
@@ -232,6 +234,7 @@ func (s *Service) loadLocal() localConfig {
 	if lc.SkillsStorageDir == "" {
 		lc.SkillsStorageDir = filepath.Join(s.dataDir, "skills")
 	}
+	lc.AutoPushTools = NormalizeToolNameList(lc.AutoPushTools)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
 	if lc.Window != nil {
@@ -259,6 +262,7 @@ func (s *Service) saveShared(sc sharedConfig) error {
 
 func (s *Service) saveLocal(lc localConfig) error {
 	lc.CloudCredentials = nil
+	lc.AutoPushTools = NormalizeToolNameList(lc.AutoPushTools)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
 	if lc.Window != nil {
@@ -368,6 +372,7 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
 		SkillsStorageDir:      local.SkillsStorageDir,
+		AutoPushTools:         NormalizeToolNameList(local.AutoPushTools),
 		LaunchAtLogin:         local.LaunchAtLogin,
 		DefaultCategory:       shared.DefaultCategory,
 		LogLevel:              NormalizeLogLevel(shared.LogLevel),
@@ -417,6 +422,7 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return localConfig{
 		SkillsStorageDir:           cfg.SkillsStorageDir,
+		AutoPushTools:              NormalizeToolNameList(cfg.AutoPushTools),
 		LaunchAtLogin:              cfg.LaunchAtLogin,
 		Tools:                      tools,
 		CloudCredentialsByProvider: splitLocalCloudCredentialsByProvider(profiles),

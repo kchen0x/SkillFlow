@@ -119,6 +119,7 @@ export namespace config {
 	}
 	export class AppConfig {
 	    skillsStorageDir: string;
+	    autoPushTools: string[];
 	    launchAtLogin: boolean;
 	    defaultCategory: string;
 	    logLevel: string;
@@ -137,6 +138,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.skillsStorageDir = source["skillsStorageDir"];
+	        this.autoPushTools = source["autoPushTools"];
 	        this.launchAtLogin = source["launchAtLogin"];
 	        this.defaultCategory = source["defaultCategory"];
 	        this.logLevel = source["logLevel"];
@@ -548,4 +550,3 @@ export namespace skill {
 	}
 
 }
-
