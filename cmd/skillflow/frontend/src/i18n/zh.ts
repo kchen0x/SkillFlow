@@ -229,6 +229,7 @@ export const zh = {
   'backup.failed': '备份失败，请检查云存储配置',
   'backup.gitChanges': '本次 Git 变更',
   'backup.cloudChanges': '本次云备份变更',
+  'backup.lastSyncAt': '上次同步完成时间：{time}',
   'backup.noChanges': '本次备份没有包含文件变更。',
   'backup.deleted': '已删除',
   'backup.action.added': '新增',

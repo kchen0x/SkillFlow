@@ -50,6 +50,7 @@ type App struct {
 
 	backupResultMu   sync.RWMutex
 	lastBackupResult []backup.RemoteFile
+	lastBackupAt     time.Time
 }
 
 const defaultCategoryName = "Default"
@@ -234,7 +235,7 @@ func (a *App) runBackup() error {
 		return err
 	} else {
 		a.recordBackupResult(changes, currentSnapshot)
-		payload := notify.BackupCompletedPayload{Files: changes}
+		payload := notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}
 		a.logInfof("backup completed")
 		if isGit {
 			a.clearGitConflictPending()
@@ -321,7 +322,7 @@ func (a *App) gitPullOnStartup() {
 	a.recordBackupResult(changes, afterSnapshot)
 	a.logInfof("startup git pull completed")
 	a.clearGitConflictPending()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes}})
+	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
 	a.reloadStateFromDisk()
 }
 
@@ -399,7 +400,7 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	}
 	a.recordBackupResult(changes, afterSnapshot)
 	a.reloadStateFromDisk()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes}})
+	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
 	a.logInfof("git conflict resolution completed: strategy=%s, backupDir=%s", action, backupDir)
 	return nil
 }
@@ -476,6 +477,7 @@ func (a *App) setLastBackupResult(files []backup.RemoteFile) {
 
 	a.backupResultMu.Lock()
 	a.lastBackupResult = copied
+	a.lastBackupAt = time.Now().UTC()
 	a.backupResultMu.Unlock()
 }
 
@@ -486,6 +488,16 @@ func (a *App) GetLastBackupChanges() []backup.RemoteFile {
 	copied := make([]backup.RemoteFile, len(a.lastBackupResult))
 	copy(copied, a.lastBackupResult)
 	return copied
+}
+
+func (a *App) GetLastBackupCompletedAt() string {
+	a.backupResultMu.RLock()
+	defer a.backupResultMu.RUnlock()
+
+	if a.lastBackupAt.IsZero() {
+		return ""
+	}
+	return a.lastBackupAt.Format(time.RFC3339)
 }
 
 func (a *App) gitProxyURL() string {
@@ -1275,7 +1287,7 @@ func (a *App) RestoreFromCloud() error {
 	a.reloadStateFromDisk()
 	if isGit {
 		a.clearGitConflictPending()
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes}})
+		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
 	}
 	return nil
 }

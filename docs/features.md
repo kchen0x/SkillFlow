@@ -383,6 +383,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 ### Backup Change List
 
 - After each successful backup or restore, the page shows only the files involved in that operation, not the full remote file set.
+- Backup page also shows **Last sync completed at** based on the most recent successful backup/restore event in the current app session.
 - Both object storage and Git render the same per-run list with action badges: `Added`, `Modified`, `Deleted`.
 - Deleted entries show a deletion label instead of a file size.
 - Refresh reloads the latest in-memory backup result for the current app session.
@@ -813,4 +814,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-09*
+*Last updated: 2026-03-10*
