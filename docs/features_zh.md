@@ -279,6 +279,7 @@ SourceSHA = LatestSHA -> 清除更新标记
 ### 仓库卡片（文件夹视图）
 
 - 点击打开该仓库的 Skill 列表。
+- 卡片头部会额外展示仓库主机（如 `github.com`）和紧凑的 Skill 数量，便于在钻取前快速判断仓库来源与规模。
 - **在浏览器中打开**（ExternalLink 图标） — 在默认浏览器中打开仓库 URL。
 - **更新**（RefreshCw 图标） — `UpdateStarredRepo(url)` — 拉取最新提交。
 - **删除**（Trash2 图标，悬停变红） — 从收藏列表中移除。

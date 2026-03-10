@@ -139,6 +139,7 @@ export const en = {
   'starred.skipConflicts': 'Skip Conflicts',
   'starred.syncAt': 'Synced at',
   'starred.notSynced': 'Not synced',
+  'starred.skillCount': '{count} skills',
   'starred.openInBrowser': 'Open in browser',
   'starred.updateBtn': 'Update',
   'starred.removeStarred': 'Remove starred',
