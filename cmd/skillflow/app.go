@@ -32,6 +32,10 @@ type maxDepthPuller interface {
 	PullWithMaxDepth(ctx context.Context, sourceDir string, maxDepth int) ([]*skill.Skill, error)
 }
 
+type githubSkillDownloader interface {
+	DownloadTo(ctx context.Context, source install.InstallSource, c install.SkillCandidate, targetDir string) error
+}
+
 type App struct {
 	ctx                context.Context
 	hub                *notify.Hub
@@ -43,6 +47,7 @@ type App struct {
 	startupOnce        sync.Once
 	initialWindowState config.WindowState
 	autostartFactory   func() (launchAtLoginController, error)
+	ghDownloader       func(client *http.Client) githubSkillDownloader
 
 	// Git sync state
 	gitConflictMu      sync.Mutex
@@ -71,7 +76,12 @@ func normalizeCategoryName(name string) string {
 }
 
 func NewApp() *App {
-	return &App{hub: notify.NewHub()}
+	return &App{
+		hub: notify.NewHub(),
+		ghDownloader: func(client *http.Client) githubSkillDownloader {
+			return install.NewGitHubInstaller("", client)
+		},
+	}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -1609,7 +1619,7 @@ func (a *App) UpdateSkill(skillID string) error {
 		a.logErrorf("update skill failed: %v", err)
 		return err
 	}
-	inst := install.NewGitHubInstaller("", a.proxyHTTPClient())
+	inst := a.newGitHubDownloader()
 	tmpDir := filepath.Join(os.TempDir(), "skillflow-update", sk.Name)
 	defer os.RemoveAll(tmpDir)
 
@@ -1625,8 +1635,65 @@ func (a *App) UpdateSkill(skillID string) error {
 	sk.SourceSHA = sk.LatestSHA
 	sk.LatestSHA = ""
 	_ = a.storage.UpdateMeta(sk)
+	if err := a.refreshUpdatedPushedSkillCopies(sk); err != nil {
+		a.logErrorf("update skill refresh pushed copies failed: id=%s name=%s err=%v", skillID, sk.Name, err)
+		a.scheduleAutoBackup()
+		return err
+	}
 	a.scheduleAutoBackup()
 	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
+	return nil
+}
+
+func (a *App) newGitHubDownloader() githubSkillDownloader {
+	if a.ghDownloader != nil {
+		return a.ghDownloader(a.proxyHTTPClient())
+	}
+	return install.NewGitHubInstaller("", a.proxyHTTPClient())
+}
+
+func (a *App) refreshUpdatedPushedSkillCopies(sk *skill.Skill) error {
+	if sk == nil {
+		return nil
+	}
+
+	cfg, err := a.config.Load()
+	if err != nil {
+		a.logErrorf("refresh updated pushed skill copies failed: skill=%s load config failed: %v", sk.Name, err)
+		return err
+	}
+
+	a.logInfof("refresh updated pushed skill copies started: skill=%s", sk.Name)
+	updatedTools := 0
+
+	for _, tool := range cfg.Tools {
+		if strings.TrimSpace(tool.PushDir) == "" {
+			continue
+		}
+
+		targetPath := filepath.Join(tool.PushDir, sk.Name)
+		if _, err := os.Stat(targetPath); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			a.logErrorf("refresh updated pushed skill copy failed: skill=%s tool=%s target=%s err=%v", sk.Name, tool.Name, targetPath, err)
+			return err
+		}
+
+		a.logInfof("refresh updated pushed skill copy started: skill=%s tool=%s target=%s", sk.Name, tool.Name, targetPath)
+		if err := os.RemoveAll(targetPath); err != nil {
+			a.logErrorf("refresh updated pushed skill copy failed: skill=%s tool=%s target=%s err=%v", sk.Name, tool.Name, targetPath, err)
+			return err
+		}
+		if err := getAdapter(tool).Push(a.ctx, []*skill.Skill{sk}, tool.PushDir); err != nil {
+			a.logErrorf("refresh updated pushed skill copy failed: skill=%s tool=%s target=%s err=%v", sk.Name, tool.Name, targetPath, err)
+			return err
+		}
+		updatedTools++
+		a.logInfof("refresh updated pushed skill copy completed: skill=%s tool=%s target=%s", sk.Name, tool.Name, targetPath)
+	}
+
+	a.logInfof("refresh updated pushed skill copies completed: skill=%s updatedTools=%d", sk.Name, updatedTools)
 	return nil
 }
 

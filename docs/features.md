@@ -110,7 +110,7 @@ Central library for managing your skill collection.
 ### Skill Update Flow
 
 - Toolbar **Update** performs a remote update check for installed Git-backed skills and only marks cards as updatable.
-- Card-level **Update** is the action that actually downloads the latest files and overwrites the installed copy in **My Skills**.
+- Card-level **Update** is the action that actually downloads the latest files, overwrites the installed copy in **My Skills**, and refreshes any same-skill copies that already exist in tool `PushDir`s.
 - Remote checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
 - When multiple installed instances point at the same logical git skill, one remote SHA lookup updates their check state together, but each installed instance still decides its own `updatable` state by comparing its own `SourceSHA`.
 
@@ -137,6 +137,9 @@ Download latest repo subpath again
           |
           v
 Overwrite installed folder in My Skills
+          |
+          v
+Refresh existing tool PushDir copies for that skill
           |
           v
 SourceSHA = LatestSHA -> clear update marker
@@ -833,4 +836,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-10*
+*Last updated: 2026-03-11*

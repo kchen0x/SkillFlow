@@ -26,7 +26,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **Cross-tool Sync** | Push or pull skills across Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, and custom tools. |
 | **Starred Repos** | Watch Git repos, browse their skills, and import or push them without installing everything into My Skills first. |
 | **Cloud Backup** | Back up skills, prompts, and metadata to object storage providers or Git, with local-only secret storage. |
-| **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app. |
+| **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app, including any copies already pushed to tool directories. |
 | **Desktop Experience** | Bilingual UI, multiple themes, background tray behavior, launch-at-login, and per-tool settings. |
 
 For the complete UI/UX reference, see **[docs/features.md](docs/features.md)**.
