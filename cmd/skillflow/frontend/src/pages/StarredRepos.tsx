@@ -262,6 +262,15 @@ export default function StarredRepos() {
 
   const skillGridVisible = !!currentRepo || view === 'flat'
   const skills = currentRepo ? filteredRepoSkills : filteredAllSkills
+  const repoSkillCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const skill of allSkills) {
+      const repoURL = String(skill?.repoUrl ?? '')
+      if (!repoURL) continue
+      counts.set(repoURL, (counts.get(repoURL) ?? 0) + 1)
+    }
+    return counts
+  }, [allSkills])
 
   const toolBtnStyle = (active: boolean) => active ? {
     background: 'var(--accent-glow)',
@@ -441,6 +450,7 @@ export default function StarredRepos() {
           <SkillGrid skills={filteredRepoSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
         ) : view === 'folder' ? (
           <RepoGrid repos={repos}
+            repoSkillCounts={repoSkillCounts}
             onEnter={url => navigate(`/starred/${encodeURIComponent(url)}`)}
             onUpdate={handleUpdateOne}
             onRemove={handleRemove} />
@@ -662,13 +672,25 @@ export default function StarredRepos() {
   )
 }
 
-function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
+function RepoGrid({ repos, repoSkillCounts, onEnter, onUpdate, onRemove }: {
   repos: any[]
+  repoSkillCounts: Map<string, number>
   onEnter: (url: string) => void
   onUpdate: (url: string) => void
   onRemove: (url: string) => void
 }) {
   const { t } = useLanguage()
+
+  const parseRepoMeta = (repo: any) => {
+    const source = String(repo?.source ?? '')
+    const host = source.includes('/') ? source.split('/')[0] : ''
+    const sourceName = source.includes('/') ? source.split('/').slice(1).join('/') : source
+    return {
+      host,
+      displayName: repo?.name || sourceName || repo?.url || '',
+    }
+  }
+
   if (repos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
@@ -680,14 +702,29 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
   }
   return (
     <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-      {repos.map((r: any) => (
+      {repos.map((r: any) => {
+        const { host, displayName } = parseRepoMeta(r)
+        const skillCount = repoSkillCounts.get(r.url) ?? 0
+        return (
         <div
           key={r.url}
           onClick={() => onEnter(r.url)}
           className="card-base p-4 cursor-pointer"
         >
           <div className="flex justify-between items-start mb-2">
-            <span className="font-medium text-sm truncate flex-1 mr-2" style={{ color: 'var(--text-primary)' }}>{r.name}</span>
+            <div className="flex-1 min-w-0 mr-2">
+              <span className="font-medium text-sm truncate block" style={{ color: 'var(--text-primary)' }} title={displayName}>{displayName}</span>
+              <div className="flex items-center gap-2 mt-1">
+                {host && (
+                  <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+                    {host}
+                  </span>
+                )}
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {t('starred.skillCount', { count: skillCount })}
+                </span>
+              </div>
+            </div>
             <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
               <button
                 onClick={() => OpenURL(r.source ? `https://${r.source}` : r.url)}
@@ -734,7 +771,8 @@ function RepoGrid({ repos, onEnter, onUpdate, onRemove }: {
             </>
           )}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

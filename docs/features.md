@@ -271,6 +271,7 @@ Browse and import skills directly from watched Git repositories without installi
 ### Repo Card (Folder View)
 
 - Click to open the skill list for that repo.
+- Card header now highlights the repo host (for example `github.com`) and shows a compact skill count so users can quickly compare repo scale before drill-down.
 - **Open in Browser** (ExternalLink icon) — opens repo URL in default browser.
 - **Update** (RefreshCw icon) — `UpdateStarredRepo(url)` — pulls latest commits.
 - **Delete** (Trash2 icon, red on hover) — removes from starred list.

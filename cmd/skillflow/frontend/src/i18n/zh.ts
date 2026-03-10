@@ -139,6 +139,7 @@ export const zh = {
   'starred.skipConflicts': '跳过冲突',
   'starred.syncAt': '同步于',
   'starred.notSynced': '未同步',
+  'starred.skillCount': '{count} 个 Skills',
   'starred.openInBrowser': '在浏览器中打开',
   'starred.updateBtn': '更新',
   'starred.removeStarred': '删除收藏',
