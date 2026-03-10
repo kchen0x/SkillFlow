@@ -69,6 +69,8 @@ All other documentation lives under `docs/`:
 | `docs/features_zh.md` | Complete UI/UX feature reference in Chinese |
 | `docs/architecture.md` | Internal architecture, packages, data models, extension guides (English) |
 | `docs/architecture_zh.md` | Same in Chinese |
+| `docs/config.md` | Persisted config and metadata file reference (English) |
+| `docs/config_zh.md` | Same in Chinese |
 | `docs/plans/` | Design and implementation plans |
 | `docs/skill_directory.md` | Skill directory format specification |
 
@@ -95,6 +97,22 @@ All other documentation lives under `docs/`:
 - `README.md` / `README_zh.md` must stay high-level and only describe coarse-grained product capabilities. Avoid adding small UI wording/layout details that increase reading burden.
 - If a frontend/backend feature change also changes architecture, module boundaries, cross-module contracts, core data flow, persistence model, or extension points, update `docs/architecture.md` in the same commit. When the Chinese architecture doc is being maintained in parallel, update `docs/architecture_zh.md` as well.
 - If a change needs detailed module-level design or implementation documentation, create or update files under a coarse-grained module folder in `docs/` such as `docs/<module>/...` instead of adding more root-level markdown files. Keep module categories broad and stable; do not create many small folders for individual pages, components, or one-off tweaks.
+
+## Configuration Documentation Sync Rule — MANDATORY
+
+**Any time a repo-tracked persisted config or metadata file is added, removed, renamed, or its on-disk schema/semantics change, you MUST update the following files in the same commit:**
+
+| File | What to update |
+|------|---------------|
+| `docs/config.md` | Update the English examples, key tables, file-name notes, path/sync-scope notes, and any added/removed/renamed fields. |
+| `docs/config_zh.md` | Same changes in Chinese. |
+
+**Rules:**
+- This rule applies to persisted config and metadata files such as `config.json`, `config_local.json`, `star_repos.json`, `meta/*.json`, and future repo-tracked files that document on-disk configuration or sync metadata.
+- Update the docs when a field is added, removed, renamed, split, merged, moved between files, changes meaning, changes persistence scope, or when the canonical file name/path changes.
+- Keep examples aligned with the actual persisted format on disk, not just the in-memory runtime model.
+- Pure formatting-only changes that do not change persisted keys, file names, storage location, or semantics do not require doc churn.
+- Do not merge config/schema changes while `docs/config.md` and `docs/config_zh.md` are stale.
 
 ## Path Persistence Rule — MANDATORY
 
