@@ -19,10 +19,10 @@ const (
 )
 
 var (
-	ErrPromptNotFound  = errors.New("prompt not found")
-	ErrPromptExists    = errors.New("prompt already exists")
-	ErrEmptyContent    = errors.New("prompt content is empty")
-	ErrInvalidName     = errors.New("invalid prompt name")
+	ErrPromptNotFound   = errors.New("prompt not found")
+	ErrPromptExists     = errors.New("prompt already exists")
+	ErrEmptyContent     = errors.New("prompt content is empty")
+	ErrInvalidName      = errors.New("invalid prompt name")
 	ErrCategoryNotEmpty = errors.New("category not empty")
 )
 
@@ -281,7 +281,11 @@ func (s *Storage) Update(originalName, name, description, category, content stri
 	currentDir := current.Path
 	targetDir := s.promptDir(promptCategory, promptName)
 	if currentDir != targetDir {
-		if _, err := os.Stat(targetDir); err == nil {
+		targetExists, sameTarget, err := compareFilesystemEntries(currentDir, targetDir)
+		if err != nil {
+			return nil, err
+		}
+		if targetExists && !sameTarget {
 			return nil, ErrPromptExists
 		}
 		if err := os.MkdirAll(filepath.Dir(targetDir), 0755); err != nil {
@@ -597,4 +601,19 @@ func nextAvailableName(base string, existing map[string]struct{}) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func compareFilesystemEntries(currentPath, targetPath string) (bool, bool, error) {
+	currentInfo, err := os.Stat(currentPath)
+	if err != nil {
+		return false, false, err
+	}
+	targetInfo, err := os.Stat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, false, nil
+		}
+		return false, false, err
+	}
+	return true, os.SameFile(currentInfo, targetInfo), nil
 }

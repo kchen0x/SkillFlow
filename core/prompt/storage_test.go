@@ -87,10 +87,10 @@ func TestStorageImportArrayPayloadUpdatesExistingPrompt(t *testing.T) {
 	require.NoError(t, err)
 
 	payload, err := json.Marshal([]map[string]string{{
-		"name": "Prompt A",
+		"name":        "Prompt A",
 		"description": "New",
-		"category": "Research",
-		"content": "New content",
+		"category":    "Research",
+		"content":     "New content",
 	}})
 	require.NoError(t, err)
 
@@ -119,4 +119,31 @@ func TestStorageMigratesLegacyLayout(t *testing.T) {
 	assert.Equal(t, "20260308-review-api", items[0].Name)
 	_, err = os.Stat(filepath.Join(root, "Default", "20260308-review-api", prompt.FileName))
 	assert.NoError(t, err)
+}
+
+func TestStorageUpdateAllowsCaseOnlyRename(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Gitacp", "Git helper", "Default", "git add && git commit && git push")
+	require.NoError(t, err)
+
+	updated, err := store.Update("Gitacp", "gitacp", "Git helper", "Default", "git add && git commit && git push")
+	require.NoError(t, err)
+	assert.Equal(t, "gitacp", updated.Name)
+	assert.Equal(t, filepath.Join(root, "Default", "gitacp"), updated.Path)
+
+	items, err := store.ListAll()
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "gitacp", items[0].Name)
+	assert.Equal(t, filepath.Join(root, "Default", "gitacp"), items[0].Path)
+
+	_, err = os.Stat(filepath.Join(root, "Default", "gitacp", prompt.FileName))
+	assert.NoError(t, err)
+
+	entries, err := os.ReadDir(filepath.Join(root, "Default"))
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "gitacp", entries[0].Name())
 }
