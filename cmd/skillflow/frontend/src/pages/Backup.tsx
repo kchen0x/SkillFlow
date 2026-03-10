@@ -63,6 +63,7 @@ export default function Backup() {
   const [cloudEnabled, setCloudEnabled] = useState(false)
   const [isGit, setIsGit] = useState(false)
   const [lastCompletedAt, setLastCompletedAt] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const formatCompletedAt = (value: string) => {
     if (!value) return ''
@@ -81,11 +82,19 @@ export default function Backup() {
   }
 
   useEffect(() => {
-    GetConfig().then(cfg => {
-      setCloudEnabled(cfg?.cloud?.enabled ?? false)
-      setIsGit(cfg?.cloud?.provider === 'git')
-    })
-    loadLastChanges()
+    let active = true
+
+    Promise.all([GetConfig(), GetLastBackupChanges(), GetLastBackupCompletedAt()])
+      .then(([cfg, changes, completedAt]) => {
+        if (!active) return
+        setCloudEnabled(cfg?.cloud?.enabled ?? false)
+        setIsGit(cfg?.cloud?.provider === 'git')
+        setFiles(normalizeChanges(changes))
+        setLastCompletedAt(completedAt ?? '')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
 
     EventsOn('backup.progress', (data: string) => {
       try { setCurrentFile(JSON.parse(data).currentFile ?? '') } catch {}
@@ -106,6 +115,10 @@ export default function Backup() {
       setCurrentFile('')
     })
     EventsOn('git.sync.failed', () => setResultStatus('error'))
+
+    return () => {
+      active = false
+    }
   }, [])
 
   return (
@@ -114,7 +127,13 @@ export default function Backup() {
         <Cloud size={18} /> {t('backup.title')}
       </h2>
 
-      {!cloudEnabled && (
+      {loading && (
+        <p className="mb-6 text-sm" style={{ color: 'var(--text-muted)' }}>
+          {t('common.loading')}
+        </p>
+      )}
+
+      {!loading && !cloudEnabled && (
         <div
           className="rounded-xl p-4 mb-6 text-sm"
           style={{

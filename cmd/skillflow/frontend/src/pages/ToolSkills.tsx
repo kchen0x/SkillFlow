@@ -16,7 +16,7 @@ export default function ToolSkills() {
   const [tools, setTools] = useState<any[]>([])
   const [selectedTool, setSelectedTool] = useState<string>('')
   const [skills, setSkills] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
@@ -24,13 +24,38 @@ export default function ToolSkills() {
   const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
 
   useEffect(() => {
-    GetEnabledTools().then(t => {
-      setTools(t ?? [])
-      if (t && t.length > 0) {
-        setSelectedTool(t[0].name)
-        loadSkills(t[0].name)
+    let active = true
+
+    const initialize = async () => {
+      setLoading(true)
+      try {
+        const enabledTools = await GetEnabledTools()
+        if (!active) return
+
+        const nextTools = enabledTools ?? []
+        setTools(nextTools)
+
+        if (nextTools.length === 0) {
+          setSkills([])
+          return
+        }
+
+        const initialTool = nextTools[0].name
+        setSelectedTool(initialTool)
+
+        const listedSkills = await ListToolSkills(initialTool)
+        if (!active) return
+        setSkills(listedSkills ?? [])
+      } finally {
+        if (active) setLoading(false)
       }
-    })
+    }
+
+    void initialize()
+
+    return () => {
+      active = false
+    }
   }, [])
 
   const loadSkills = async (toolName: string) => {
@@ -144,7 +169,7 @@ export default function ToolSkills() {
             <span className="truncate">{t.name}</span>
           </button>
         ))}
-        {tools.length === 0 && (
+        {!loading && tools.length === 0 && (
           <p className="px-3 text-xs mt-2" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noTools')}</p>
         )}
       </div>

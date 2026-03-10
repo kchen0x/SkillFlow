@@ -15,6 +15,7 @@ import AnimatedDialog from '../components/ui/AnimatedDialog'
 import SkillListControls from '../components/SkillListControls'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
+import { getListLoadState } from '../lib/listLoadState'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 
 type Scope = 'auto' | 'manual'
@@ -36,13 +37,29 @@ export default function SyncPush() {
   const [pendingPush, setPendingPush] = useState(false)
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([GetEnabledTools(), ListSkills(), ListCategories()]).then(([t, s, c]) => {
-      setTools(t ?? [])
-      setSkills(s ?? [])
-      setCategories(c ?? [])
-    })
+    let active = true
+
+    const initialize = async () => {
+      setLoading(true)
+      try {
+        const [enabledTools, listedSkills, listedCategories] = await Promise.all([GetEnabledTools(), ListSkills(), ListCategories()])
+        if (!active) return
+        setTools(enabledTools ?? [])
+        setSkills(listedSkills ?? [])
+        setCategories(listedCategories ?? [])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    void initialize()
+
+    return () => {
+      active = false
+    }
   }, [])
 
   const filteredSkills = useMemo(
@@ -62,6 +79,7 @@ export default function SyncPush() {
 
   const pushCount = pushIDs.length
   const allManualSelected = visibleSkills.length > 0 && visibleSkills.every((skill: any) => selectedSkills.has(skill.id))
+  const listState = getListLoadState({ isLoading: loading, itemCount: visibleSkills.length })
 
   const scopeLabel = scope === 'manual'
     ? t('syncPush.scopeManual', { count: selectedSkills.size })
@@ -281,28 +299,32 @@ export default function SyncPush() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
-            {visibleSkills.map((skill: any) => (
-              <SyncSkillCard
-                key={skill.id}
-                id={skill.id}
-                name={skill.name}
-                subtitle={skill.category || undefined}
-                source={skill.source}
-                path={skill.path}
-                pushedTools={skill.pushedTools}
-                showPushedTools={visibility.includes('pushedTools')}
-                selected={scope === 'manual' && selectedSkills.has(skill.id)}
-                showSelection={scope === 'manual'}
-                onToggle={() => toggleSkill(skill.id)}
-              />
-            ))}
-          </div>
-
-          {visibleSkills.length === 0 && (
+          {listState === 'loading' ? (
+            <div className="flex items-center justify-center h-48 text-sm" style={{ color: 'var(--text-muted)' }}>
+              {t('common.loading')}
+            </div>
+          ) : listState === 'empty' ? (
             <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
               <p className="text-sm">{t('syncPush.empty')}</p>
               <p className="text-xs mt-1">{t('syncPush.emptyHint')}</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 xl:grid-cols-4 gap-3">
+              {visibleSkills.map((skill: any) => (
+                <SyncSkillCard
+                  key={skill.id}
+                  id={skill.id}
+                  name={skill.name}
+                  subtitle={skill.category || undefined}
+                  source={skill.source}
+                  path={skill.path}
+                  pushedTools={skill.pushedTools}
+                  showPushedTools={visibility.includes('pushedTools')}
+                  selected={scope === 'manual' && selectedSkills.has(skill.id)}
+                  showSelection={scope === 'manual'}
+                  onToggle={() => toggleSkill(skill.id)}
+                />
+              ))}
             </div>
           )}
         </div>

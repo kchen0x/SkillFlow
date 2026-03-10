@@ -1,4 +1,6 @@
-export type StarredRepoListState = 'loading' | 'empty' | 'ready'
+import { getListLoadState, type ListLoadState } from './listLoadState.js'
+
+export type StarredRepoListState = ListLoadState
 
 export function getStarredRepoListState({
   isLoading,
@@ -7,7 +9,5 @@ export function getStarredRepoListState({
   isLoading: boolean
   skillCount: number
 }): StarredRepoListState {
-  if (isLoading) return 'loading'
-  if (skillCount === 0) return 'empty'
-  return 'ready'
+  return getListLoadState({ isLoading, itemCount: skillCount })
 }

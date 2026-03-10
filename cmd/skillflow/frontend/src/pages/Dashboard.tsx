@@ -13,6 +13,7 @@ import GitHubInstallDialog from '../components/GitHubInstallDialog'
 import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine } from 'lucide-react'
 import { gridContainerVariants, cardVariants } from '../lib/motionVariants'
 import SkillListControls from '../components/SkillListControls'
+import { getListLoadState } from '../lib/listLoadState'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const [toolOptions, setToolOptions] = useState<any[]>([])
   const [autoPushTools, setAutoPushTools] = useState<Set<string>>(new Set())
   const [dashboardCfg, setDashboardCfg] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
   const [savingAutoPush, setSavingAutoPush] = useState(false)
 
   // Hover tooltip state
@@ -43,12 +45,17 @@ export default function Dashboard() {
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async () => {
-    const [s, c, cfg] = await Promise.all([ListSkills(), ListCategories(), GetConfig()])
-    setSkills(s ?? [])
-    setCategories(c ?? [])
-    setDashboardCfg(cfg)
-    setToolOptions((cfg?.tools ?? []).filter((tool: any) => tool.enabled))
-    setAutoPushTools(new Set(cfg?.autoPushTools ?? []))
+    setLoading(true)
+    try {
+      const [s, c, cfg] = await Promise.all([ListSkills(), ListCategories(), GetConfig()])
+      setSkills(s ?? [])
+      setCategories(c ?? [])
+      setDashboardCfg(cfg)
+      setToolOptions((cfg?.tools ?? []).filter((tool: any) => tool.enabled))
+      setAutoPushTools(new Set(cfg?.autoPushTools ?? []))
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -65,6 +72,7 @@ export default function Dashboard() {
     ),
     [skills, selectedCat, search, sortOrder],
   )
+  const listState = getListLoadState({ isLoading: loading, itemCount: filtered.length })
 
   const skillCounts = skills.reduce((acc, sk) => {
     const category = sk.category || 'Default'
@@ -327,7 +335,11 @@ export default function Dashboard() {
             background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-glow) 42%, transparent) 0%, color-mix(in srgb, var(--bg-elevated) 94%, transparent) 100%)',
           }}
         >
-          {toolOptions.length > 0 ? (
+          {loading ? (
+            <p className="text-sm flex-1" style={{ color: 'var(--text-muted)' }}>
+              {t('common.loading')}
+            </p>
+          ) : toolOptions.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
               {toolOptions.map(tool => {
                 const active = autoPushTools.has(tool.name)
@@ -372,50 +384,55 @@ export default function Dashboard() {
 
         {/* Skills grid */}
         <div className="flex-1 overflow-y-auto p-6">
-          <motion.div
-            className="grid grid-cols-3 xl:grid-cols-4 gap-4"
-            variants={containerVariants}
-            initial="initial"
-            animate="animate"
-          >
-            {filtered.map(sk => (
-              <motion.div key={sk.id} variants={filtered.length <= 30 ? cardVariants : undefined}>
-                <SkillCard
-                  skill={{
-                    id: sk.id,
-                    name: sk.name,
-                    category: sk.category,
-                    source: sk.source,
-                    hasUpdate: !!sk.updatable,
-                    path: sk.path,
-                    pushedTools: sk.pushedTools,
-                  }}
-                  showUpdatable={visibility.includes('updatable')}
-                  showPushedTools={visibility.includes('pushedTools')}
-                  categories={categories}
-                  onDelete={async () => { await DeleteSkill(sk.id); load() }}
-                  onUpdate={async () => { await UpdateSkill(sk.id); load() }}
-                  onMoveCategory={async cat => { await MoveSkillCategory(sk.id, cat); load() }}
-                  dragging={draggingSkillID === sk.id}
-                  dropTargetActive={draggingSkillID === sk.id && categoryDragActive}
-                  onDragStateChange={(dragging) => {
-                    setDraggingSkillID(dragging ? sk.id : null)
-                    if (!dragging) setCategoryDragActive(false)
-                  }}
-                  selectMode={selectMode}
-                  selected={selectedIDs.has(sk.id)}
-                  onToggleSelect={() => toggleSelectID(sk.id)}
-                  onHoverStart={rect => handleHoverStart(sk, rect)}
-                  onHoverEnd={handleHoverEnd}
-                />
-              </motion.div>
-            ))}
-          </motion.div>
-          {filtered.length === 0 && (
+          {listState === 'loading' ? (
+            <div className="flex items-center justify-center h-48 text-sm" style={{ color: 'var(--text-muted)' }}>
+              {t('common.loading')}
+            </div>
+          ) : listState === 'empty' ? (
             <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
               <p className="text-sm">{t('dashboard.empty')}</p>
               <p className="text-xs mt-1">{t('dashboard.emptyHint')}</p>
             </div>
+          ) : (
+            <motion.div
+              className="grid grid-cols-3 xl:grid-cols-4 gap-4"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+            >
+              {filtered.map(sk => (
+                <motion.div key={sk.id} variants={filtered.length <= 30 ? cardVariants : undefined}>
+                  <SkillCard
+                    skill={{
+                      id: sk.id,
+                      name: sk.name,
+                      category: sk.category,
+                      source: sk.source,
+                      hasUpdate: !!sk.updatable,
+                      path: sk.path,
+                      pushedTools: sk.pushedTools,
+                    }}
+                    showUpdatable={visibility.includes('updatable')}
+                    showPushedTools={visibility.includes('pushedTools')}
+                    categories={categories}
+                    onDelete={async () => { await DeleteSkill(sk.id); load() }}
+                    onUpdate={async () => { await UpdateSkill(sk.id); load() }}
+                    onMoveCategory={async cat => { await MoveSkillCategory(sk.id, cat); load() }}
+                    dragging={draggingSkillID === sk.id}
+                    dropTargetActive={draggingSkillID === sk.id && categoryDragActive}
+                    onDragStateChange={(dragging) => {
+                      setDraggingSkillID(dragging ? sk.id : null)
+                      if (!dragging) setCategoryDragActive(false)
+                    }}
+                    selectMode={selectMode}
+                    selected={selectedIDs.has(sk.id)}
+                    onToggleSelect={() => toggleSelectID(sk.id)}
+                    onHoverStart={rect => handleHoverStart(sk, rect)}
+                    onHoverEnd={handleHoverEnd}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
           )}
         </div>
       </div>

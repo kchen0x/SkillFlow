@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test:unit": "node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\" && tsc src/lib/clipboardCore.ts src/lib/starredRepoListState.ts --module ESNext --target ES2020 --moduleResolution Node --outDir .tmp-tests && node --test tests/*.test.mjs"
+    "test:unit": "node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\" && tsc src/lib/clipboardCore.ts src/lib/listLoadState.ts src/lib/starredRepoListState.ts --module ESNext --target ES2020 --moduleResolution Node --outDir .tmp-tests && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
