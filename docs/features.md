@@ -388,8 +388,8 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 
 | Button | Object Storage label | Git label |
 |--------|---------------------|-----------|
-| **Backup Now** (Upload icon) | 立即备份 | 立即备份 |
-| **Restore / Pull** (Download icon) | 从云端恢复 | 拉取远端 |
+| **Backup Now** (Upload icon) | Backup Now | Backup Now |
+| **Restore / Pull** (Download icon) | Restore from Cloud | Pull Remote |
 | **Refresh** (RefreshCw) | Reloads the latest backup change result | Same |
 
 - Backup Now and Restore are disabled when cloud is not configured.
@@ -444,9 +444,9 @@ When the **git** provider is selected:
 - **Manual actions with conflict detection** — both **Backup Now** and **Restore / Pull** detect git conflicts/divergence and emit `git.conflict` when user action is required.
 - **Conflict resolution dialog** — if `git pull` or `git push` detects a conflict or diverged history, a modal appears:
   - The dialog includes a conflict file list when available.
-  - **"以本地为准"** (Keep Local) — aborts the merge, force-pushes local state to remote. Calls `ResolveGitConflict(true)`.
-  - **"以远端为准"** (Use Remote) — aborts the merge, resets local to `origin/<branch>`. Calls `ResolveGitConflict(false)`.
-  - **"手动解决"** (Resolve Manually) — opens the Git backup root in the system file manager so the user can inspect and fix conflicted files directly.
+  - **"Keep Local"** — aborts the merge, force-pushes local state to remote. Calls `ResolveGitConflict(true)`.
+  - **"Keep Remote"** — aborts the merge, resets local to `origin/<branch>`. Calls `ResolveGitConflict(false)`.
+  - **"Resolve Manually"** — opens the Git backup root in the system file manager so the user can inspect and fix conflicted files directly.
   - The keep-local and keep-remote actions both reload app state from disk (skills/meta/config) and emit `git.sync.completed` on success.
 - **State refresh after pull** — after successful startup pull or manual pull, app state is immediately reloaded from disk so changed `meta/` and config files take effect.
 - If a conflict is detected during startup (before the UI loads), it is stored as a pending flag and surfaced when the Backup page mounts (`GetGitConflictPending()`).
@@ -686,50 +686,50 @@ A centered modal dialog that appears when a new app version is detected. Trigger
 | State | Trigger | Dialog content |
 |-------|---------|---------------|
 | `available` | `app.update.available` event | Version labels + release notes + platform-specific action buttons |
-| `downloading` | User clicks "下载并自动重启更新" (Windows only) | Spinner + progress message |
-| `ready_to_restart` | `app.update.download.done` event | Completion message + "立即重启" / "稍后重启" buttons |
-| `download_failed` | `app.update.download.fail` event | Error message + "前往下载页" button |
+| `downloading` | User clicks "Download & Auto-restart" (Windows only) | Spinner + progress message |
+| `ready_to_restart` | `app.update.download.done` event | Completion message + "Restart Now" / "Later" buttons |
+| `download_failed` | `app.update.download.fail` event | Error message + "Go to Downloads" button |
 
 ### Platform Behavior
 
 Both startup and manual checks surface the same modal dialog.
 
 - **Windows** — Three choices in the `available` state:
-  1. **下载并自动重启更新** — downloads new exe in the background, then prompts restart.
-  2. **前往 Release 页面手动下载** — opens the GitHub Releases page in the system browser.
-  3. **跳过此版本（下次启动不再提示）** — persists the skipped version; the startup check will not prompt for this version again. The manual check always shows the dialog regardless.
+  1. **Download & Auto-restart** — downloads the new exe in the background, then prompts restart.
+  2. **Open Release Page** — opens the GitHub Releases page in the system browser.
+  3. **Skip this version (don't remind on next start)** — persists the skipped version; the startup check will not prompt for this version again. The manual check always shows the dialog regardless.
 - **macOS** — Two choices in the `available` state (auto-download not supported):
-  1. **前往 Release 页面手动下载** — opens the GitHub Releases page.
-  2. **跳过此版本（下次启动不再提示）** — same skip behavior as Windows.
+  1. **Open Release Page** — opens the GitHub Releases page.
+  2. **Skip this version (don't remind on next start)** — same skip behavior as Windows.
 - The `available` dialog always renders the current version, latest version, and the Release-page action from the same `AppUpdateInfo` payload on both platforms.
 
 ### Skip Version Behavior
 
 - The skipped version tag is stored in `AppConfig.SkippedUpdateVersion` and persisted in the shared `config.json` file, so it survives app restarts.
 - On app startup, if `latestVersion == skippedUpdateVersion` the `app.update.available` event is **not** emitted and no dialog appears.
-- When the user manually clicks "检测更新" in Settings, `CheckAppUpdateAndNotify` always emits the event, bypassing the skip — the dialog always appears for manual checks.
-- Clicking "跳过此版本" calls `SetSkippedUpdateVersion(latestVersion)`.
+- When the user manually clicks "Check for Updates" in Settings, `CheckAppUpdateAndNotify` always emits the event, bypassing the skip — the dialog always appears for manual checks.
+- Clicking "Skip this version" calls `SetSkippedUpdateVersion(latestVersion)`.
 
 ### Manual Check Button (Settings Page)
 
-A **"检测更新"** button in the top-right corner of the Settings page header:
+A **"Check for Updates"** button in the top-right corner of the Settings page header:
 
 - Displays current app version (`vX.Y.Z`) next to the button.
 - Click → calls `CheckAppUpdateAndNotify()`; button shows a spinner while checking.
 - If a new version is found, the update dialog opens automatically via the `app.update.available` event.
-- If already up-to-date, inline text shows "已是最新版本 (vX.Y.Z)".
-- On error: "检测失败: …" shown inline.
+- If already up-to-date, inline text shows "Already up to date (vX.Y.Z)".
+- On error: "Check failed: …" shown inline.
 
 ### Controls
 
 | Control | Action |
 |---------|--------|
-| **下载并自动重启更新** (Windows, `available`) | `DownloadAppUpdate(downloadUrl)` — starts async download |
-| **前往 Release 页面手动下载** (`available`) | `OpenURL(releaseUrl)` — opens release page in browser; closes dialog |
-| **跳过此版本** (`available`) | `SetSkippedUpdateVersion(latestVersion)` — persists skip; closes dialog |
-| **立即重启** (`ready_to_restart`) | `ApplyAppUpdate()` — writes bat script and exits; bat replaces exe and relaunches |
-| **稍后重启** (`ready_to_restart`) | Closes dialog without restarting |
-| **前往下载页** (`download_failed`) | `OpenURL(releaseUrl)` — opens release page in browser; closes dialog |
+| **Download & Auto-restart** (Windows, `available`) | `DownloadAppUpdate(downloadUrl)` — starts async download |
+| **Open Release Page** (`available`) | `OpenURL(releaseUrl)` — opens release page in browser; closes dialog |
+| **Skip this version** (`available`) | `SetSkippedUpdateVersion(latestVersion)` — persists skip; closes dialog |
+| **Restart Now** (`ready_to_restart`) | `ApplyAppUpdate()` — writes bat script and exits; bat replaces exe and relaunches |
+| **Later** (`ready_to_restart`) | Closes dialog without restarting |
+| **Go to Downloads** (`download_failed`) | `OpenURL(releaseUrl)` — opens release page in browser; closes dialog |
 | **×** (all states except `downloading`) | Closes dialog for the current session |
 
 ### Backend Methods

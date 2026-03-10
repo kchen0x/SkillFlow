@@ -2,78 +2,171 @@
 
 > 🌐 **中文** | [English](architecture.md)
 
-本文档面向贡献者，涵盖内部架构、包设计、数据模型和扩展指南。
-
-## 云 Provider 构建说明
-
-- `core/backup` 包含 Aliyun、AWS、Azure、Google、Tencent、Huawei 与 Git provider，统一遵循 `CloudProvider` 接口。
-- 默认构建会包含全部 provider；按需构建时可传入 `provider_select` 和 `backup_<provider>` build tags（例如 `backup_aws backup_google`）只编译需要的云 provider。
-- Git 备份始终保留，不受云 provider 选择影响。
-- `CloudConfig.Provider` 的可选值为 `aliyun`、`aws`、`azure`、`google`、`tencent`、`huawei`、`git`。
-- 可同步连接字段包含 `region`、`account_name`、`service_url`；敏感字段如 `account_key`、`service_account_json` 仍只落在 `config_local.json`。
+本文档面向贡献者，说明 SkillFlow 的内部架构、仓库布局、关键数据模型和扩展点。面向用户的交互与功能说明请查看 **[docs/features_zh.md](features_zh.md)**。
 
 ---
 
 ## 概述
 
-SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0）。Go 后端通过 Wails 方法绑定直接将方法暴露给 React 前端。**没有 REST API** — 前端以异步函数形式直接调用 Go 方法。
+SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23**，前端使用 **React 18 + TypeScript**。
 
-**技术栈：**
-- 后端：Go 1.23、Wails v2
-- 前端：React 18、TypeScript、React Router v7、Tailwind CSS、Lucide React、Radix UI
-- 构建：Wails CLI、Vite、可选云 provider build tags
+- Go 后端位于 `cmd/skillflow/`
+- React 前端位于 `cmd/skillflow/frontend/`
+- 二者通过 Wails 生成绑定直接通信
+- **没有 REST API**
 
----
+核心技术栈：
 
-## 关键设计决策
-
-- **`core/sync` 包名与 Go 标准库 `sync` 冲突** — 必须使用别名导入：`toolsync "github.com/shinerio/skillflow/core/sync"`
-- **Wails 绑定为自动生成** — 在 `App` 上增删导出方法后，需运行 `wails generate module` 更新 `frontend/wailsjs/go/main/App.{js,d.ts}`
-- **云备份 provider 支持 build tags** — 默认构建包含全部 provider；按需构建可传入 `provider_select` 以及 `backup_<provider>` 标签，只编译所需云 provider；Git 备份始终保留
-- **根目录下的 `package main` 文件** — `app.go`、`adapters.go`、`providers.go`、`events.go` 均与 `main.go` 同属 `package main`，因为 Wails 要求 App 结构体与 `main` 位于同一包
-- **无 REST API** — 直接使用 Wails 方法绑定，更快更简洁
-- **已安装 Skill 实例使用 UUID，但跨模块关联必须使用稳定的逻辑主键** — 见下文的[统一的 Skill 身份与状态模型](#统一的-skill-身份与状态模型)
-- **文件系统适配器** — 所有内置工具共享同一 `FilesystemAdapter` 模式
-- **以 GitHub 为数据来源** — 更新检测器轮询 GitHub API，而非本地时间戳
+- 后端：Go、Wails、Git、各云服务商 SDK
+- 前端：React、TypeScript、React Router、Tailwind CSS、Radix UI、Lucide
+- 构建：`make`、Wails CLI、Vite
 
 ---
 
-## 数据存储目录结构
+## 仓库布局
 
+```text
+/                              模块根目录，不放 Go 源文件
+  go.mod
+  Makefile
+  README.md
+  README_zh.md
+  docs/
+  core/                        可复用包，不使用 package main
+  cmd/
+    skillflow/                 Wails 桌面应用，package main
+      main.go
+      app.go
+      app_*.go
+      adapters.go
+      providers.go
+      events.go
+      version.go
+      tray_*.go
+      single_instance_*.go
+      window_*.go
+      wails.json
+      build/
+      frontend/
 ```
-~/.skillflow/
-  skills/              ← SkillsStorageDir（可配置）
-    <category>/
-      <skill-name>/    ← 复制的 Skill 目录
-        skill.md       ← 带 YAML 前置元数据的主文件
-        ...其他文件
-  meta/                ← JSON 附属文件（与 skills/ 同级）
-    <uuid>.json        ← 每个 Skill 一个，包含 Skill 结构体
-  config.json          ← 可同步的应用配置（工具、页面级卡片状态显示策略、当前云状态、按服务商分组的云端非敏感配置、代理）
-  config_local.json    ← 仅本地保存的路径配置 + 按服务商分组的云端敏感凭据
-  star_repos.json      ← StarredRepo[] 数组
-  cache/               ← 收藏仓库的临时克隆目录
-    <cached-repo-dirs>/
-```
 
-已安装的 Skill 实例以 UUID 标识。跨模块关联必须遵循下文[统一的 Skill 身份与状态模型](#统一的-skill-身份与状态模型)中的逻辑主键规则。`meta/` 目录始终为 `filepath.Join(filepath.Dir(root), "meta")`。
+关键规则：
+
+- 根目录 **不允许** 出现 `.go` 文件。
+- `cmd/skillflow/*.go` 必须保持 **扁平**，因为 Wails 绑定要求同一个 `package main` 目录。
+- 新的可复用后端逻辑应放到 `core/<name>/`，而不是再给 `cmd/skillflow/` 建 Go 子目录。
+- `wails dev`、`wails build`、`wails generate module` 都要在 `cmd/skillflow/` 下执行；从仓库根目录优先使用 `make dev`、`make build`、`make generate`。
 
 ---
 
-## 后端包职责
+## 运行时生命周期
 
-| 包 | 职责 |
-|----|------|
-| `core/skill` | `Skill` 模型、`Storage`（增删改查 + 分类）、`Validator`（skill.md 校验）、已安装 Skill 关联索引 |
-| `core/skillkey` | Git Skill 与本地 Skill 的稳定逻辑主键生成 |
-| `core/config` | `AppConfig` 模型、状态显示默认值/归一化、`Service`（JSON 加载/保存）、各工具的 `DefaultToolsDir()` |
-| `core/notify` | `Hub`（缓冲通道发布/订阅）、`EventType` 常量 |
-| `core/install` | `Installer` 接口、`GitHubInstaller`（扫描/下载/SHA）、`LocalInstaller` |
-| `core/sync` | `ToolAdapter` 接口、`FilesystemAdapter`（所有内置工具共用） |
-| `core/backup` | `CloudProvider` 接口、provider factory catalog，以及阿里云/AWS/Azure/Google/腾讯云/华为云/Git 实现 |
-| `core/update` | `Checker`（GitHub Commits API SHA 对比） |
-| `core/registry` | Installer/ToolAdapter/CloudProvider 的全局映射 — 启动时注册 |
-| `core/git` | Git 克隆/更新、仓库 Skill 扫描、收藏仓库存储 |
+### Wails 入口
+
+`cmd/skillflow/main.go` 负责：
+
+- 用 `//go:embed all:frontend/dist` 嵌入前端构建产物
+- 通过 `NewApp()` 创建 `App` 实例
+- 以 `HideWindowOnClose: true` 启动 Wails
+- 将 `App` 直接绑定给前端
+
+### 应用启动流程
+
+`App.startup()` 完成核心后端初始化：
+
+1. 解析 `config.AppDataDir()`
+2. 通过 `core/config.Service` 加载配置
+3. 初始化滚动日志
+4. 创建 Skill 存储和收藏仓库存储
+5. 注册工具适配器与云服务商
+6. 启动后端事件转发
+7. 启动云备份自动同步计时器
+
+`App.domReady()` 负责外壳/UI 相关初始化：
+
+1. 恢复或计算窗口初始尺寸
+2. 初始化系统托盘
+3. 延迟调度启动后的后台任务
+
+当前延迟后台任务包括：
+
+- Skill 更新检测
+- 收藏仓库刷新
+- 应用版本更新检测
+- Git 备份启动拉取
+
+`App.beforeClose()` 会持久化当前窗口尺寸，`App.shutdown()` 会清理托盘资源。
+
+---
+
+## 应用数据布局
+
+默认情况下，SkillFlow 将数据保存在 `config.AppDataDir()`：
+
+- macOS：`~/Library/Application Support/SkillFlow/`
+- Windows：`%USERPROFILE%\\.skillflow\\`
+
+```text
+<AppDataDir>/
+  skills/                 已安装 Skill 库
+  meta/                   每个已安装 Skill 的 JSON sidecar
+  prompts/                提示词库
+  cache/                  收藏仓库的本地克隆缓存
+  logs/
+    skillflow.log
+    skillflow.log.1
+  config.json             可同步的共享配置
+  config_local.json       本地专属配置
+  star_repos.json         收藏仓库元数据
+```
+
+重要规则：
+
+- `config.json` 只保存跨设备可同步的安全配置。
+- `config_local.json` 保存机器相关路径、自动推送目标、开机自启、代理、窗口状态、自定义工具路径配置，以及敏感云凭据。
+- `meta/*.json`、`star_repos.json` 等可同步文件中的本地路径，在目标位于同步根目录内时必须以 **正斜杠相对路径** 形式持久化。
+- 如果 `SkillsStorageDir` 被移出默认应用数据目录，同步根目录会变成 `skills/` 与 `meta/` 的共同父目录。
+- 日志文件固定为 **两个**，每个 **1MB** 上限：`skillflow.log` 与 `skillflow.log.1`。
+
+---
+
+## 包职责
+
+| 路径 | 职责 |
+|------|------|
+| `cmd/skillflow` | Wails 入口、前端可调用的 `App` 方法、托盘/窗口/单实例集成、适配器与服务商注册 |
+| `core/applog` | 日志滚动与日志级别处理 |
+| `core/backup` | 备份快照、服务商接口、Git provider、对象存储 provider |
+| `core/config` | 共享/本地配置拆分持久化、默认值、状态显示策略归一化 |
+| `core/git` | Git clone/pull/push 辅助、收藏仓库扫描、收藏仓库存储 |
+| `core/install` | GitHub 安装和本地导入流程 |
+| `core/notify` | 缓冲事件总线与事件载荷类型 |
+| `core/pathutil` | 跨平台路径归一化与相对路径持久化辅助 |
+| `core/prompt` | 提示词库存储与导入导出 |
+| `core/registry` | 工具适配器和云服务商的全局注册表 |
+| `core/skill` | Skill 模型、存储、校验、已安装索引 |
+| `core/skillkey` | Git Skill 与内容型 Skill 的稳定逻辑主键生成 |
+| `core/sync` | `ToolAdapter` 接口和基于文件系统的适配器实现 |
+| `core/update` | 基于 GitHub commit 的已安装 Git Skill 更新检测 |
+
+---
+
+## `cmd/skillflow/` 文件组织
+
+Wails 应用包必须保持扁平，因此通过文件名前缀划分职责：
+
+| 文件组 | 作用 |
+|--------|------|
+| `main.go`、`version.go` | 入口与构建时版本号 |
+| `app.go` | 主 `App` 结构体及大部分前端可调用方法 |
+| `app_prompt.go` | 提示词 CRUD 与提示词导入导出 |
+| `app_update.go` | 应用版本检测、下载、应用更新、跳过版本逻辑 |
+| `app_log.go` | 日志初始化与 Wails runtime 日志桥接 |
+| `app_restore.go`、`app_backup.go` | 恢复补偿逻辑、Git 备份辅助 |
+| `app_autostart.go`、`window_size.go`、`app_path.go` | 操作系统集成辅助 |
+| `adapters.go`、`providers.go` | 注册 `core/sync` 适配器与 `core/backup` 服务商 |
+| `events.go`、`push_conflict.go`、`skill_state.go` | 前端 DTO 与跨页面状态聚合 |
+| `tray_*.go`、`single_instance_*.go`、`window_*.go` | 平台相关的壳层行为 |
 
 ---
 
@@ -83,389 +176,284 @@ SkillFlow 是一款基于 **Wails v2** 的桌面应用（Go 1.23，Wails v2.11.0
 
 ```go
 type Skill struct {
-    ID            string     // UUID
-    Name          string     // skill 名称（目录名）
-    Path          string     // 运行时绝对路径；在 meta/*.json 中以同步根目录下的相对路径持久化
-    Category      string     // 用户定义的分类
-    Source        SourceType // "github" | "manual"
-    SourceURL     string     // GitHub 源的仓库 URL
-    SourceSubPath string     // 仓库内的相对路径（如 "skills/my-skill"）
-    SourceSHA     string     // 已安装的 commit SHA（来自 GitHub）
-    LatestSHA     string     // 检测到的更新 SHA（用于更新检测）
+    ID            string
+    Name          string
+    Path          string
+    Category      string
+    Source        SourceType
+    SourceURL     string
+    SourceSubPath string
+    SourceSHA     string
+    LatestSHA     string
     InstalledAt   time.Time
     UpdatedAt     time.Time
     LastCheckedAt time.Time
 }
-
-const (
-    SourceGitHub SourceType = "github"
-    SourceManual SourceType = "manual"
-)
 ```
 
-## 统一的 Skill 身份与状态模型
+说明：
 
-本节对所有后续涉及 skill 卡片、导入/安装/推送/拉取流程、收藏仓库、工具扫描或更新徽标的改动都具有约束力。
-
-### 身份分层
-
-SkillFlow 必须区分两类身份：
-
-- **实例身份** — `Skill.ID` 标识“我的 skills”中的某一份已安装副本。删除、移动分类、实例级更新等安装实例操作应使用它。
-- **逻辑身份** — 稳定的跨模块身份，用来回答“Dashboard、Starred Repos、Tool Skills、Sync Pull、Sync Push 中显示的是不是同一个 skill”。
-
-`Name` 和绝对 `Path` 只是展示信息或位置信息，不能作为跨模块主身份键。
-
-### 逻辑主键规则
-
-- **Git 来源 skill** 必须使用“规范化仓库来源 + 仓库内子路径”生成逻辑主键：
-  - 格式：`git:<repo-source>#<subpath>`
-  - `repo-source` 为规范化后的 host/path，例如 `github.com/owner/repo`
-  - `<subpath>` 为仓库内使用正斜杠的相对路径，例如 `skills/my-skill`
-- **非 Git skill** 应使用稳定的内容型主键，例如 `content:<hash>`，这样在工具扫描和本地导入时也能识别为同一个 skill。
-- **临时兜底启发式** 仅可在尚无法生成稳定逻辑主键时使用，并且必须视为弱匹配。
-
-### 模块映射
-
-| 模块 / 页面 | 主要实体 | 驱动行为的身份 |
-|-------------|----------|----------------|
-| Dashboard / 我的 Skills | 已安装 `Skill` | 实例操作使用 `Skill.ID`；跨模块关联使用逻辑主键 |
-| Sync Push | 已安装 `Skill` | 选择使用 `Skill.ID`；推送状态解析使用逻辑主键 |
-| GitHub 扫描/安装 | 远端候选项 | 使用 repo source + subpath 派生的逻辑主键 |
-| Starred Repos | `StarSkill` | 使用 repo source + subpath 派生的逻辑主键 |
-| Tool Skills | 工具侧候选项 / 聚合项 | 去重与状态使用逻辑主键；仅在该工具内的打开/删除使用 path |
-| Sync Pull | 工具侧候选项 | 导入与冲突检测使用逻辑主键 |
-
-### 统一状态语义
-
-- **installed** — 该逻辑主键在“我的 skills”中至少存在一个已安装实例。
-- **imported** — 外部来源页面对 `installed` 的文案别名；在 GitHub、Starred Repos、Tool 扫描视图中，“已导入”表示“已经安装进我的 skills”。
-- **pushed** — 该逻辑 skill 已存在于某工具配置的 `PushDir` 中，可视为已经推送到该工具。
-- **seenInToolScan** — 该逻辑 skill 已在某工具配置的 `ScanDirs` 中被扫描到，表示该 skill 已出现在工具生态中，但不一定由 SkillFlow 管理，也不一定在 `PushDir` 中。
-- **updatable** — 至少有一个已安装的 Git skill 实例，其远端最新提交与本地 `SourceSHA` 不一致。
-
-### 状态规则
-
-- `pushed` 比“工具里某处存在”更窄，它特指配置的推送目标中存在。
-- `seenInToolScan` 是观察型状态，用来区分“工具里已经有这个 skill”和“SkillFlow 已经把它推过去了”。
-- 当推送目录也被扫描，或同一个逻辑 skill 同时存在于 push/scan 两处时，`pushed=true` 与 `seenInToolScan=true` 可以同时成立。
-- 当 `seenInToolScan=true` 且 `pushed=false` 时，界面不能误写成“已推送”。当前 UI 通常通过把它放进“扫描路径”分区来表达，而不是在每张卡片上重复放一个 `detected` 徽章。
-- `pushedTools` 是卡片层的派生展示态：后端会聚合当前哪些工具的 `PushDir` 中包含该逻辑 skill，前端只消费这个结果并渲染图标。
-- 前端在真正渲染 badge 前，还会再应用 `AppConfig.SkillStatusVisibility` 里的页面级白名单。每个页面只能切换其默认策略里已有的状态，额外状态即使写进配置也会被归一化丢弃，因此同一套后端状态结果可以按页面稳定隐藏或显示，而不会被越权扩展。
-
-### 冲突与去重规则
-
-- 跨模块去重必须优先使用逻辑主键相等。
-- 不同仓库中的同名项，只要逻辑主键不同，就必须视为不同 skill。
-- 相同路径不自动代表同一个 skill，除非它们能解析为同一个逻辑主键。
-- 基于名称的匹配只能作为最后的兼容性兜底，且不能覆盖更强的逻辑主键匹配。
-
-### 更新检测规则
-
-- 只有具备稳定 repo source 和 subpath 的已安装 Git skill 才参与远端更新检测。
-- 更新资格必须使用与安装/导入关联相同的逻辑来源键。
-- 远端更新检测通过比较本地 `SourceSHA` 与同一 repo subpath 的最新远端 commit SHA。
-- `LastCheckedAt` 应在每次完成检查后更新，而不是仅在发现更新时更新。
-- 当最新检查确认本地 `SourceSHA` 已是最新时，应清空 `LatestSHA`。
-- 更新徽标与“更新”动作必须来源于统一状态模型，而不是页面私有的启发式判断。
-
-### 实现指导
-
-- 跨模块的 skill 关联应由后端统一负责，并向前端暴露规范化后的状态。
-- 前端页面不应再基于 `Name` 或 `Path` 独自判断“是不是同一个 skill”“是否已导入”或“是否已推送”。
-- 后续若引入 catalog / aggregate 层，应将各模块中的不同表示统一归并到同一个逻辑 skill 记录下，并把已安装实例作为其子引用。
-- 当前实现使用 `core/skillkey` 生成逻辑主键，并通过 `core/skill.BuildInstalledIndex` 统一解析 GitHub、仓库收藏、工具扫描中的 `installed` / `imported` / `updatable` 状态。
-- 工具目录中的副本会通过内容哈希侧索引回连到 Git 安装实例，因此被推送出来的目录副本仍能解析回规范化的 `git:<repo-source>#<subpath>` 身份。
-- 后端返回给卡片的数据还会携带聚合后的 `pushedTools` 列表，以便前端在同一张卡片上稳定展示多个并存状态，而不必重新扫描工具目录。
-- Push 冲突现在按 skill-target 配对（`skill + tool + target path`）结构化返回，因此覆盖操作可以精确作用于单个冲突，而不再是按名称猜测的一整批。
+- `ID` 是已安装实例的 UUID。
+- `Path` 运行时为绝对路径；若写入可同步元数据，应尽量保存为可移植的相对路径。
+- `SourceURL + SourceSubPath` 共同标识 GitHub 安装 Skill 的逻辑来源。
 
 ### AppConfig（`core/config/model.go`）
 
 ```go
-type ToolConfig struct {
-    Name     string   // 如 "claude-code"、"opencode"、"codex"、"gemini-cli"、"openclaw"
-    ScanDirs []string // 扫描现有 Skill 的目录列表
-    PushDir  string   // 默认推送目录
-    Enabled  bool
-    Custom   bool     // true 表示用户通过设置添加的自定义工具
-}
-
-type CloudConfig struct {
-    Provider    string            // "aliyun"、"tencent"、"huawei"、"git"
-    Enabled     bool
-    BucketName  string
-    RemotePath  string            // 规范化后的备份前缀，始终以 "skillflow/" 结尾
-    Credentials map[string]string // 运行时合并视图；非敏感字段在 config.json，敏感凭据在 config_local.json
-}
-
-type CloudProviderConfig struct {
-    BucketName  string
-    RemotePath  string
-    Credentials map[string]string // 某个服务商的运行时合并视图
-}
-
-type ProxyConfig struct {
-    Mode   ProxyMode // "none" | "system" | "manual"
-    URL    string    // Mode 为 "manual" 时使用
-}
-
 type AppConfig struct {
-    SkillsStorageDir     string        // 默认：~/.skillflow/skills
-    DefaultCategory      string        // 默认："Default"
-    LogLevel             string        // "debug" | "info" | "error"
-    RepoScanMaxDepth     int
-    SkillStatusVisibility SkillStatusVisibilityConfig // 共享的页面级卡片状态白名单
-    Tools                []ToolConfig
-    Cloud                CloudConfig
-    CloudProfiles        map[string]CloudProviderConfig // 各服务商独立持久化的配置
-    Proxy                ProxyConfig
-    SkippedUpdateVersion string        // 用于抑制启动时更新提示的版本 tag
-}
-
-type SkillStatusVisibilityConfig struct {
-    MySkills      []string // 默认：可更新、已推送工具
-    MyTools       []string // 默认：已导入、可更新、已推送工具
-    PushToTool    []string // 默认：已推送工具
-    PullFromTool  []string // 默认：已导入
-    StarredRepos  []string // 默认：已导入、已推送工具
-    GitHubInstall []string // 默认：已导入、可更新、已推送工具
+    SkillsStorageDir      string
+    AutoPushTools         []string
+    LaunchAtLogin         bool
+    DefaultCategory       string
+    LogLevel              string
+    RepoScanMaxDepth      int
+    SkillStatusVisibility SkillStatusVisibilityConfig
+    Tools                 []ToolConfig
+    Cloud                 CloudConfig
+    CloudProfiles         map[string]CloudProviderConfig
+    Proxy                 ProxyConfig
+    SkippedUpdateVersion  string
 }
 ```
 
-### StarredRepo（`core/git/model.go`）
+配置拆分规则：
+
+- **共享 / 可同步**：`DefaultCategory`、`LogLevel`、`RepoScanMaxDepth`、状态显示策略、内置工具启用状态、当前云服务商状态、云服务商非敏感配置、跳过的应用版本。
+- **本地专属**：`SkillsStorageDir`、`AutoPushTools`、`LaunchAtLogin`、工具路径、自定义工具定义、代理、窗口尺寸、敏感云凭据。
+
+相关嵌套模型：
+
+```go
+type ToolConfig struct {
+    Name     string
+    ScanDirs []string
+    PushDir  string
+    Enabled  bool
+    Custom   bool
+}
+
+type CloudConfig struct {
+    Provider            string
+    Enabled             bool
+    BucketName          string
+    RemotePath          string
+    Credentials         map[string]string
+    SyncIntervalMinutes int
+}
+```
+
+### 收藏仓库模型（`core/git/model.go`）
 
 ```go
 type StarredRepo struct {
-    URL       string    // 用户提供的 git 仓库 URL
-    Name      string    // 解析后的 "owner/repo"
-    Source    string    // 规范化键值 "<host>/<path>"
-    LocalDir  string    // 运行时绝对缓存目录；在 star_repos.json 中以 AppDataDir() 下的相对路径持久化
+    URL       string
+    Name      string
+    Source    string
+    LocalDir  string
     LastSync  time.Time
     SyncError string
 }
 
 type StarSkill struct {
-    Name     string
-    Path     string   // 本地 Skill 目录的绝对路径
-    SubPath  string   // 仓库内的相对路径
-    RepoURL  string
-    RepoName string
-    Source   string
-    Imported bool     // 是否已在"我的skills"中
+    Name        string
+    Path        string
+    SubPath     string
+    RepoURL     string
+    RepoName    string
+    Source      string
+    LogicalKey  string
+    Installed   bool
+    Imported    bool
+    Updatable   bool
+    Pushed      bool
+    PushedTools []string
 }
 ```
 
 ---
 
-## 启动流程
+## 统一的 Skill 身份与状态模型
 
-`main.go` → `app.startup()`：
-1. 加载应用数据目录
-2. 初始化 `config.Service`，加载配置
-3. 使用已配置的 `SkillsStorageDir` 创建 `skill.Storage`
-4. 调用 `registerAdapters()`（5 个内置工具 → `FilesystemAdapter`）
-5. 调用 `registerProviders()`（阿里云、腾讯云、华为云）
-6. 启动 `forwardEvents(ctx, hub)` goroutine — 订阅 Hub，通过 `runtime.EventsEmit` 发送事件
-7. 启动 `checkUpdatesOnStartup()` goroutine — 扫描 GitHub 来源 Skill 的更新
-8. 启动 `updateStarredReposOnStartup()` goroutine — 同步收藏仓库
+本节对所有涉及 Skill 卡片、导入/安装/推送/拉取流程、收藏仓库、工具扫描或更新徽标的改动都具有约束力。
 
----
+### 身份分层
 
-## 主 App 结构体
+SkillFlow 区分两类身份：
 
-`app.go`（`package main`）包含 `App` 结构体及所有导出方法：
+- **实例身份**：`Skill.ID`，用于“我的 Skills”中的单个已安装副本操作，例如删除、移动分类、实例更新。
+- **逻辑身份**：跨模块稳定身份，用来判断 Dashboard、Starred Repos、Tool Skills、Pull、Push 中展示的是不是同一个 Skill。
 
-```go
-type App struct {
-    ctx         context.Context
-    hub         *notify.Hub           // 事件发布/订阅
-    storage     *skill.Storage        // Skill 增删改查
-    config      *config.Service       // 配置持久化
-    starStorage *coregit.StarStorage  // 收藏仓库 JSON 持久化
-    cacheDir    string                // ~/.skillflow/cache/
-}
-```
+`Name` 和绝对 `Path` 只是展示或定位信息，**不能** 作为跨模块主键。
 
-**主要导出方法（50+），均可从前端调用：**
+### 逻辑主键规则
 
-| 类别 | 方法 |
-|------|------|
-| Skills | `ListSkills()`、`ListCategories()`、`DeleteSkill()`、`MoveSkillCategory()` |
-| 导入 | `ScanGitHub()`、`InstallFromGitHub()`、`ImportLocal()` |
-| 同步 | `GetEnabledTools()`、`ScanToolSkills()`、`PushToTools()`、`PullFromTool()` |
-| 配置 | `GetConfig()`、`SaveConfig()`、`AddCustomTool()`、`RemoveCustomTool()` |
-| 备份 | `BackupNow()`、`ListCloudFiles()`、`RestoreFromCloud()`、`ListCloudProviders()` |
-| 更新 | `CheckUpdates()`、`UpdateSkill()`、`CheckAppUpdate()`、`CheckAppUpdateAndNotify()` |
-| 收藏仓库 | `AddStarredRepo()`、`ListAllStarSkills()`、`ImportStarSkills()`、`UpdateAllStarredRepos()` |
-| UI 辅助 | `OpenFolderDialog()`、`OpenPath()`、`OpenURL()` |
+- **Git 来源 Skill** 使用 `git:<repo-source>#<subpath>`
+  - `repo-source`：规范化 host/path，例如 `github.com/owner/repo`
+  - `subpath`：仓库内正斜杠路径，例如 `skills/my-skill`
+- **非 Git Skill** 应使用稳定内容主键，例如 `content:<hash>`
+- 只有在暂时无法生成稳定主键时，才允许弱匹配兜底
 
-变更操作（删除、导入、推送、拉取）完成后，在云端备份已启用时会自动触发 `autoBackup()`。
+### 模块映射
 
----
+| 模块 / 页面 | 主要实体 | 驱动行为的身份 |
+|-------------|----------|----------------|
+| Dashboard / 我的 Skills | 已安装 `Skill` | 实例操作用 `Skill.ID`；跨模块关联用逻辑主键 |
+| Sync Push | 已安装 `Skill` | 选择用 `Skill.ID`；推送状态解析用逻辑主键 |
+| GitHub 扫描/安装 | 远端候选项 | 用 repo source + subpath 派生的逻辑主键 |
+| Starred Repos | `StarSkill` | 用 repo source + subpath 派生的逻辑主键 |
+| Tool Skills | 工具侧候选项 / 聚合项 | 去重与状态用逻辑主键；工具内打开/删除才用 path |
+| Sync Pull | 工具侧候选项 | 导入与冲突检测用逻辑主键 |
 
-## 事件系统
+### 统一状态语义
 
-后端 → 前端的事件通过 `core/notify.Hub` 流转：
-- 后端通过 `hub.Publish(notify.Event{Type: ..., Payload: ...})` 发布事件
-- `forwardEvents()` goroutine 订阅 Hub，将 `Payload` 序列化为 JSON 后调用 `runtime.EventsEmit(ctx, eventType, jsonData)`
-- 前端通过 `wailsjs/runtime/runtime` 中的 `EventsOn('backup.progress', handler)` 订阅
+- **installed**：该逻辑主键在“我的 Skills”中至少存在一个已安装实例
+- **imported**：外部来源页面对 `installed` 的文案别名
+- **pushed**：该逻辑 Skill 已存在于某工具配置的 `PushDir`
+- **seenInToolScan**：该逻辑 Skill 已出现在某工具配置的 `ScanDirs`；这 **不代表** SkillFlow 已经推送过它
+- **updatable**：至少有一个已安装 Git Skill 实例的远端 SHA 更新了
 
-事件类型定义在 `core/notify/model.go`：
+### 状态与去重规则
 
-```go
-const (
-    EventBackupStarted         EventType = "backup.started"
-    EventBackupProgress        EventType = "backup.progress"
-    EventBackupCompleted       EventType = "backup.completed"
-    EventBackupFailed          EventType = "backup.failed"
-    EventSyncCompleted         EventType = "sync.completed"
-    EventUpdateAvailable       EventType = "update.available"
-    EventSkillConflict         EventType = "skill.conflict"
-    EventStarSyncProgress      EventType = "star.sync.progress"
-    EventStarSyncDone          EventType = "star.sync.done"
-    EventAppUpdateAvailable    EventType = "app.update.available"
-    EventAppUpdateDownloadDone EventType = "app.update.download.done"
-    EventAppUpdateDownloadFail EventType = "app.update.download.fail"
-)
-```
+- `pushed` 比“工具里某处存在”更窄，它特指配置的推送目标。
+- `seenInToolScan` 是观察型状态，不能被误写成“已推送”。
+- 跨模块去重必须优先使用逻辑主键。
+- 不同仓库中的同名项，只要逻辑主键不同，就必须视为不同 Skill。
+- 仅按名称匹配只能作为最后兼容兜底，且不能覆盖更强的逻辑主键匹配。
 
-Hub 使用大小为 32 的缓冲通道，对慢速订阅者采用丢弃最旧事件的策略。
+### 更新规则
+
+- 只有具备稳定 repo source + subpath 的已安装 Git Skill 才参与远端更新检测。
+- 远端查询与已安装实例关联必须使用同一逻辑 Git 主键。
+- 当最新检查确认本地已是最新时，应清空 `LatestSHA`。
+- 每次完成检查后都应更新 `LastCheckedAt`。
+
+### 实现指导
+
+- 跨模块关联由后端统一负责，并将归一化状态返回给前端。
+- 前端页面不应仅基于 `Name` 或 `Path` 自行判断“是否同一个 Skill”“是否已导入”“是否已推送”。
+- `core/skillkey` 负责生成逻辑主键。
+- `core/skill.BuildInstalledIndex` 负责把 GitHub 扫描、收藏仓库、工具扫描结果关联回已安装状态。
 
 ---
 
-## 工具适配器
+## 事件与绑定
 
-5 个内置工具均使用 `core/sync` 中的 `FilesystemAdapter`。各工具默认推送目录：
+### 后端事件流
 
-| 工具 | 默认推送目录 |
-|------|------------|
-| `claude-code` | `~/.claude/skills` |
-| `opencode` | `~/.config/opencode/skills` |
-| `codex` | `~/.agents/skills` |
-| `gemini-cli` | `~/.gemini/skills` |
-| `openclaw` | `~/.openclaw/skills` |
+SkillFlow 使用 `core/notify.Hub` 作为缓冲事件总线：
 
-**适配器行为：**
-- `Pull()` — 递归扫描目录树中的 `skill.md` 文件，将每个文件作为 Skill 导入
-- `Push()` — 将 Skill 目录平铺（无分类子目录）复制到目标目录
+1. 后端发布 `notify.Event`
+2. `forwardEvents()` 订阅并通过 Wails `runtime.EventsEmit` 转发
+3. 前端通过 `cmd/skillflow/frontend/wailsjs/runtime` 订阅
 
-通过设置添加的自定义工具也使用 `FilesystemAdapter`，目录由用户指定。
+当前事件总线缓冲区大小为 **32**，对慢消费者采用丢弃最旧事件策略。
 
----
+主要事件分组：
 
-## Installer 接口（`core/install`）
+- 备份：`backup.started`、`backup.progress`、`backup.completed`、`backup.failed`
+- 同步/更新：`sync.completed`、`update.available`、`skill.conflict`
+- 收藏仓库：`star.sync.progress`、`star.sync.done`
+- Git 备份：`git.sync.started`、`git.sync.completed`、`git.sync.failed`、`git.conflict`
+- 应用更新：`app.update.available`、`app.update.download.done`、`app.update.download.fail`
 
-```go
-type Installer interface {
-    Type() string
-    Scan(ctx context.Context, source InstallSource) ([]SkillCandidate, error)
-    Install(ctx context.Context, source InstallSource, selected []SkillCandidate, category string) error
-}
-```
+### Wails 生成绑定
 
-- `GitHubInstaller` — 通过 Contents API 扫描 GitHub 仓库，下载 Skill 目录，记录 commit SHA
-- `LocalInstaller` — 从本地文件系统路径导入
+生成后的绑定位于：
 
----
+- `cmd/skillflow/frontend/wailsjs/go/main/App.js`
+- `cmd/skillflow/frontend/wailsjs/go/main/App.d.ts`
 
-## Cloud Provider 接口（`core/backup`）
-
-```go
-type CloudProvider interface {
-    Name() string
-    Init(credentials map[string]string) error
-    Sync(ctx context.Context, localDir, bucket, remotePath string, onProgress func(file string)) error
-    Restore(ctx context.Context, bucket, remotePath, localDir string) error
-    List(ctx context.Context, bucket, remotePath string) ([]RemoteFile, error)
-    RequiredCredentials() []CredentialField
-}
-```
-
-设置页会根据 `RequiredCredentials()` 自动渲染凭据输入字段。
-
----
-
-## Git 包（`core/git`）
-
-处理收藏仓库工作流：
-- `CloneOrUpdate(ctx, repoURL, localDir, proxyURL)` — git clone 或 fetch+pull
-- `ScanSkills(localDir, repoURL, repoName, source)` — 在克隆的仓库中查找 Skill 目录
-- `GetSubPathSHA(ctx, repoDir, subPath)` — 获取某路径的最新 commit SHA
-- `ParseRepoRef()`、`ParseRepoName()`、`RepoSource()` — URL 解析工具函数
-- `StarStorage` — `[]StarredRepo` 的 JSON 持久化，存储于 `<AppDataDir>/star_repos.json`
+当导出的 `App` 方法发生变化时，需要运行 `make generate`。
 
 ---
 
 ## 前端结构
 
-```
-frontend/src/
-  App.tsx              ← BrowserRouter + 侧边栏布局 + 路由定义
-  pages/               ← 每个路由对应一个文件
-    Dashboard.tsx      ← 我的skills 列表（分类、搜索、拖拽）
-    SyncPush.tsx       ← 推送 Skills 到外部工具
-    SyncPull.tsx       ← 从外部工具拉取 Skills
-    StarredRepos.tsx   ← 浏览和导入收藏仓库的 Skills
-    Backup.tsx         ← 云端备份管理
-    Settings.tsx       ← 工具配置、云服务商、代理设置
-  components/          ← 共享 UI 组件
-    SkillCard.tsx      ← 单个 Skill 展示卡片
-    SkillTooltip.tsx   ← 鼠标悬停时显示 Skill 元数据
-    CategoryPanel.tsx  ← 分类侧边栏/筛选
-    GitHubInstallDialog.tsx  ← GitHub 仓库扫描 UI
-    ConflictDialog.tsx ← 同步时处理 Skill 名称冲突
-    SyncSkillCard.tsx  ← 同步页的 Skill 卡片
-    ContextMenu.tsx    ← 右键上下文菜单
-  config/
-    toolIcons.tsx      ← 工具名称 → 图标映射
-  wailsjs/             ← 自动生成（请勿手动编辑）
-    go/main/App.js     ← Go 方法绑定
-    go/main/App.d.ts   ← TypeScript 类型声明
-    runtime/runtime.js ← Wails runtime（EventsOn、EventsEmit 等）
+```text
+cmd/skillflow/frontend/
+  src/
+    App.tsx
+    main.tsx
+    pages/
+    components/
+    contexts/
+    i18n/
+    lib/
+    config/
+  tests/
+  wailsjs/
 ```
 
-前端直接调用 Go 方法：`import { ListSkills } from '../../wailsjs/go/main/App'`。生成后的 JSON 默认沿用导出字段名；若结构体声明了显式 `json` 标签，则以前端标签名为准。因此配置模型仍是 PascalCase，而工具/收藏相关 DTO 可能暴露为小写字段。
+主要前端区域：
+
+- `src/pages/`：Dashboard、Sync Push/Pull、Starred Repos、Backup、Settings、My Tools、My Prompts 等路由页
+- `src/components/`：卡片、对话框、分类栏、列表控件等共享组件
+- `src/contexts/`：语言、主题、状态显示策略等上下文状态
+- `src/i18n/`：中英文翻译词典
+- `src/lib/`：列表、搜索、剪贴板、状态管理等共享辅助
+- `tests/`：不依赖 Wails 打包流程的前端单测
+
+前端通过 Wails 生成模块直接导入后端方法，例如：
+
+```ts
+import { ListSkills } from '../../wailsjs/go/main/App'
+```
 
 ---
 
-## 测试方法
+## 日志与路径可移植性
 
-测试使用 `httptest.NewServer` 模拟 GitHub API 调用。将 mock 服务器 URL 传给 `NewChecker(srv.URL)` 或 `NewGitHubInstaller(srv.URL)`。文件系统测试使用 `t.TempDir()`。
+### 日志
 
-**各包测试覆盖情况：**
+- `core/applog.Logger` 将结构化文本日志写入应用数据目录下的 `logs/`
+- `cmd/skillflow/app_log.go` 会把启用级别的日志同步输出到 Wails runtime 日志
+- 后端改动应为关键变更、同步、备份、Git 操作和外部 API 调用提供 started / completed / failed 级别日志
+- 严禁记录密钥、令牌、密码等敏感信息
 
-| 包 | 测试文件 | 说明 |
-|----|---------|------|
-| `core/skill` | `model_test.go`、`storage_test.go`、`validator_test.go` | 完整覆盖 |
-| `core/config` | `service_test.go` | 完整覆盖 |
-| `core/notify` | `hub_test.go` | 完整覆盖 |
-| `core/install` | `github_test.go`、`local_test.go` | 模拟 GitHub API |
-| `core/update` | `checker_test.go` | 模拟 GitHub API |
-| `core/sync` | `filesystem_adapter_test.go` | TempDir 文件系统测试 |
-| `core/git` | `client_test.go`、`scanner_test.go`、`storage_test.go` | TempDir + mock |
-| `core/backup` | 无 | 需要真实云凭据 |
-| `core/registry` | 无 | 薄封装，通过集成测试覆盖 |
+### 路径处理
+
+- `core/pathutil` 负责把可同步路径归一化为正斜杠相对路径
+- 运行时 API 可以在返回给调用方前把它们还原为绝对路径
+- 备份、恢复和跨设备同步都依赖这套可移植路径规则
+
+---
+
+## 测试与构建工作流
+
+- 在仓库根目录运行后端测试：`go test ./core/...`
+- Wails 的开发、构建、绑定生成都在 `cmd/skillflow/` 下执行；也可直接使用 `make dev`、`make build`、`make generate`
+- 前端依赖位于 `cmd/skillflow/frontend/package.json`
+- 前端单测位于 `cmd/skillflow/frontend/tests/`
+- 生产构建输出位于 `cmd/skillflow/build/bin/`
 
 ---
 
 ## 扩展指南
 
+### 新增前端可调用的 App 方法
+
+1. 在 `cmd/skillflow/app.go` 或其他扁平的 `cmd/skillflow/*.go` 文件中添加导出方法
+2. 运行 `make generate`
+3. 在前端通过 `../../wailsjs/go/main/App` 导入
+
 ### 新增云服务商
 
-1. 创建 `core/backup/<name>.go`，实现 `backup.CloudProvider`
-2. 在 `providers.go` 中注册：`registry.RegisterCloudProvider(NewXxxProvider())`
-3. 设置页会根据 `RequiredCredentials()` 自动渲染凭据字段
+1. 创建 `core/backup/<name>.go` 并实现 `backup.CloudProvider`
+2. 在 `cmd/skillflow/providers.go` 中注册
+3. 通过 `RequiredCredentials()` 暴露其凭据字段
 
 ### 新增工具适配器
 
-如果工具使用标准的平铺 Skill 目录，只需在 `adapters.go` 的 `registerAdapters()` 中添加即可。如需自定义行为，实现 `toolsync.ToolAdapter` 并通过 `registry.RegisterAdapter()` 注册。
+1. 标准文件系统型工具可直接在 `cmd/skillflow/adapters.go` 中注册
+2. 如需自定义行为，实现 `toolsync.ToolAdapter`
+3. 导入 `core/sync` 时始终使用 `toolsync` 别名，避免与标准库 `sync` 冲突
 
-### 新增 App 方法（前端可调用）
+### 新增可复用后端模块
 
-1. 在 `app.go`（或根目录下的新 `package main` 文件）中为 `App` 结构体添加导出方法
-2. 运行 `make generate`（或 `wails generate module`）更新 `frontend/wailsjs/go/main/App.{js,d.ts}`
-3. 在前端导入并调用：`import { MyNewMethod } from '../../wailsjs/go/main/App'`
+- 可复用逻辑优先放到 `core/<name>/`
+- 不要在 `cmd/skillflow/` 下再创建 Go 子目录
+- Wails 壳层代码留在 `cmd/skillflow/`，可复用领域逻辑沉淀到 `core/`
 
 ---
 
-*最后更新：2026-03-08*
+*最后更新：2026-03-10*

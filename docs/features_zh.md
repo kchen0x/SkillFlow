@@ -5,16 +5,6 @@
 > 本文档列举了 SkillFlow 的每一项功能、按钮、交互细节和 UX 设计。
 > **每当功能增删改时，必须同步更新本文件。**
 
-## 云备份新增服务商
-
-- 对象存储在原有阿里云 OSS、腾讯云 COS、华为云 OBS 之外，新增 AWS S3、Azure Blob Storage、Google Cloud Storage。
-- AWS S3 使用 `bucket + region`。
-- Azure Blob Storage 使用 `container`（即设置页里的 bucket 字段）+ `account name` + `account key`，并支持可选 `service URL`。
-- Google Cloud Storage 使用 `bucket + Service Account JSON`，该凭据也可以填写为本地密钥文件路径。
-- `region`、`account_name`、`service_url` 会作为可同步连接字段保存在 `config.json`；`account key` 和 `Service Account JSON` 等敏感凭据仍只保存在 `config_local.json`。
-
----
-
 ## 目录
 
 1. [导航与外壳](#1-导航与外壳)
@@ -420,6 +410,11 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 - **Git 备份兼容处理** — 当 Git 备份以父目录作为工作树时，SkillFlow 会自动迁移旧的 `skills/.git` 嵌套元数据，避免真实 Skill 文件被当作嵌套仓库而无法跟踪。
 - **恢复后的本机补偿动作** — 云端恢复成功后，当前设备上新恢复出来的库内 Skill 会自动推送到已勾选的自动推送工具；新恢复出来的收藏仓库也会立刻在本地完成克隆。
 
+### 服务商覆盖范围
+
+- 对象存储除阿里云 OSS、腾讯云 COS、华为云 OBS 外，还支持 AWS S3（bucket + region）、Azure Blob Storage（container + account name + 可选 service URL）以及 Google Cloud Storage（bucket + service-account JSON 或本地 key file path）。
+- 可同步的连接字段现在除既有的 endpoint / repo URL / branch 外，还包括 `region`、`account_name`、`service_url`。Account key、service-account JSON 等敏感值仍只保存在本地 `config_local.json`。
+
 ### 自动备份
 
 以下操作完成后（在云备份已启用时）自动触发：
@@ -483,12 +478,13 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 
 | 控件 | 说明 |
 |------|------|
-| **云服务商按钮** | 以可自动换行的卡片网格展示。顺序固定为 **git** 第一、**华为云 OBS** 第二，其他服务商保持后端返回顺序；切换时会自动恢复该服务商各自保存的存储桶 / 路径 / 凭据草稿 |
+| **云服务商按钮** | 以可自动换行的卡片网格展示。顺序固定为 **git** 第一，其余服务商保持后端返回顺序；切换时会自动恢复该服务商各自保存的存储桶 / 路径 / 凭据草稿 |
 | **存储桶名称** | 对象存储桶名称（选择 git 服务商时隐藏） |
 | **远程路径** | 对象存储的父级路径（可选）。用户只需填写父目录，SkillFlow 会自动在末尾追加 `/skillflow/` 作为最终备份前缀 |
 | **最终备份路径预览** | 实时渲染对象存储的最终目标路径，显示为 `<存储桶>/<remotePath>/skillflow/`，方便用户在保存前确认真实备份位置 |
 | **凭据字段** | 根据 `RequiredCredentials()` 动态渲染 — 文本或密码输入框，因服务商而异。Endpoint / 仓库地址 / 分支等非敏感连接信息保存在 `config.json`，Access Key / Secret / Token 等敏感凭据仅保存在 `config_local.json`。Git 字段：仓库地址、分支、用户名、访问令牌 |
 | **输入规范化** | 阿里云 OSS 和华为云 OBS 的存储桶字段既可填写纯桶名，也可填写常见的完整桶域名/URL，保存时会自动提取桶名。腾讯云 COS 与其他对象存储一样使用独立的存储桶 + Endpoint 模型。存储桶始终来自单独的存储桶输入框，而 Endpoint 字段既可填写纯 Endpoint host，也可填写完整桶域名/URL，并会按用户输入形式保留用于展示 |
+| **附加服务商细节** | AWS S3 在保存前会去除 region 字段首尾空白。Azure Blob Storage 使用存储桶字段作为 container 名称，将 account name 和可选 service URL 作为可同步字段保存，并在 service URL 为空时默认使用 `https://<account>.blob.core.windows.net/`。Google Cloud Storage 支持填写内联 service-account JSON 或本地 key file path，并且该凭据始终只保存在本地 `config_local.json`。 |
 | **定时自动同步间隔** | 数字输入框（分钟）；0 表示仅在变更后同步；正数启动后台定时器 |
 | **启用自动云备份开关** | 控制每次写操作后是否自动触发备份，同时控制定时器 |
 

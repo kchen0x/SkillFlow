@@ -2,70 +2,171 @@
 
 > 🌐 [中文版](architecture_zh.md) | **English**
 
-This document covers the internal architecture, package design, data models, and extension guides for contributors.
+This document covers SkillFlow's internal architecture, repository layout, data models, and extension points for contributors. User-facing behavior belongs in **[docs/features.md](features.md)**.
 
 ---
 
 ## Overview
 
-SkillFlow is a **Wails v2** desktop app (Go 1.23, Wails v2.11.0). The Go backend exposes methods directly to the React frontend via Wails method bindings. There is **no REST API** — frontend calls Go methods as async functions.
+SkillFlow is a **Wails v2** desktop app built with **Go 1.23** and a **React 18 + TypeScript** frontend.
 
-**Tech stack:**
-- Backend: Go 1.23, Wails v2
-- Frontend: React 18, TypeScript, React Router v7, Tailwind CSS, Lucide React, Radix UI
-- Build: Wails CLI, Vite, optional cloud-provider build tags
+- The Go backend lives in `cmd/skillflow/`.
+- The React frontend lives in `cmd/skillflow/frontend/`.
+- Wails bindings connect them directly.
+- There is **no REST API**.
 
----
+Core stack:
 
-## Key Design Decisions
-
-- **`core/sync` package name conflicts with Go stdlib `sync`** — always import it with alias: `toolsync "github.com/shinerio/skillflow/core/sync"`
-- **Wails bindings are auto-generated** — after adding/removing exported methods on `App`, run `wails generate module` to update `frontend/wailsjs/go/main/App.{js,d.ts}`
-- **Cloud backup providers are build-tag aware** — default builds include every provider, while selective builds can pass `provider_select` plus `backup_<provider>` tags (for example `backup_aws backup_google`) to compile only the needed cloud providers; Git backup remains always included
-- **`package main` files at root** — `app.go`, `adapters.go`, `providers.go`, `events.go` are all `package main` alongside `main.go` because Wails requires the app struct in the same package as `main`
-- **No REST API** — direct Wails method bindings; faster and simpler
-- **Installed skill instances are UUID-based, but cross-module identity must use a stable logical key** — see [Unified Skill Identity & State Model](#unified-skill-identity--state-model)
-- **Filesystem adapters** — all built-in tools share the same `FilesystemAdapter` pattern
-- **GitHub as source of truth** — update checker polls GitHub API, not local timestamps
+- Backend: Go, Wails, Git, provider-specific cloud SDKs
+- Frontend: React, TypeScript, React Router, Tailwind CSS, Radix UI, Lucide
+- Build: `make`, Wails CLI, Vite
 
 ---
 
-## Data Storage Layout
+## Repository Layout
 
+```text
+/                              module root, no Go source files
+  go.mod
+  Makefile
+  README.md
+  README_zh.md
+  docs/
+  core/                        reusable packages, no package main
+  cmd/
+    skillflow/                 Wails desktop app, package main
+      main.go
+      app.go
+      app_*.go
+      adapters.go
+      providers.go
+      events.go
+      version.go
+      tray_*.go
+      single_instance_*.go
+      window_*.go
+      wails.json
+      build/
+      frontend/
 ```
-~/.skillflow/
-  skills/              ← SkillsStorageDir (configured)
-    <category>/
-      <skill-name>/    ← copied skill directory
-        skill.md       ← main file with YAML frontmatter
-        ...other files
-  meta/                ← JSON sidecars (sibling of skills/)
-    <uuid>.json        ← one per skill, contains Skill struct
-  config.json          ← synced app config (tools, page-level card status visibility, active cloud state, per-provider non-sensitive cloud profiles, proxy)
-  config_local.json    ← local-only paths + per-provider sensitive cloud credentials
-  star_repos.json      ← StarredRepo[] array
-  cache/               ← temporary cloned repos for starred repos
-    <cached-repo-dirs>/
-```
 
-Installed skill instances are identified by UUID. Cross-module correlation must follow the logical-key rules in [Unified Skill Identity & State Model](#unified-skill-identity--state-model). The `meta/` directory is always `filepath.Join(filepath.Dir(root), "meta")`.
+Key repository rules:
+
+- The root directory contains **no `.go` files**.
+- `cmd/skillflow/*.go` stays **flat** because Wails requires the bound `package main` files to remain in one directory.
+- New reusable backend code goes in `core/<name>/`, not in a subdirectory under `cmd/skillflow/`.
+- Run `wails dev`, `wails build`, and `wails generate module` from `cmd/skillflow/`. From the repo root, prefer `make dev`, `make build`, and `make generate`.
 
 ---
 
-## Backend Package Responsibilities
+## Runtime Lifecycle
 
-| Package | Responsibility |
-|---------|---------------|
-| `core/skill` | `Skill` model, `Storage` (CRUD + categories), `Validator` (skill.md check), installed-skill correlation index |
-| `core/skillkey` | Stable logical-key derivation for git-backed skills and content-derived local skills |
-| `core/config` | `AppConfig` model, status-visibility defaults/normalization, `Service` (load/save JSON), `DefaultToolsDir()` per tool |
-| `core/notify` | `Hub` (buffered channel pub/sub), `EventType` constants |
-| `core/install` | `Installer` interface, `GitHubInstaller` (scan/download/SHA), `LocalInstaller` |
-| `core/sync` | `ToolAdapter` interface, `FilesystemAdapter` (shared by all built-in tools) |
-| `core/backup` | `CloudProvider` interface, provider factory catalog, and Aliyun/AWS/Azure/Google/Tencent/Huawei/Git implementations |
-| `core/update` | `Checker` (GitHub Commits API SHA comparison) |
-| `core/registry` | Global maps for Installer/ToolAdapter/CloudProvider — registered at startup |
-| `core/git` | Git clone/update, repo scanning for skills, starred repo storage |
+### Wails entrypoint
+
+`cmd/skillflow/main.go`:
+
+- embeds `frontend/dist` with `//go:embed all:frontend/dist`
+- creates the `App` instance with `NewApp()`
+- starts Wails with `HideWindowOnClose: true`
+- binds the `App` instance directly to the frontend
+
+### App startup flow
+
+`App.startup()` performs the core backend initialization:
+
+1. Resolve `config.AppDataDir()`
+2. Load config via `core/config.Service`
+3. Initialize the rotating file logger
+4. Create skill storage and starred-repo storage
+5. Register tool adapters and cloud providers
+6. Start backend event forwarding
+7. Start the auto-sync timer for cloud backup
+
+`App.domReady()` handles shell/UI setup:
+
+1. Restore or compute the initial window size
+2. Initialize the system tray
+3. Schedule background startup tasks after a short delay
+
+Deferred background tasks currently include:
+
+- skill update check
+- starred repo refresh
+- app release update check
+- Git backup startup pull
+
+`App.beforeClose()` persists the current window size. `App.shutdown()` tears down tray resources.
+
+---
+
+## App Data Layout
+
+By default, SkillFlow stores app data under `config.AppDataDir()`:
+
+- macOS: `~/Library/Application Support/SkillFlow/`
+- Windows: `%USERPROFILE%\\.skillflow\\`
+
+```text
+<AppDataDir>/
+  skills/                 installed library
+  meta/                   one JSON sidecar per installed skill
+  prompts/                prompt library
+  cache/                  cloned starred repositories
+  logs/
+    skillflow.log
+    skillflow.log.1
+  config.json             sync-safe shared settings
+  config_local.json       local-only settings
+  star_repos.json         starred repo metadata
+```
+
+Important storage rules:
+
+- `config.json` contains only settings that are safe to sync across devices.
+- `config_local.json` stores machine-specific paths, auto-push targets, launch-at-login state, proxy settings, window state, custom-tool path config, and sensitive cloud credentials.
+- Synced files such as `meta/*.json` and `star_repos.json` persist local paths as **forward-slash relative paths** whenever the target is inside the synchronized root.
+- If `SkillsStorageDir` is moved outside the default app data directory, the synchronized root becomes the shared parent of `skills/` and `meta/`.
+- Logs are bounded to **two files** (`skillflow.log`, `skillflow.log.1`) at **1MB each**.
+
+---
+
+## Package Responsibilities
+
+| Path | Responsibility |
+|------|----------------|
+| `cmd/skillflow` | Wails entrypoint, frontend-callable `App` methods, tray/window/single-instance integration, adapter/provider registration |
+| `core/applog` | Rotating file logger and log-level handling |
+| `core/backup` | Backup snapshot logic, provider interfaces, Git provider, object-storage providers |
+| `core/config` | Split shared/local config persistence, defaults, status-visibility normalization |
+| `core/git` | Git clone/pull/push helpers, starred repo scanning, starred repo storage |
+| `core/install` | GitHub and local install flows |
+| `core/notify` | Buffered backend event hub and typed payloads |
+| `core/pathutil` | Cross-platform path normalization and relative-path persistence helpers |
+| `core/prompt` | Prompt library storage and import/export |
+| `core/registry` | Global tool-adapter and cloud-provider registries |
+| `core/skill` | Skill model, storage, validation, installed-skill indexing |
+| `core/skillkey` | Stable logical-key derivation for git and content-based skills |
+| `core/sync` | `ToolAdapter` interface and filesystem-based adapter implementation |
+| `core/update` | GitHub commit-based update checker for installed git-backed skills |
+
+---
+
+## `cmd/skillflow/` File Organization
+
+The Wails app package must remain flat, so responsibilities are grouped by file prefix:
+
+| File group | Purpose |
+|-----------|---------|
+| `main.go`, `version.go` | entrypoint and build-time version |
+| `app.go` | main `App` struct and most frontend-callable methods |
+| `app_prompt.go` | prompt CRUD and prompt import/export |
+| `app_update.go` | app release update check, download, apply, skip-version behavior |
+| `app_log.go` | logger initialization and runtime/file log bridging |
+| `app_restore.go`, `app_backup.go` | restore compensation, Git-backup helpers |
+| `app_autostart.go`, `window_size.go`, `app_path.go` | OS integration helpers |
+| `adapters.go`, `providers.go` | register `core/sync` adapters and `core/backup` providers |
+| `events.go`, `push_conflict.go`, `skill_state.go` | frontend DTOs and aggregated card state |
+| `tray_*.go`, `single_instance_*.go`, `window_*.go` | platform-specific shell behavior |
 
 ---
 
@@ -75,47 +176,122 @@ Installed skill instances are identified by UUID. Cross-module correlation must 
 
 ```go
 type Skill struct {
-    ID            string     // UUID
-    Name          string     // skill name (dir name)
-    Path          string     // absolute runtime path; persisted in meta/*.json as a relative path within the synced root
-    Category      string     // user-defined category
-    Source        SourceType // "github" | "manual"
-    SourceURL     string     // GitHub repo URL for GitHub sources
-    SourceSubPath string     // relative path within repo (e.g. "skills/my-skill")
-    SourceSHA     string     // installed commit SHA (from GitHub)
-    LatestSHA     string     // detected newer SHA (for update checking)
+    ID            string
+    Name          string
+    Path          string
+    Category      string
+    Source        SourceType
+    SourceURL     string
+    SourceSubPath string
+    SourceSHA     string
+    LatestSHA     string
     InstalledAt   time.Time
     UpdatedAt     time.Time
     LastCheckedAt time.Time
 }
-
-const (
-    SourceGitHub SourceType = "github"
-    SourceManual SourceType = "manual"
-)
 ```
+
+Notes:
+
+- `ID` is the installed-instance UUID.
+- `Path` is a runtime absolute path; when persisted inside synced metadata it should be stored as a portable relative path whenever possible.
+- `SourceURL + SourceSubPath` identify the logical git source for GitHub-installed skills.
+
+### AppConfig (`core/config/model.go`)
+
+```go
+type AppConfig struct {
+    SkillsStorageDir      string
+    AutoPushTools         []string
+    LaunchAtLogin         bool
+    DefaultCategory       string
+    LogLevel              string
+    RepoScanMaxDepth      int
+    SkillStatusVisibility SkillStatusVisibilityConfig
+    Tools                 []ToolConfig
+    Cloud                 CloudConfig
+    CloudProfiles         map[string]CloudProviderConfig
+    Proxy                 ProxyConfig
+    SkippedUpdateVersion  string
+}
+```
+
+Config split:
+
+- **Shared / synced**: `DefaultCategory`, `LogLevel`, `RepoScanMaxDepth`, status visibility, built-in tool enabled state, active cloud provider state, non-sensitive cloud profile fields, skipped app version.
+- **Local-only**: `SkillsStorageDir`, `AutoPushTools`, `LaunchAtLogin`, tool paths, custom-tool definitions, proxy settings, window size, sensitive cloud credentials.
+
+Relevant nested models:
+
+```go
+type ToolConfig struct {
+    Name     string
+    ScanDirs []string
+    PushDir  string
+    Enabled  bool
+    Custom   bool
+}
+
+type CloudConfig struct {
+    Provider            string
+    Enabled             bool
+    BucketName          string
+    RemotePath          string
+    Credentials         map[string]string
+    SyncIntervalMinutes int
+}
+```
+
+### Starred repo models (`core/git/model.go`)
+
+```go
+type StarredRepo struct {
+    URL       string
+    Name      string
+    Source    string
+    LocalDir  string
+    LastSync  time.Time
+    SyncError string
+}
+
+type StarSkill struct {
+    Name        string
+    Path        string
+    SubPath     string
+    RepoURL     string
+    RepoName    string
+    Source      string
+    LogicalKey  string
+    Installed   bool
+    Imported    bool
+    Updatable   bool
+    Pushed      bool
+    PushedTools []string
+}
+```
+
+---
 
 ## Unified Skill Identity & State Model
 
-This section is normative for all future work that touches skill cards, import/install/push/pull flows, starred repos, tool scans, or update badges.
+This section is normative for any work touching skill cards, import/install/push/pull flows, starred repos, tool scans, or update badges.
 
 ### Identity layers
 
-SkillFlow must distinguish between two different identities:
+SkillFlow distinguishes two identities:
 
-- **Instance identity** — `Skill.ID` identifies one installed copy in **My Skills**. This is the correct key for CRUD operations on installed items such as delete, move category, rename category membership, and manual update.
-- **Logical identity** — a stable cross-module identity that answers: “is this the same skill shown on Dashboard, Starred Repos, Tool Skills, Sync Pull, and Sync Push?”
+- **Instance identity** — `Skill.ID` identifies one installed copy in **My Skills**. Use it for delete, move, and installed-instance update operations.
+- **Logical identity** — a stable cross-module identity used to answer whether Dashboard, Starred Repos, Tool Skills, Pull, and Push are referring to the same skill.
 
-`Name` and absolute `Path` are display or location metadata only. They must not be treated as the primary cross-module identity.
+`Name` and absolute `Path` are display/location metadata only. They are **not** the primary cross-module key.
 
 ### Logical key rules
 
-- **Git-backed skills** must use a logical key derived from normalized repository source plus repository subpath:
-  - format: `git:<repo-source>#<subpath>`
-  - `repo-source` is the canonical host/path form such as `github.com/owner/repo`
-  - `<subpath>` is the forward-slash relative path inside the repo such as `skills/my-skill`
-- **Non-git skills** should use a stable content-derived key, e.g. `content:<hash>`, so the same skill can still be recognized across tool scans and local imports.
-- **Temporary fallback heuristics** are allowed only when no stable logical key can be derived yet, and those heuristics must be treated as weak matches.
+- **Git-backed skills** use `git:<repo-source>#<subpath>`
+  - `repo-source`: canonical host/path such as `github.com/owner/repo`
+  - `subpath`: forward-slash repo-relative path such as `skills/my-skill`
+- **Non-git skills** should use a stable content-derived key such as `content:<hash>`
+- Weak fallbacks are allowed only when no stable key can be derived yet
 
 ### Module mapping
 
@@ -123,341 +299,161 @@ SkillFlow must distinguish between two different identities:
 |---------------|----------------|-------------------------------|
 | Dashboard / My Skills | installed `Skill` | `Skill.ID` for instance actions; logical key for cross-module correlation |
 | Sync Push | installed `Skill` | `Skill.ID` for selection; logical key for pushed-state resolution |
-| GitHub scan/install | remote candidate | logical key derived from repo source + subpath |
-| Starred Repos | `StarSkill` | logical key derived from repo source + subpath |
-| Tool Skills | tool-local candidate / aggregate | logical key for dedupe and status; path only for open/delete within that tool |
-| Sync Pull | tool-local candidate | logical key for import/conflict detection |
+| GitHub scan/install | remote candidate | logical key from repo source + subpath |
+| Starred Repos | `StarSkill` | logical key from repo source + subpath |
+| Tool Skills | tool-local candidate / aggregate | logical key for dedupe and status; path only for tool-local open/delete |
+| Sync Pull | tool-local candidate | logical key for import and conflict detection |
 
 ### Unified status semantics
 
-- **installed** — at least one installed instance exists in My Skills for the logical key.
-- **imported** — external-source wording for `installed`; when viewing GitHub, Starred Repos, or Tool scans, “imported” means “already installed into My Skills”.
-- **pushed** — the logical skill is present in a tool’s configured `PushDir`. This means SkillFlow can regard it as already pushed to that tool.
-- **seenInToolScan** — the logical skill is detected in one of a tool’s configured `ScanDirs`. This means the skill is visible in the tool ecosystem, but not necessarily managed by SkillFlow or present in `PushDir`.
-- **updatable** — at least one installed git-backed instance has a newer remote commit than its installed `SourceSHA`.
+- **installed** — at least one installed My Skills entry exists for the logical key
+- **imported** — wording alias for `installed` on external-source pages
+- **pushed** — the logical skill exists in a tool's configured `PushDir`
+- **seenInToolScan** — the logical skill exists in a tool's configured `ScanDirs`; this does **not** imply SkillFlow pushed it
+- **updatable** — at least one installed git-backed instance has a newer remote SHA than its installed `SourceSHA`
 
-### Status rules
+### Status and dedupe rules
 
-- `pushed` is narrower than “exists somewhere in the tool”; it refers specifically to the configured push target.
-- `seenInToolScan` is observational. It helps distinguish “the tool already has this skill” from “SkillFlow already pushed this skill”.
-- A skill may have both `pushed=true` and `seenInToolScan=true` when the push directory is also scanned, or when the same logical skill exists in both places.
-- A skill with `seenInToolScan=true` and `pushed=false` should not be mislabeled as “already pushed”. In the current UI, this state is typically expressed by placement in the Scan Path section rather than by a repeated card badge.
-- `pushedTools` is a derived card-view state: the backend aggregates the exact tool names whose `PushDir` currently contains the logical skill, so cards can render tool icons without page-local inference.
-- The frontend applies a page-level whitelist from `AppConfig.SkillStatusVisibility` before rendering badges. Each page can only toggle statuses that belong to its default policy; unsupported statuses are normalized away rather than enabled by config edits.
+- `pushed` is narrower than "exists somewhere in the tool"; it specifically means present in the configured push target.
+- `seenInToolScan` is observational state. It must not be mislabeled as "already pushed".
+- Cross-module dedupe prefers logical-key equality.
+- Same-name items from different repos remain distinct when their logical keys differ.
+- Name-only matching is a last-resort compatibility fallback and must never override a stronger logical-key match.
 
-### Conflict and dedupe rules
+### Update rules
 
-- Cross-module dedupe must prefer logical key equality.
-- Same-name items from different repos must be treated as different skills when their logical keys differ.
-- Same-path items are not automatically the same skill unless they resolve to the same logical key.
-- Name-only matching is acceptable only as a last-resort compatibility fallback and must never overwrite a stronger logical-key match.
-
-### Update detection rules
-
-- Only git-backed installed skills with a stable repo source and subpath participate in remote update checks.
-- Update eligibility must be keyed by the same logical source used for install/import correlation.
-- Remote update detection compares the installed `SourceSHA` with the newest remote commit SHA for the same repo subpath.
-- `LastCheckedAt` should be updated on every completed check attempt, not only when an update is found.
-- `LatestSHA` should be cleared when a fresh check confirms that the installed `SourceSHA` is already current.
-- Update badges and “Update” actions must be derived from the unified status model rather than page-local heuristics.
+- Remote update checks apply only to installed git-backed skills with a stable repo source and subpath.
+- Remote lookup and installed-instance correlation must use the same logical git key.
+- `LatestSHA` is cleared when a fresh check confirms the installed copy is already current.
+- `LastCheckedAt` is updated on every completed check attempt.
 
 ### Implementation guidance
 
-- The backend should own cross-module skill correlation and expose normalized statuses to the frontend.
-- Frontend pages should not independently decide “same skill”, “already imported”, or “already pushed” from `Name` or `Path` alone.
-- Any future catalog / aggregate layer should group all module-specific representations under one logical skill record and keep installed instances as child references.
-- The current implementation uses `core/skillkey` to derive logical keys and `core/skill.BuildInstalledIndex` to resolve `installed` / `imported` / `updatable` across GitHub, starred repos, and tool scans.
-- Tool-directory copies are bridged back to git-backed installed skills through a content-hash side index, so pushed folders can still resolve to the canonical `git:<repo-source>#<subpath>` identity.
-- Backend card payloads also carry aggregated `pushedTools` lists so the frontend can show multiple coexisting states on the same card without rescanning tool directories.
-- Push conflict reporting is structured per skill-target pair (`skill + tool + target path`) so overwrite actions can be scoped to one exact conflict instead of a name-only batch guess.
-
-### AppConfig (`core/config/model.go`)
-
-```go
-type ToolConfig struct {
-    Name     string   // e.g. "claude-code", "opencode", "codex", "gemini-cli", "openclaw"
-    ScanDirs []string // directories to scan for existing skills
-    PushDir  string   // default directory to push skills to
-    Enabled  bool
-    Custom   bool     // true if user-added via Settings
-}
-
-type CloudConfig struct {
-    Provider    string            // "aliyun", "aws", "azure", "google", "tencent", "huawei", "git"
-    Enabled     bool
-    BucketName  string
-    RemotePath  string            // normalized backup prefix, always ending in "skillflow/"
-    Credentials map[string]string // runtime merged view; sync-safe fields live in config.json, sensitive credentials in config_local.json
-}
-
-type CloudProviderConfig struct {
-    BucketName  string
-    RemotePath  string
-    Credentials map[string]string // runtime merged view for a specific provider
-}
-
-type ProxyConfig struct {
-    Mode   ProxyMode // "none" | "system" | "manual"
-    URL    string    // used when Mode == "manual"
-}
-
-type AppConfig struct {
-    SkillsStorageDir     string        // default: ~/.skillflow/skills
-    DefaultCategory      string        // default: "Default"
-    LogLevel             string        // "debug" | "info" | "error"
-    RepoScanMaxDepth     int
-    SkillStatusVisibility SkillStatusVisibilityConfig // shared per-page card-status whitelist
-    Tools                []ToolConfig
-    Cloud                CloudConfig
-    CloudProfiles        map[string]CloudProviderConfig // provider-specific settings persisted independently
-    Proxy                ProxyConfig
-    SkippedUpdateVersion string        // version tag to suppress startup update prompt
-}
-
-type SkillStatusVisibilityConfig struct {
-    MySkills      []string // default: updatable, pushedTools
-    MyTools       []string // default: imported, updatable, pushedTools
-    PushToTool    []string // default: pushedTools
-    PullFromTool  []string // default: imported
-    StarredRepos  []string // default: imported, pushedTools
-    GitHubInstall []string // default: imported, updatable, pushedTools
-}
-```
-
-### StarredRepo (`core/git/model.go`)
-
-```go
-type StarredRepo struct {
-    URL       string    // user-provided git repo URL
-    Name      string    // parsed "owner/repo"
-    Source    string    // canonical key "<host>/<path>"
-    LocalDir  string    // absolute runtime cache dir; persisted in star_repos.json as a relative path under AppDataDir()
-    LastSync  time.Time
-    SyncError string
-}
-
-type StarSkill struct {
-    Name     string
-    Path     string   // absolute local path to skill dir
-    SubPath  string   // relative path in repo
-    RepoURL  string
-    RepoName string
-    Source   string
-    Imported bool     // already in My Skills?
-}
-```
+- Backend code owns cross-module correlation and should return normalized status data to the frontend.
+- Frontend pages should not infer "same skill", "already imported", or "already pushed" from `Name` or `Path` alone.
+- `core/skillkey` derives logical keys.
+- `core/skill.BuildInstalledIndex` correlates installed state across GitHub scan results, starred repo entries, and tool-scan entries.
 
 ---
 
-## Startup Flow
+## Events and Bindings
 
-`main.go` → `app.startup()`:
-1. Load app data directory
-2. Initialize `config.Service`, load config
-3. Create `skill.Storage` with configured `SkillsStorageDir`
-4. Call `registerAdapters()` (5 built-in tools → `FilesystemAdapter`)
-5. Call `registerProviders()` (Aliyun, AWS, Azure, Google, Tencent, Huawei, Git)
-6. Start `forwardEvents(ctx, hub)` goroutine — subscribes to Hub, emits each event via `runtime.EventsEmit`
-7. Start `checkUpdatesOnStartup()` goroutine — scan skills for GitHub updates
-8. Start `updateStarredReposOnStartup()` goroutine — sync starred repos
+### Backend event flow
 
----
+SkillFlow uses `core/notify.Hub` as a buffered event bus:
 
-## Main App Struct
+1. Backend code publishes `notify.Event`
+2. `forwardEvents()` subscribes and forwards them through Wails `runtime.EventsEmit`
+3. The frontend subscribes through `cmd/skillflow/frontend/wailsjs/runtime`
 
-`app.go` (`package main`) contains the `App` struct and all exported methods:
+The hub currently uses a buffer of **32** entries with drop-oldest behavior for slow consumers.
 
-```go
-type App struct {
-    ctx         context.Context
-    hub         *notify.Hub           // event pub/sub
-    storage     *skill.Storage        // skill CRUD
-    config      *config.Service       // config persistence
-    starStorage *coregit.StarStorage  // starred repos JSON persistence
-    cacheDir    string                // ~/.skillflow/cache/
-}
-```
+Important event groups:
 
-**Key exported methods (50+) — all callable from frontend:**
+- backup: `backup.started`, `backup.progress`, `backup.completed`, `backup.failed`
+- sync/update: `sync.completed`, `update.available`, `skill.conflict`
+- starred repos: `star.sync.progress`, `star.sync.done`
+- Git backup: `git.sync.started`, `git.sync.completed`, `git.sync.failed`, `git.conflict`
+- app update: `app.update.available`, `app.update.download.done`, `app.update.download.fail`
 
-| Category | Methods |
-|----------|---------|
-| Skills | `ListSkills()`, `ListCategories()`, `DeleteSkill()`, `MoveSkillCategory()` |
-| Import | `ScanGitHub()`, `InstallFromGitHub()`, `ImportLocal()` |
-| Sync | `GetEnabledTools()`, `ScanToolSkills()`, `PushToTools()`, `PullFromTool()` |
-| Config | `GetConfig()`, `SaveConfig()`, `AddCustomTool()`, `RemoveCustomTool()` |
-| Backup | `BackupNow()`, `ListCloudFiles()`, `RestoreFromCloud()`, `ListCloudProviders()` |
-| Updates | `CheckUpdates()`, `UpdateSkill()`, `CheckAppUpdate()`, `CheckAppUpdateAndNotify()` |
-| Starred repos | `AddStarredRepo()`, `ListAllStarSkills()`, `ImportStarSkills()`, `UpdateAllStarredRepos()` |
-| UI helpers | `OpenFolderDialog()`, `OpenPath()`, `OpenURL()` |
+### Wails bindings
 
-Auto-backup (`autoBackup()`) is triggered after mutations (delete, import, push, pull) when cloud backup is enabled.
+Generated bindings live under:
 
----
+- `cmd/skillflow/frontend/wailsjs/go/main/App.js`
+- `cmd/skillflow/frontend/wailsjs/go/main/App.d.ts`
 
-## Event System
-
-Backend → Frontend events flow through `core/notify.Hub`:
-- Backend publishes via `hub.Publish(notify.Event{Type: ..., Payload: ...})`
-- `forwardEvents()` goroutine subscribes to Hub, marshals `Payload` to JSON, and calls `runtime.EventsEmit(ctx, eventType, jsonData)`
-- Frontend subscribes via `EventsOn('backup.progress', handler)` from `wailsjs/runtime/runtime`
-
-Event types are defined in `core/notify/model.go`:
-
-```go
-const (
-    EventBackupStarted         EventType = "backup.started"
-    EventBackupProgress        EventType = "backup.progress"
-    EventBackupCompleted       EventType = "backup.completed"
-    EventBackupFailed          EventType = "backup.failed"
-    EventSyncCompleted         EventType = "sync.completed"
-    EventUpdateAvailable       EventType = "update.available"
-    EventSkillConflict         EventType = "skill.conflict"
-    EventStarSyncProgress      EventType = "star.sync.progress"
-    EventStarSyncDone          EventType = "star.sync.done"
-    EventAppUpdateAvailable    EventType = "app.update.available"
-    EventAppUpdateDownloadDone EventType = "app.update.download.done"
-    EventAppUpdateDownloadFail EventType = "app.update.download.fail"
-)
-```
-
-The Hub uses a buffered channel (size 32) with drop-oldest behavior for slow subscribers.
-
----
-
-## Tool Adapters
-
-All 5 built-in tools use `FilesystemAdapter` from `core/sync`. Default push directories per tool:
-
-| Tool | Default Push Directory |
-|------|----------------------|
-| `claude-code` | `~/.claude/skills` |
-| `opencode` | `~/.config/opencode/skills` |
-| `codex` | `~/.agents/skills` |
-| `gemini-cli` | `~/.gemini/skills` |
-| `openclaw` | `~/.openclaw/skills` |
-
-**Adapter behavior:**
-- `Pull()` — recursively scan directory tree for `skill.md` files, import each as a skill
-- `Push()` — copy skill directories flat (no category subdir) into the target directory
-
-Custom tools added via Settings also use `FilesystemAdapter` with user-provided directory.
-
----
-
-## Installer Interface (`core/install`)
-
-```go
-type Installer interface {
-    Type() string
-    Scan(ctx context.Context, source InstallSource) ([]SkillCandidate, error)
-    Install(ctx context.Context, source InstallSource, selected []SkillCandidate, category string) error
-}
-```
-
-- `GitHubInstaller` — scans GitHub repos via Contents API, downloads skill directories, records commit SHA
-- `LocalInstaller` — imports from local filesystem path
-
----
-
-## Cloud Provider Interface (`core/backup`)
-
-```go
-type CloudProvider interface {
-    Name() string
-    Init(credentials map[string]string) error
-    Sync(ctx context.Context, localDir, bucket, remotePath string, onProgress func(file string)) error
-    Restore(ctx context.Context, bucket, remotePath, localDir string) error
-    List(ctx context.Context, bucket, remotePath string) ([]RemoteFile, error)
-    RequiredCredentials() []CredentialField
-}
-```
-
-The Settings page automatically renders credential input fields from `RequiredCredentials()`.
-
----
-
-## Git Package (`core/git`)
-
-Handles starred repo workflows:
-- `CloneOrUpdate(ctx, repoURL, localDir, proxyURL)` — git clone or fetch+pull
-- `ScanSkills(localDir, repoURL, repoName, source)` — find skill dirs in cloned repo
-- `GetSubPathSHA(ctx, repoDir, subPath)` — get latest commit SHA for a path
-- `ParseRepoRef()`, `ParseRepoName()`, `RepoSource()` — URL parsing utilities
-- `StarStorage` — JSON persistence for `[]StarredRepo` at `<AppDataDir>/star_repos.json`
+Regenerate them with `make generate` after changing exported `App` methods.
 
 ---
 
 ## Frontend Structure
 
-```
-frontend/src/
-  App.tsx              ← BrowserRouter + sidebar layout + route definitions
-  pages/               ← one file per route
-    Dashboard.tsx      ← My Skills listing (categories, search, drag-drop)
-    SyncPush.tsx       ← Push skills to external tools
-    SyncPull.tsx       ← Pull skills from external tools
-    StarredRepos.tsx   ← Browse and import from starred/watched repos
-    Backup.tsx         ← Cloud backup management
-    Settings.tsx       ← Tool config, cloud provider, proxy settings
-  components/          ← shared UI components
-    SkillCard.tsx      ← Individual skill display card
-    SkillTooltip.tsx   ← Hover tooltips showing skill metadata
-    CategoryPanel.tsx  ← Category sidebar/filter
-    GitHubInstallDialog.tsx  ← GitHub repo scanner UI
-    ConflictDialog.tsx ← Handle skill name conflicts on sync
-    SyncSkillCard.tsx  ← Skill card for sync pages
-    ContextMenu.tsx    ← Right-click context menus
-  config/
-    toolIcons.tsx      ← Tool name → icon mapping
-  wailsjs/             ← auto-generated (do not edit manually)
-    go/main/App.js     ← Go method bindings
-    go/main/App.d.ts   ← TypeScript type declarations
-    runtime/runtime.js ← Wails runtime (EventsOn, EventsEmit, etc.)
+```text
+cmd/skillflow/frontend/
+  src/
+    App.tsx
+    main.tsx
+    pages/
+    components/
+    contexts/
+    i18n/
+    lib/
+    config/
+  tests/
+  wailsjs/
 ```
 
-Frontend calls Go methods directly: `import { ListSkills } from '../../wailsjs/go/main/App'`. Generated JSON respects exported Go field names unless a struct declares explicit `json` tags; config models remain PascalCase while tool/starred DTOs may expose lower-case tagged fields.
+Key frontend areas:
+
+- `src/pages/` — route-level screens such as Dashboard, Sync Push/Pull, Starred Repos, Backup, Settings, My Tools, and My Prompts
+- `src/components/` — shared cards, dialogs, category panels, and list controls
+- `src/contexts/` — language, theme, and status-visibility state
+- `src/i18n/` — translation dictionaries
+- `src/lib/` — shared list/search/clipboard/state helpers
+- `tests/` — frontend unit tests run outside the Wails build
+
+Frontend code imports backend methods from the generated Wails module, for example:
+
+```ts
+import { ListSkills } from '../../wailsjs/go/main/App'
+```
 
 ---
 
-## Testing Approach
+## Logging and Path Portability
 
-Tests use `httptest.NewServer` to mock GitHub API calls. Pass the mock server URL to `NewChecker(srv.URL)` or `NewGitHubInstaller(srv.URL)`. Filesystem tests use `t.TempDir()`.
+### Logging
 
-**Test coverage by package:**
+- `core/applog.Logger` writes structured text logs to the app data `logs/` directory.
+- `cmd/skillflow/app_log.go` mirrors enabled logs to the Wails runtime log APIs.
+- Backend changes should log start/completion/failure for important mutations, sync flows, backup flows, Git operations, and external API calls.
+- Secrets must never be logged.
 
-| Package | Test files | Notes |
-|---------|-----------|-------|
-| `core/skill` | `model_test.go`, `storage_test.go`, `validator_test.go` | Full coverage |
-| `core/config` | `service_test.go` | Full coverage |
-| `core/notify` | `hub_test.go` | Full coverage |
-| `core/install` | `github_test.go`, `local_test.go` | Mocked GitHub API |
-| `core/update` | `checker_test.go` | Mocked GitHub API |
-| `core/sync` | `filesystem_adapter_test.go` | TempDir filesystem tests |
-| `core/git` | `client_test.go`, `scanner_test.go`, `storage_test.go` | TempDir + mock |
-| `core/backup` | none | Requires real cloud credentials |
-| `core/registry` | none | Thin wrapper, tested via integration |
+### Path handling
+
+- `core/pathutil` normalizes stored paths into forward-slash relative form.
+- Runtime APIs may expand those paths back to absolute paths before returning them to callers.
+- Portable path storage is required for synced files and restore flows.
+
+---
+
+## Testing and Build Workflow
+
+- Run backend tests from the repo root: `go test ./core/...`
+- Run Wails dev/build/generate from `cmd/skillflow/`, or use `make dev`, `make build`, `make generate`
+- Frontend dependencies live in `cmd/skillflow/frontend/package.json`
+- Frontend unit tests live in `cmd/skillflow/frontend/tests/`
+- Production app output is written to `cmd/skillflow/build/bin/`
 
 ---
 
 ## Extension Guides
 
-### Adding a New Cloud Provider
+### Add a new frontend-callable App method
+
+1. Add an exported method on `App` in `cmd/skillflow/app.go` or another flat `cmd/skillflow/*.go` file
+2. Run `make generate`
+3. Import it in the frontend from `../../wailsjs/go/main/App`
+
+### Add a new cloud provider
 
 1. Create `core/backup/<name>.go` implementing `backup.CloudProvider`
-2. Register in `providers.go`: `registry.RegisterCloudProvider(NewXxxProvider())`
-3. The Settings page automatically renders credential fields from `RequiredCredentials()`
+2. Register it in `cmd/skillflow/providers.go`
+3. Expose its credential fields through `RequiredCredentials()`
 
-### Adding a New Tool Adapter
+### Add a new tool adapter
 
-If the tool uses a flat directory of skills (standard), just add it to `registerAdapters()` in `adapters.go`. For custom behavior, implement `toolsync.ToolAdapter` and register via `registry.RegisterAdapter()`.
+1. For standard filesystem-based tools, register it in `cmd/skillflow/adapters.go`
+2. For custom behavior, implement `toolsync.ToolAdapter`
+3. Always import `core/sync` as `toolsync` to avoid the stdlib `sync` name conflict
 
-### Adding a New App Method (Frontend-callable)
+### Add a new reusable backend module
 
-1. Add exported method to `App` struct in `app.go` (or a new `package main` file at root)
-2. Run `make generate` (or `wails generate module`) to update `frontend/wailsjs/go/main/App.{js,d.ts}`
-3. Import and call from frontend: `import { MyNewMethod } from '../../wailsjs/go/main/App'`
+- Prefer `core/<name>/` for reusable logic
+- Do not create Go subdirectories under `cmd/skillflow/`
+- Keep Wails-specific shell code in `cmd/skillflow/` and reusable domain logic in `core/`
 
 ---
 
-*Last updated: 2026-03-08*
+*Last updated: 2026-03-10*
