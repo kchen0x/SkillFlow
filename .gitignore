@@ -12,7 +12,9 @@
 
 # Current Wails app outputs
 /cmd/skillflow/build/bin/
+/cmd/skillflow/.build-cache/
 /cmd/skillflow/frontend/dist/
+/cmd/skillflow/frontend/.cache/
 /cmd/skillflow/frontend/node_modules/
 /cmd/skillflow/frontend/package.json.md5
 

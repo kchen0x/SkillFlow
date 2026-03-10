@@ -9,15 +9,18 @@ endif
 
 APP_DIR := cmd/skillflow
 APP_DIR_WIN := $(subst /,\,$(APP_DIR))
+NODE ?= node
 EMPTY :=
 SPACE := $(EMPTY) $(EMPTY)
 COMMA := ,
 
 WAILS_BUILD_TAGS ?=
 WAILS_BUILD_LDFLAGS ?= -s -w
+BUILD_PLAN_CMD = $(NODE) $(APP_DIR)/tools/build-plan.mjs
 NORMALIZE_PROVIDERS = $(strip $(subst $(COMMA),$(SPACE),$(1)))
 PROVIDER_BUILD_TAGS = $(strip provider_select $(foreach provider,$(call NORMALIZE_PROVIDERS,$(1)),backup_$(provider)))
-WAILS_BUILD_FLAGS = -trimpath $(if $(strip $(WAILS_BUILD_TAGS)),-tags "$(WAILS_BUILD_TAGS)") $(if $(strip $(WAILS_BUILD_LDFLAGS)),-ldflags "$(WAILS_BUILD_LDFLAGS)")
+WAILS_SKIP_FLAGS = $(shell $(BUILD_PLAN_CMD) plan)
+WAILS_BUILD_FLAGS = -trimpath -m -nosyncgomod $(WAILS_SKIP_FLAGS) $(if $(strip $(WAILS_BUILD_TAGS)),-tags "$(WAILS_BUILD_TAGS)") $(if $(strip $(WAILS_BUILD_LDFLAGS)),-ldflags "$(WAILS_BUILD_LDFLAGS)")
 
 .PHONY: all dev build build-cloud test test-cloud tidy generate install-frontend clean help
 
@@ -30,6 +33,7 @@ dev:
 ## build: Build production binary
 build:
 	cd $(APP_DIR) && $(WAILS) build $(WAILS_BUILD_FLAGS)
+	$(BUILD_PLAN_CMD) mark
 ifneq ($(OS),Windows_NT)
 	@if [ -f $(APP_DIR)/build/darwin/iconfile.icns ] && [ -d $(APP_DIR)/build/bin/SkillFlow.app ]; then \
 		cp $(APP_DIR)/build/darwin/iconfile.icns $(APP_DIR)/build/bin/SkillFlow.app/Contents/Resources/iconfile.icns; \
@@ -39,7 +43,8 @@ endif
 ## build-cloud: Build with only selected cloud providers, e.g. make build-cloud PROVIDERS="aws,google"
 build-cloud:
 	$(if $(strip $(PROVIDERS)),,$(error Usage: make build-cloud PROVIDERS="aws,google"))
-	cd $(APP_DIR) && $(WAILS) build -trimpath -tags "$(strip $(WAILS_BUILD_TAGS) $(call PROVIDER_BUILD_TAGS,$(PROVIDERS)))" $(if $(strip $(WAILS_BUILD_LDFLAGS)),-ldflags "$(WAILS_BUILD_LDFLAGS)")
+	cd $(APP_DIR) && $(WAILS) build -trimpath -m -nosyncgomod $(WAILS_SKIP_FLAGS) -tags "$(strip $(WAILS_BUILD_TAGS) $(call PROVIDER_BUILD_TAGS,$(PROVIDERS)))" $(if $(strip $(WAILS_BUILD_LDFLAGS)),-ldflags "$(WAILS_BUILD_LDFLAGS)")
+	$(BUILD_PLAN_CMD) mark
 ifneq ($(OS),Windows_NT)
 	@if [ -f $(APP_DIR)/build/darwin/iconfile.icns ] && [ -d $(APP_DIR)/build/bin/SkillFlow.app ]; then \
 		cp $(APP_DIR)/build/darwin/iconfile.icns $(APP_DIR)/build/bin/SkillFlow.app/Contents/Resources/iconfile.icns; \
@@ -62,6 +67,7 @@ tidy:
 ## generate: Regenerate TypeScript bindings after App method changes
 generate:
 	cd $(APP_DIR) && $(WAILS) generate module
+	$(BUILD_PLAN_CMD) mark-bindings
 
 ## install-frontend: Install frontend npm dependencies
 install-frontend:
@@ -72,11 +78,15 @@ clean:
 ifeq ($(OS),Windows_NT)
 	if exist "$(APP_DIR_WIN)\build\bin" rmdir /s /q "$(APP_DIR_WIN)\build\bin"
 	if exist "$(APP_DIR_WIN)\frontend\dist" rmdir /s /q "$(APP_DIR_WIN)\frontend\dist"
+	if exist "$(APP_DIR_WIN)\frontend\.cache" rmdir /s /q "$(APP_DIR_WIN)\frontend\.cache"
 	if exist "$(APP_DIR_WIN)\frontend\package.json.md5" del /f /q "$(APP_DIR_WIN)\frontend\package.json.md5"
+	if exist "$(APP_DIR_WIN)\.build-cache" rmdir /s /q "$(APP_DIR_WIN)\.build-cache"
 else
 	rm -rf $(APP_DIR)/build/bin
 	rm -rf $(APP_DIR)/frontend/dist
+	rm -rf $(APP_DIR)/frontend/.cache
 	rm -f $(APP_DIR)/frontend/package.json.md5
+	rm -rf $(APP_DIR)/.build-cache
 endif
 
 ## help: Show this help
