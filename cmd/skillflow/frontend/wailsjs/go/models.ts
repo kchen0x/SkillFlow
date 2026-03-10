@@ -364,6 +364,7 @@ export namespace main {
 	export class ToolSkillCandidate {
 	    name: string;
 	    path: string;
+	    source: string;
 	    logicalKey: string;
 	    installed: boolean;
 	    imported: boolean;
@@ -379,6 +380,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.path = source["path"];
+	        this.source = source["source"];
 	        this.logicalKey = source["logicalKey"];
 	        this.installed = source["installed"];
 	        this.imported = source["imported"];
@@ -390,6 +392,7 @@ export namespace main {
 	export class ToolSkillEntry {
 	    name: string;
 	    path: string;
+	    source: string;
 	    logicalKey: string;
 	    installed: boolean;
 	    imported: boolean;
@@ -406,6 +409,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.path = source["path"];
+	        this.source = source["source"];
 	        this.logicalKey = source["logicalKey"];
 	        this.installed = source["installed"];
 	        this.imported = source["imported"];
@@ -550,3 +554,4 @@ export namespace skill {
 	}
 
 }
+

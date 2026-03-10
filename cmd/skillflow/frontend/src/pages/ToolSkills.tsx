@@ -253,6 +253,7 @@ export default function ToolSkills() {
                         key={sk.path}
                         name={sk.name}
                         path={sk.path}
+                        source={sk.source}
                         imported={sk.imported}
                         updatable={sk.updatable}
                         pushedTools={(sk.pushedTools ?? []).filter((toolName: string) => toolName !== selectedTool)}
@@ -293,6 +294,7 @@ export default function ToolSkills() {
                         key={sk.path}
                         name={sk.name}
                         path={sk.path}
+                        source={sk.source}
                         imported={sk.imported}
                         updatable={sk.updatable}
                         pushedTools={(sk.pushedTools ?? []).filter((toolName: string) => toolName !== selectedTool)}
@@ -320,6 +322,7 @@ export default function ToolSkills() {
 interface ToolSkillCardProps {
   name: string
   path: string
+  source?: string
   imported?: boolean
   updatable?: boolean
   pushedTools?: string[]
@@ -336,6 +339,7 @@ interface ToolSkillCardProps {
 function ToolSkillCard({
   name,
   path,
+  source,
   imported,
   updatable,
   pushedTools = [],
@@ -354,6 +358,13 @@ function ToolSkillCard({
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null)
   const [meta, setMeta] = useState<any | null>(null)
   const [copied, setCopied] = useState(false)
+  const sourceLabel = source === 'github'
+    ? t('common.sourceGitHub')
+    : source === 'manual'
+      ? t('common.sourceManual')
+      : source === 'git'
+        ? t('common.sourceGit')
+        : source
 
   const handleMouseEnter = () => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current)
@@ -461,6 +472,11 @@ function ToolSkillCard({
         <SkillStatusStrip
           className={`${selectMode && canDelete ? 'pl-5' : ''} pr-12`}
           badges={[
+            ...(sourceLabel ? [{
+              key: `source:${sourceLabel}`,
+              label: sourceLabel,
+              tone: source === 'github' ? ('accent' as const) : ('muted' as const),
+            }] : []),
             ...(showImported && imported ? [{
               key: 'imported',
               label: t('common.imported'),
@@ -504,7 +520,7 @@ function ToolSkillCard({
       </div>
 
       {hoveredRect && (
-        <SkillTooltip skill={{ Name: name, Source: undefined }} meta={meta} anchorRect={hoveredRect} />
+        <SkillTooltip skill={{ Name: name, Source: source }} meta={meta} anchorRect={hoveredRect} />
       )}
     </>
   )

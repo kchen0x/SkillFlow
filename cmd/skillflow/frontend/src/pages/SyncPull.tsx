@@ -280,6 +280,7 @@ export default function SyncPull() {
                     <SyncSkillCard
                       key={sk.path}
                       name={sk.name}
+                      source={sk.source}
                       path={sk.path}
                       imported={sk.imported}
                       showImported={visibility.includes('imported')}

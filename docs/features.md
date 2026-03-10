@@ -185,6 +185,7 @@ If a skill already exists in the target directory, a conflict dialog appears for
 ### Skill Grid
 
 - Library cards surface only push-relevant state on this page: which tools already contain that logical skill in their `PushDir`.
+- Cards also keep the installed-source badge from My Skills so users can still distinguish manual imports from GitHub installs while deciding what to push.
 - The pushed-tool indicator uses compact tool icons with ellipsis overflow and hover-to-reveal full lists.
 
 ### Bottom Bar
@@ -222,7 +223,8 @@ Imports skills from external tool directories into your library.
 - Appears after a successful scan.
 - Search field filters the scanned skill list by name in real time.
 - Two-button sort toggle switches between **A-Z** and **Z-A** ordering by skill name.
-- Each card shows only the state relevant to pull decisions: whether that skill is already imported into My Skills.
+- When a scanned item correlates to an already installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from GitHub installs at a glance.
+- Cards still show the pull-specific imported state; newly discovered scan items that do not correlate to an installed entry keep the source badge empty instead of guessing.
 - After each scan, all skills start unchecked by default.
 - Select individual skills, use "Select All / Deselect All" for the currently visible list, or use the matching square-style "Select Not Imported" toggle to bulk-select only visible skills that are not yet imported.
 - Selection and pull conflicts are tracked by scanned path, so same-name skills from different tool folders remain independent.
@@ -290,6 +292,7 @@ Browse and import skills directly from watched Git repositories without installi
 
 - Breadcrumb back button (ChevronLeft) to return to the repo grid.
 - Skills grid with same select/import behavior as flat view.
+- While repo skills are still loading, both the toolbar count label and the content pane show **Loading...** instead of a transient `0 skills` / `No Skills found` empty state.
 - Repo skill cards show only imported and pushed-tool state on this page.
 - Imported badges are resolved from normalized repo source + subpath, so same-name skills from different repos are not conflated.
 - Pushed state is rendered as tool-brand icons with hover-to-reveal full tool lists.
@@ -773,14 +776,15 @@ Browse the skills currently present inside each enabled tool.
 - Shows deletable tool-local skills under the configured push directory.
 - Push-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - In select mode, **Select All / Deselect All** applies to the currently visible filtered Push Path cards only.
-- Cards show only imported, update-available, and "pushed to other tools" states. The current tool is excluded from the pushed-tool icon list so the card only surfaces cross-tool distribution that adds information.
+- When a tool-local skill correlates to an installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from GitHub installs.
+- Cards continue showing imported, update-available, and "pushed to other tools" states. The current tool is excluded from the pushed-tool icon list so the card only surfaces cross-tool distribution that adds information.
 
 ### Scan Path Section
 
 - Shows read-only skills discovered only from scan directories.
 - Scan-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Shares the same search and sort controls as Push Path.
-- Scan-path cards use the same compact strip for imported / update-available / pushed-to-other-tools states; the fact that they were found via scan paths is conveyed by the section itself instead of repeating a detected badge on every card.
+- Scan-path cards use the same compact strip for source / imported / update-available / pushed-to-other-tools states whenever the scanned item can be correlated to an installed My Skills entry; the fact that they were found via scan paths is conveyed by the section itself instead of repeating a detected badge on every card.
 
 ---
 

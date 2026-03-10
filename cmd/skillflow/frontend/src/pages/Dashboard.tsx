@@ -327,10 +327,6 @@ export default function Dashboard() {
             background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-glow) 42%, transparent) 0%, color-mix(in srgb, var(--bg-elevated) 94%, transparent) 100%)',
           }}
         >
-          <div className="flex items-center gap-2 shrink-0 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            <ArrowUpFromLine size={15} />
-            {t('dashboard.autoPushTitle')}
-          </div>
           {toolOptions.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
               {toolOptions.map(tool => {
@@ -364,10 +360,14 @@ export default function Dashboard() {
               )}
             </div>
           ) : (
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-sm flex-1" style={{ color: 'var(--text-muted)' }}>
               {t('dashboard.autoPushEmpty')}
             </p>
           )}
+          <div className="flex items-center gap-2 shrink-0 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <ArrowUpFromLine size={15} />
+            {t('dashboard.autoPushTitle')}
+          </div>
         </div>
 
         {/* Skills grid */}

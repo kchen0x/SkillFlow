@@ -9,6 +9,7 @@ import (
 type CorrelationStatus struct {
 	LogicalKey    string                 `json:"logicalKey,omitempty"`
 	MatchStrength skillkey.MatchStrength `json:"matchStrength,omitempty"`
+	Source        string                 `json:"source,omitempty"`
 	Installed     bool                   `json:"installed"`
 	Imported      bool                   `json:"imported"`
 	Updatable     bool                   `json:"updatable"`
@@ -136,6 +137,7 @@ func (g *installedGroup) status(logicalKey string, matchStrength skillkey.MatchS
 	status := CorrelationStatus{
 		LogicalKey:    logicalKey,
 		MatchStrength: matchStrength,
+		Source:        g.source(),
 		Installed:     true,
 		Imported:      true,
 	}
@@ -146,6 +148,18 @@ func (g *installedGroup) status(logicalKey string, matchStrength skillkey.MatchS
 		}
 	}
 	return status
+}
+
+func (g *installedGroup) source() string {
+	for _, sk := range g.Skills {
+		if sk == nil {
+			continue
+		}
+		if source := strings.TrimSpace(string(sk.Source)); source != "" {
+			return source
+		}
+	}
+	return ""
 }
 
 func normalizedName(name string) string {

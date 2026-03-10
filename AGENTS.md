@@ -78,7 +78,7 @@ All other documentation lives under `docs/`:
 
 ## Documentation Sync Rule — MANDATORY
 
-**Any time a feature is added, changed, or removed, you MUST update the following files in the same commit:**
+**Any time a meaningful user-facing feature is added, changed, or removed, you MUST update the following files in the same commit:**
 
 | File | What to update |
 |------|---------------|
@@ -88,9 +88,13 @@ All other documentation lives under `docs/`:
 | `README_zh.md` | Same in Chinese. |
 
 **Rules:**
-- A "feature change" includes: any new UI element (button, dialog, toggle, input), behavior change, removal of a control, new backend method callable from the frontend, and new event type.
+- A "feature change" means a clear user-facing capability or usage-flow change: for example a new UI control that enables a new action, a behavior change, removal of a control, a new backend method callable from the frontend, or a new event type.
+- Pure presentation-only adjustments are **not** feature changes for this rule. Do **not** update `docs/features.md`, `docs/features_zh.md`, `README.md`, or `README_zh.md` for small copy tweaks, label renames, icon swaps, visual reordering, spacing/layout polish, or other changes that do not obviously change how the feature is used.
 - Do **not** leave the docs stale. Never commit a feature change without the corresponding doc update in the same commit.
-- `docs/features.md` / `docs/features_zh.md` are the source of truth for UX details. README files only carry high-level summaries with links to the feature files.
+- `docs/features.md` / `docs/features_zh.md` are the source of truth for UX details, but only for meaningful UX/feature behavior. Do not churn them for low-signal presentation-only edits unless the user explicitly asks.
+- `README.md` / `README_zh.md` must stay high-level and only describe coarse-grained product capabilities. Avoid adding small UI wording/layout details that increase reading burden.
+- If a frontend/backend feature change also changes architecture, module boundaries, cross-module contracts, core data flow, persistence model, or extension points, update `docs/architecture.md` in the same commit. When the Chinese architecture doc is being maintained in parallel, update `docs/architecture_zh.md` as well.
+- If a change needs detailed module-level design or implementation documentation, create or update files under a coarse-grained module folder in `docs/` such as `docs/<module>/...` instead of adding more root-level markdown files. Keep module categories broad and stable; do not create many small folders for individual pages, components, or one-off tweaks.
 
 ## Path Persistence Rule — MANDATORY
 

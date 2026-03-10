@@ -30,6 +30,7 @@ type InstalledSkillEntry struct {
 type ToolSkillCandidate struct {
 	Name        string   `json:"name"`
 	Path        string   `json:"path"`
+	Source      string   `json:"source"`
 	LogicalKey  string   `json:"logicalKey"`
 	Installed   bool     `json:"installed"`
 	Imported    bool     `json:"imported"`
@@ -41,6 +42,7 @@ type ToolSkillCandidate struct {
 type ToolSkillEntry struct {
 	Name           string   `json:"name"`
 	Path           string   `json:"path"`
+	Source         string   `json:"source"`
 	LogicalKey     string   `json:"logicalKey"`
 	Installed      bool     `json:"installed"`
 	Imported       bool     `json:"imported"`
@@ -52,6 +54,7 @@ type ToolSkillEntry struct {
 
 type resolvedSkillState struct {
 	LogicalKey  string
+	Source      string
 	Installed   bool
 	Imported    bool
 	Updatable   bool
@@ -148,6 +151,7 @@ func resolveToolSkillCandidates(candidates []*skill.Skill, idx *skill.InstalledI
 		resolved := ToolSkillCandidate{
 			Name:        candidate.Name,
 			Path:        candidate.Path,
+			Source:      state.Source,
 			LogicalKey:  coalesceLogicalKey(state.LogicalKey, logicalKey),
 			Installed:   state.Installed,
 			Imported:    state.Imported,
@@ -184,6 +188,7 @@ func aggregateToolSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill
 		entry := entries[groupKey]
 		entry.Name = candidate.Name
 		entry.Path = candidate.Path
+		entry.Source = coalesceSource(candidate.Source, entry.Source)
 		entry.LogicalKey = coalesceLogicalKey(candidate.LogicalKey, entry.LogicalKey)
 		entry.Installed = entry.Installed || candidate.Installed
 		entry.Imported = entry.Imported || candidate.Imported
@@ -202,6 +207,7 @@ func aggregateToolSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill
 		if entry.Name == "" {
 			entry.Name = candidate.Name
 		}
+		entry.Source = coalesceSource(candidate.Source, entry.Source)
 		entry.LogicalKey = coalesceLogicalKey(candidate.LogicalKey, entry.LogicalKey)
 		entry.Installed = entry.Installed || candidate.Installed
 		entry.Imported = entry.Imported || candidate.Imported
@@ -323,6 +329,7 @@ func resolveSkillState(name, logicalKey string, idx *skill.InstalledIndex, prese
 	pushedTools := presence.tools(lookupKeys...)
 	return resolvedSkillState{
 		LogicalKey:  coalesceLogicalKey(resolvedKey, logicalKey),
+		Source:      status.Source,
 		Installed:   status.Installed,
 		Imported:    status.Imported,
 		Updatable:   status.Updatable,
@@ -349,6 +356,9 @@ func mergeToolCandidate(existing, incoming ToolSkillCandidate) ToolSkillCandidat
 	}
 	if existing.LogicalKey == "" {
 		existing.LogicalKey = incoming.LogicalKey
+	}
+	if existing.Source == "" {
+		existing.Source = incoming.Source
 	}
 	existing.Installed = existing.Installed || incoming.Installed
 	existing.Imported = existing.Imported || incoming.Imported
@@ -413,6 +423,13 @@ func compactKeys(keys ...string) []string {
 }
 
 func coalesceLogicalKey(primary, secondary string) string {
+	if strings.TrimSpace(primary) != "" {
+		return primary
+	}
+	return secondary
+}
+
+func coalesceSource(primary, secondary string) string {
 	if strings.TrimSpace(primary) != "" {
 		return primary
 	}

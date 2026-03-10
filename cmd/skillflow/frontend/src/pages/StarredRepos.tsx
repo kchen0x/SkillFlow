@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -21,6 +21,7 @@ import { toastVariants } from '../lib/motionVariants'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
+import { getStarredRepoListState } from '../lib/starredRepoListState'
 
 export default function StarredRepos() {
   const { t } = useLanguage()
@@ -31,6 +32,9 @@ export default function StarredRepos() {
   const [repos, setRepos] = useState<any[]>([])
   const [repoSkills, setRepoSkills] = useState<any[]>([])
   const [allSkills, setAllSkills] = useState<any[]>([])
+  const [reposLoading, setReposLoading] = useState(true)
+  const [allSkillsLoading, setAllSkillsLoading] = useState(true)
+  const [repoSkillsLoading, setRepoSkillsLoading] = useState(() => !!currentRepo)
   const [view, setView] = useState<'folder' | 'flat'>('folder')
   const [syncing, setSyncing] = useState(false)
   const [addUrl, setAddUrl] = useState('')
@@ -79,8 +83,8 @@ export default function StarredRepos() {
   }
 
   useEffect(() => {
-    loadRepos()
-    loadAllSkills()
+    void loadRepos().finally(() => setReposLoading(false))
+    void loadAllSkills().finally(() => setAllSkillsLoading(false))
     ListCategories().then(c => {
       setCategories(c ?? [])
       if (c && c.length > 0) setImportCategory(c[0])
@@ -91,8 +95,25 @@ export default function StarredRepos() {
     return () => { off1?.(); off2?.() }
   }, [])
 
-  useEffect(() => {
-    if (currentRepo) loadRepoSkills(currentRepo)
+  useLayoutEffect(() => {
+    if (!currentRepo) {
+      setRepoSkillsLoading(false)
+      return
+    }
+
+    let active = true
+    setRepoSkillsLoading(true)
+    ListRepoStarSkills(currentRepo)
+      .then(s => {
+        if (active) setRepoSkills(s ?? [])
+      })
+      .finally(() => {
+        if (active) setRepoSkillsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
   }, [currentRepo])
 
   const handleAddRepo = async () => {
@@ -262,6 +283,10 @@ export default function StarredRepos() {
 
   const skillGridVisible = !!currentRepo || view === 'flat'
   const skills = currentRepo ? filteredRepoSkills : filteredAllSkills
+  const skillsLoading = currentRepo ? repoSkillsLoading : view === 'flat' ? allSkillsLoading : false
+  const skillResultLabel = skillsLoading
+    ? t('common.loading')
+    : t('common.showingNSkills', { count: skills.length })
   const repoSkillCounts = useMemo(() => {
     const counts = new Map<string, number>()
     for (const skill of allSkills) {
@@ -348,7 +373,7 @@ export default function StarredRepos() {
             sortOrder={sortOrder}
             onSortOrderChange={setSortOrder}
             placeholder={currentRepo ? t('starred.searchCurrentRepo') : t('starred.searchAllRepos')}
-            resultLabel={t('common.showingNSkills', { count: skills.length })}
+            resultLabel={skillResultLabel}
             searchClassName="max-w-[420px]"
           />
         ) : (
@@ -411,15 +436,15 @@ export default function StarredRepos() {
                 ))}
               </>
             )}
-            {skillGridVisible && (
+            {skillGridVisible && !skillsLoading && skills.length > 0 && (
               <button
                 onClick={() => setSelectMode(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
-            >
-              <CheckSquare size={14} /> {t('starred.batchImport')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+              >
+                <CheckSquare size={14} /> {t('starred.batchImport')}
               </button>
             )}
             <button
@@ -447,15 +472,32 @@ export default function StarredRepos() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {currentRepo ? (
-          <SkillGrid skills={filteredRepoSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
+          <SkillGrid
+            skills={filteredRepoSkills}
+            loading={repoSkillsLoading}
+            selectMode={selectMode}
+            selectedPaths={selectedPaths}
+            onToggle={toggleSelectPath}
+            showRepo
+          />
         ) : view === 'folder' ? (
-          <RepoGrid repos={repos}
+          <RepoGrid
+            repos={repos}
+            loading={reposLoading || allSkillsLoading}
             repoSkillCounts={repoSkillCounts}
             onEnter={url => navigate(`/starred/${encodeURIComponent(url)}`)}
             onUpdate={handleUpdateOne}
-            onRemove={handleRemove} />
+            onRemove={handleRemove}
+          />
         ) : (
-          <SkillGrid skills={filteredAllSkills} selectMode={selectMode} selectedPaths={selectedPaths} onToggle={toggleSelectPath} showRepo />
+          <SkillGrid
+            skills={filteredAllSkills}
+            loading={allSkillsLoading}
+            selectMode={selectMode}
+            selectedPaths={selectedPaths}
+            onToggle={toggleSelectPath}
+            showRepo
+          />
         )}
       </div>
 
@@ -672,8 +714,9 @@ export default function StarredRepos() {
   )
 }
 
-function RepoGrid({ repos, repoSkillCounts, onEnter, onUpdate, onRemove }: {
+function RepoGrid({ repos, loading, repoSkillCounts, onEnter, onUpdate, onRemove }: {
   repos: any[]
+  loading: boolean
   repoSkillCounts: Map<string, number>
   onEnter: (url: string) => void
   onUpdate: (url: string) => void
@@ -689,6 +732,14 @@ function RepoGrid({ repos, repoSkillCounts, onEnter, onUpdate, onRemove }: {
       host,
       displayName: repo?.name || sourceName || repo?.url || '',
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-32 text-sm" style={{ color: 'var(--text-muted)' }}>
+        {t('common.loading')}
+      </div>
+    )
   }
 
   if (repos.length === 0) {
@@ -777,8 +828,9 @@ function RepoGrid({ repos, repoSkillCounts, onEnter, onUpdate, onRemove }: {
   )
 }
 
-function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = false }: {
+function SkillGrid({ skills, loading, selectMode, selectedPaths, onToggle, showRepo = false }: {
   skills: any[]
+  loading: boolean
   selectMode: boolean
   selectedPaths: Set<string>
   onToggle: (path: string) => void
@@ -786,7 +838,17 @@ function SkillGrid({ skills, selectMode, selectedPaths, onToggle, showRepo = fal
 }) {
   const { t } = useLanguage()
   const visibility = useSkillStatusVisibility('starredRepos')
-  if (skills.length === 0) {
+  const listState = getStarredRepoListState({ isLoading: loading, skillCount: skills.length })
+
+  if (listState === 'loading') {
+    return (
+      <div className="flex items-center justify-center h-32 text-sm" style={{ color: 'var(--text-muted)' }}>
+        {t('common.loading')}
+      </div>
+    )
+  }
+
+  if (listState === 'empty') {
     return (
       <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
         <p className="text-sm">{t('starred.noSkills')}</p>
