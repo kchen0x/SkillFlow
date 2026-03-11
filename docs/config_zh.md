@@ -19,6 +19,20 @@
 | `config_local.json` | 机器相关路径、敏感信息和本地运行状态 | 否 |
 | `star_repos.json` | 收藏仓库的本地缓存元数据 | 是 |
 | `meta/<skill-id>.json` | 每个已安装 Skill 的 sidecar 元数据 | 是 |
+| `cache/viewstate/*.json` | 本地派生 UI / 缓存快照 | 否 |
+
+## `cache/viewstate/*.json`
+
+路径：`<AppDataDir>/cache/viewstate/*.json`
+
+这些文件保存只属于当前设备的派生状态，用于加快页面进入速度并减少重复目录扫描。典型内容包括已安装 Skill 卡片快照和工具 presence 索引。
+
+规则：
+
+- 它们只是性能优化产物，不是权威真值。
+- 必须从 `skills/`、`meta/`、工具目录等现有真值层文件重建。
+- 不能被云备份上传，也不能反向写回任何可同步元数据文件。
+- 不同设备上的缓存内容不同是正常且无害的。
 
 ## `config.json`
 

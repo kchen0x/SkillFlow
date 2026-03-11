@@ -48,6 +48,9 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 - Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light**.
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
 - Window close button behavior: clicking the top-left close button hides the main window and keeps the app running in background.
+- Primary-page refresh behavior: route transitions remount the page subtree keyed by `location.pathname`, so re-entering pages such as **My Skills**, **My Tools**, **My Prompts**, and **Starred Repos** fetches fresh backend state again without requiring a manual in-page refresh.
+- Startup smoothing behavior: after the shell is ready, background startup jobs are staggered instead of launching together, so the first interactive second is less likely to compete with skill update checks, starred refresh, app update checks, and git startup pull at the same time.
+- Background memory trim behavior: if the window stays hidden or inactive for about 30 seconds, SkillFlow unmounts the current routed page tree to release page-local React state and large loaded datasets. When the window becomes active again, the current route mounts again and reloads fresh data automatically.
 - Initial window sizing: on launch, SkillFlow first restores the most recently saved window size from local-only `config_local.json`; if none is saved yet, it sizes itself against the current display with a larger desktop-friendly default, clamps to the available screen, and centers the window.
 - macOS tray behavior: the app creates a monochrome status icon in the menu-bar status area on startup; after the main window is hidden, the Dock icon is removed and only the menu-bar icon remains. Use native single-click to open a menu with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`.
 - Windows tray behavior: app remains in the system notification area with the app's own icon; click the tray icon to open a menu with `Show SkillFlow` and `Exit`.
@@ -101,6 +104,9 @@ Central library for managing your skill collection.
 ### Skill Grid
 
 - Grid layout: 3 columns, 4 on wide screens.
+- List performance behavior: page entry now prefers a local derived snapshot for installed skills when dependencies still match, and route transitions use a lighter fade-only animation to reduce navigation jank.
+- Dense-list animation fallback: when the visible Dashboard list exceeds 18 cards, staggered per-card entry motion is disabled automatically and cards render immediately instead of animating one-by-one.
+- Card status-strip overflow: status badges and pushed-tool icons now use deterministic truncation with compact `+N` overflow instead of per-card runtime measurement.
 - **Empty state** — "No Skills found" message with usage hint.
 - **Right-click skill menu** — includes move-to-category actions for every category other than the current one, plus delete and update where applicable.
 - **Drag-and-drop** — drag a skill card to a category in the sidebar to move it; when drag starts, a smaller floating card follows the cursor; once a sidebar category is targeted, the original card collapses into a thin line until drag ends. Dragging a folder from the OS file manager onto the window imports it directly.
@@ -441,6 +447,7 @@ When the **git** provider is selected:
 - **Repository bootstrap** — if the Skills directory is not a git repo, SkillFlow auto-initializes it and configures `origin` from the configured repo URL.
 - **Remote binding self-heal** — if `origin` is missing or changed, SkillFlow auto-adds/updates it before pull/push.
 - **Startup pull** — on every app launch, SkillFlow runs `git pull` on the Git backup root directory to fetch the latest remote changes.
+- **Staggered startup background work** — the startup pull is still automatic, but it no longer starts in the same burst as every other startup check; SkillFlow spreads those jobs out after the UI becomes interactive.
 - **Missing branch tolerance** — if the configured remote branch does not exist yet (first-time setup), startup pull is skipped without failing the backup page.
 - **Auto-push after mutations** — same post-mutation trigger as object storage; runs `git add -A && git commit && git push`.
 - **Periodic auto-sync** — controlled by the "Auto-sync interval" setting (in minutes, 0 = disabled). A background timer fires `autoBackup()` on the configured interval.
@@ -805,6 +812,7 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 - The page mirrors **My Skills** with a left category sidebar and a right content pane.
 - Categories support **Default** as the built-in fallback group.
+- Just like the other primary routes, re-entering **My Prompts** remounts the page and reloads current prompt data instead of keeping a long-lived stale page instance.
 - Prompt cards are filtered by selected category, keyword search, and A-Z / Z-A sorting.
 - Search supports logical `and` / `or` syntax, for example `review and golang` or `summary or changelog`.
 

@@ -11,13 +11,14 @@ import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
 import GitHubInstallDialog from '../components/GitHubInstallDialog'
 import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine } from 'lucide-react'
-import { gridContainerVariants, cardVariants } from '../lib/motionVariants'
+import { gridContainerVariants, cardVariants, shouldAnimateSkillCards } from '../lib/motionVariants'
 import SkillListControls from '../components/SkillListControls'
 import { getListLoadState } from '../lib/listLoadState'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { ToolIcon } from '../config/toolIcons'
+import { subscribeToEvents } from '../lib/wailsEvents'
 
 export default function Dashboard() {
   const { t } = useLanguage()
@@ -60,7 +61,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     load()
-    EventsOn('update.available', load)
+
+    return subscribeToEvents(EventsOn, [
+      ['update.available', load],
+    ])
   }, [load])
 
   const filtered = useMemo(
@@ -73,6 +77,7 @@ export default function Dashboard() {
     [skills, selectedCat, search, sortOrder],
   )
   const listState = getListLoadState({ isLoading: loading, itemCount: filtered.length })
+  const animateCards = shouldAnimateSkillCards(filtered.length)
 
   const skillCounts = skills.reduce((acc, sk) => {
     const category = sk.category || 'Default'
@@ -401,7 +406,7 @@ export default function Dashboard() {
               animate="animate"
             >
               {filtered.map(sk => (
-                <motion.div key={sk.id} variants={filtered.length <= 30 ? cardVariants : undefined}>
+                <motion.div key={sk.id} variants={animateCards ? cardVariants : undefined}>
                   <SkillCard
                     skill={{
                       id: sk.id,

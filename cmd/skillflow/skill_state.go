@@ -277,18 +277,21 @@ func scanToolSkillsRaw(ctx context.Context, adapter toolsync.ToolAdapter, scanDi
 }
 
 func (a *App) buildToolPresenceIndex(idx *skill.InstalledIndex) *toolPresenceIndex {
-	presence := &toolPresenceIndex{toolsByKey: map[string][]string{}}
+	presence, _ := measureOperation(a, "build_tool_presence_index", func() (*toolPresenceIndex, error) {
+		cfg, err := a.config.Load()
+		if err != nil {
+			a.logErrorf("build tool presence index failed: load config err=%v", err)
+			return &toolPresenceIndex{toolsByKey: map[string][]string{}}, nil
+		}
 
-	cfg, err := a.config.Load()
-	if err != nil {
-		a.logErrorf("build tool presence index failed: load config err=%v", err)
-		return presence
-	}
+		snapshot, err := a.buildToolPresenceSnapshot(cfg, idx)
+		if err != nil {
+			a.logErrorf("build tool presence index failed: build snapshot err=%v", err)
+			return &toolPresenceIndex{toolsByKey: map[string][]string{}}, nil
+		}
 
-	for _, tool := range cfg.Tools {
-		a.indexToolPushPresence(presence, idx, tool)
-	}
-
+		return &toolPresenceIndex{toolsByKey: snapshot.ToolsByKey}, nil
+	})
 	return presence
 }
 

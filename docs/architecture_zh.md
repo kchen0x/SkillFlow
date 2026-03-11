@@ -77,7 +77,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 1. 解析 `config.AppDataDir()`
 2. 通过 `core/config.Service` 加载配置
 3. 初始化滚动日志
-4. 创建 Skill 存储和收藏仓库存储
+4. 创建 Skill 存储、收藏仓库存储，以及本地派生视图缓存管理器
 5. 注册工具适配器与云服务商
 6. 启动后端事件转发
 7. 启动云备份自动同步计时器
@@ -87,13 +87,15 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 1. 恢复或计算窗口初始尺寸
 2. 初始化系统托盘
 3. 延迟调度启动后的后台任务
+4. 将这些任务错峰展开，避免首个可交互阶段同时发起所有远端检查
+5. 在前端维护一个活动状态机，用于在长时间后台或不活跃后卸载路由页面树
 
 当前延迟后台任务包括：
 
+- Git 备份启动拉取（最早）
 - Skill 更新检测
 - 收藏仓库刷新
 - 应用版本更新检测
-- Git 备份启动拉取
 
 `App.beforeClose()` 会持久化当前窗口尺寸，`App.shutdown()` 会清理托盘资源。
 
@@ -111,7 +113,9 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
   skills/                 已安装 Skill 库
   meta/                   每个已安装 Skill 的 JSON sidecar
   prompts/                提示词库
-  cache/                  收藏仓库的本地克隆缓存
+  cache/
+    <repo-cache>/         收藏仓库的本地克隆缓存
+    viewstate/            本地专属的派生 UI 快照
   logs/
     skillflow.log
     skillflow.log.1
@@ -127,6 +131,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 - `meta/*.json`、`star_repos.json` 等可同步文件中的本地路径，在目标位于同步根目录内时必须以 **正斜杠相对路径** 形式持久化。
 - 如果 `SkillsStorageDir` 被移出默认应用数据目录，同步根目录会变成 `skills/` 与 `meta/` 的共同父目录。
 - 日志文件固定为 **两个**，每个 **1MB** 上限：`skillflow.log` 与 `skillflow.log.1`。
+- `cache/viewstate/*.json` 只保存可重建的派生状态，例如已安装 Skill 快照和工具 presence 索引。这些文件只存在于本机，绝不能被视为可同步真值。
 
 ---
 
@@ -148,6 +153,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 | `core/skillkey` | Git Skill 与内容型 Skill 的稳定逻辑主键生成 |
 | `core/sync` | `ToolAdapter` 接口和基于文件系统的适配器实现 |
 | `core/update` | 基于 GitHub commit 的已安装 Git Skill 更新检测 |
+| `core/viewstate` | 本地派生快照缓存、fingerprint 计算，以及增量工具 presence 辅助逻辑 |
 
 ---
 
@@ -159,6 +165,7 @@ Wails 应用包必须保持扁平，因此通过文件名前缀划分职责：
 |--------|------|
 | `main.go`、`version.go` | 入口与构建时版本号 |
 | `app.go` | 主 `App` 结构体及大部分前端可调用方法 |
+| `app_viewstate.go`、`app_perf.go` | 本地快照缓存、fingerprint 计算和轻量性能计时辅助 |
 | `app_prompt.go` | 提示词 CRUD 与提示词导入导出 |
 | `app_update.go` | 应用版本检测、下载、应用更新、跳过版本逻辑 |
 | `app_log.go` | 日志初始化与 Wails runtime 日志桥接 |
@@ -167,6 +174,22 @@ Wails 应用包必须保持扁平，因此通过文件名前缀划分职责：
 | `adapters.go`、`providers.go` | 注册 `core/sync` 适配器与 `core/backup` 服务商 |
 | `events.go`、`push_conflict.go`、`skill_state.go` | 前端 DTO 与跨页面状态聚合 |
 | `tray_*.go`、`single_instance_*.go`、`window_*.go` | 平台相关的壳层行为 |
+
+---
+
+## 派生视图缓存
+
+为了让页面切换和大列表渲染更流畅，后端现在会在 `cache/viewstate/` 下维护本地专属的派生缓存。
+
+- `ListSkills()` 采用 snapshot-first：当已安装 Skill 的 fingerprint 匹配时，会直接返回缓存的 `InstalledSkillEntry[]`，而不是立刻重新构建 push presence。
+- 已安装 Skill fingerprint 由同步相关的 skill 元数据和工具 push 目录摘要共同决定，因此用户切走页面再回来时，如果这些依赖发生变化，就会重新读取当前真值。
+- 工具 push presence 按工具粒度增量重建，使用每个工具自己的 fingerprint，而不是每次请求都把所有配置过的 `PushDir` 全量重扫一遍。
+
+这些缓存只是性能优化产物：
+
+- 始终从权威磁盘状态重建
+- 删除后可自动恢复
+- 不会跨设备同步
 
 ---
 
@@ -355,6 +378,7 @@ SkillFlow 使用 `core/notify.Hub` 作为缓冲事件总线：
 - 收藏仓库：`star.sync.progress`、`star.sync.done`
 - Git 备份：`git.sync.started`、`git.sync.completed`、`git.sync.failed`、`git.conflict`
 - 应用更新：`app.update.available`、`app.update.download.done`、`app.update.download.fail`
+- 窗口生命周期：`app.window.visibility.changed`
 
 ### Wails 生成绑定
 
@@ -392,6 +416,12 @@ cmd/skillflow/frontend/
 - `src/i18n/`：中英文翻译词典
 - `src/lib/`：列表、搜索、剪贴板、状态管理等共享辅助
 - `tests/`：不依赖 Wails 打包流程的前端单测
+
+`App.tsx` 还负责应用活动状态机：
+
+- 把后端的隐藏/显示信号与浏览器侧的 focus / visibility 合并成统一的前后台模型
+- 进入后台约 30 秒后，卸载路由页面树，释放页面局部数组和提示词正文等内存
+- 窗口再次激活时，当前路由会从头挂载并重新加载最新数据
 
 前端通过 Wails 生成模块直接导入后端方法，例如：
 
@@ -456,4 +486,4 @@ import { ListSkills } from '../../wailsjs/go/main/App'
 
 ---
 
-*最后更新：2026-03-10*
+*最后更新：2026-03-11*

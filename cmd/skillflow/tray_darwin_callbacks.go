@@ -38,6 +38,7 @@ func skillflowTrayOnApplicationWillHide() {
 func skillflowTrayOnApplicationDidHide() {
 	go withDarwinTrayApp(func(app *App) {
 		applyDarwinAccessoryPolicy()
+		app.publishWindowVisibilityChanged(false)
 		app.logInfof("main window hide completed, mode=menu_bar")
 	})
 }

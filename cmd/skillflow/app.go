@@ -25,6 +25,7 @@ import (
 	"github.com/shinerio/skillflow/core/skillkey"
 	toolsync "github.com/shinerio/skillflow/core/sync"
 	"github.com/shinerio/skillflow/core/update"
+	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -44,6 +45,7 @@ type App struct {
 	config             *config.Service
 	starStorage        *coregit.StarStorage
 	cacheDir           string
+	viewCache          *viewstate.Manager
 	startupOnce        sync.Once
 	initialWindowState config.WindowState
 	autostartFactory   func() (launchAtLoginController, error)
@@ -57,6 +59,9 @@ type App struct {
 	backupResultMu   sync.RWMutex
 	lastBackupResult []backup.RemoteFile
 	lastBackupAt     time.Time
+	windowVisibilityMu   sync.Mutex
+	windowVisibilityInit bool
+	windowVisible        bool
 }
 
 const defaultCategoryName = "Default"
@@ -100,6 +105,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.storage = skill.NewStorage(cfg.SkillsStorageDir)
 	a.cacheDir = filepath.Join(dataDir, "cache")
+	a.viewCache = viewstate.NewManager(filepath.Join(a.cacheDir, "viewstate"))
 	a.starStorage = coregit.NewStarStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
 	registerAdapters()
 	registerProviders()
@@ -142,19 +148,20 @@ func (a *App) domReady(ctx context.Context) {
 
 func (a *App) startBackgroundStartupTasks() {
 	a.startupOnce.Do(func() {
-		a.logDebugf("startup background tasks scheduled, delay=750ms")
-		time.AfterFunc(750*time.Millisecond, func() {
-			a.logDebugf("startup background tasks started")
-			go a.checkUpdatesOnStartup()
-			go a.updateStarredReposOnStartup()
-			go a.checkAppUpdateOnStartup()
-			go a.gitPullOnStartup()
+		tasks := a.startupBackgroundTaskPlan()
+		a.logDebugf("startup background tasks scheduled, count=%d", len(tasks))
+		scheduleStartupBackgroundTasks(tasks, func(task startupBackgroundTask) {
+			time.AfterFunc(task.delay, func() {
+				a.logDebugf("startup background task started: task=%s delay=%s", task.name, task.delay)
+				task.run()
+			})
 		})
 	})
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
 	a.persistCurrentWindowSize(ctx)
+	a.publishWindowVisibilityChanged(false)
 	a.logInfof("application quit started")
 	return false
 }
@@ -170,6 +177,7 @@ func (a *App) showMainWindow() {
 		a.logErrorf("main window show failed: %v", err)
 		return
 	}
+	a.publishWindowVisibilityChanged(true)
 	a.logInfof("main window show completed")
 }
 
@@ -181,6 +189,7 @@ func (a *App) hideMainWindow() {
 		a.logErrorf("main window hide failed: %v", err)
 		return
 	}
+	a.publishWindowVisibilityChanged(false)
 	if goruntime.GOOS != "darwin" {
 		a.logInfof("main window hide completed")
 	}
@@ -574,17 +583,25 @@ func (a *App) gitProxyURL() string {
 // --- Skills ---
 
 func (a *App) ListSkills() ([]InstalledSkillEntry, error) {
-	skills, err := a.storage.ListAll()
-	if err != nil {
-		return nil, err
-	}
-	for _, sk := range skills {
-		if sk.Category == "" {
-			sk.Category = defaultCategoryName
+	return measureOperation(a, "list_skills", func() ([]InstalledSkillEntry, error) {
+		fingerprint, fingerprintErr := a.installedSkillsFingerprint()
+		if fingerprintErr == nil {
+			var cached []InstalledSkillEntry
+			state, err := a.ensureViewCache().Load(installedSkillsSnapshotName, fingerprint, &cached)
+			if err == nil && state == viewstate.StateHit {
+				return cached, nil
+			}
 		}
-	}
-	installedIndex := skill.BuildInstalledIndex(skills)
-	return a.buildInstalledSkillEntries(skills, a.buildToolPresenceIndex(installedIndex)), nil
+
+		entries, err := a.listSkillsUncached()
+		if err != nil {
+			return nil, err
+		}
+		if fingerprint, err := a.installedSkillsFingerprint(); err == nil {
+			_ = a.ensureViewCache().Save(installedSkillsSnapshotName, fingerprint, entries)
+		}
+		return entries, nil
+	})
 }
 
 func (a *App) ListCategories() ([]string, error) {
@@ -1910,6 +1927,28 @@ func (a *App) ListStarredRepos() ([]coregit.StarredRepo, error) {
 }
 
 func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
+	return measureOperation(a, "list_all_star_skills", func() ([]coregit.StarSkill, error) {
+		fingerprint, fingerprintErr := a.allStarSkillsFingerprint()
+		if fingerprintErr == nil {
+			var cached []coregit.StarSkill
+			state, err := a.ensureViewCache().Load(allStarSkillsSnapshotName, fingerprint, &cached)
+			if err == nil && state == viewstate.StateHit {
+				return cached, nil
+			}
+		}
+
+		skills, err := a.listAllStarSkillsUncached()
+		if err != nil {
+			return nil, err
+		}
+		if fingerprint, err := a.allStarSkillsFingerprint(); err == nil {
+			_ = a.ensureViewCache().Save(allStarSkillsSnapshotName, fingerprint, skills)
+		}
+		return skills, nil
+	})
+}
+
+func (a *App) listAllStarSkillsUncached() ([]coregit.StarSkill, error) {
 	repos, err := a.starStorage.Load()
 	if err != nil {
 		return nil, err

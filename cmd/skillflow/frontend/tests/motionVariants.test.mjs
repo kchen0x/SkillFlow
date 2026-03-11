@@ -1,0 +1,20 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { pageVariants, shouldAnimateSkillCards } from '../.tmp-tests/motionVariants.js'
+
+test('pageVariants uses fade-only transitions for route changes', () => {
+  assert.deepEqual(pageVariants.initial, { opacity: 0 })
+  assert.deepEqual(pageVariants.animate, {
+    opacity: 1,
+    transition: { duration: 0.16, ease: 'easeOut' },
+  })
+  assert.deepEqual(pageVariants.exit, {
+    opacity: 0,
+    transition: { duration: 0.1 },
+  })
+})
+
+test('shouldAnimateSkillCards disables per-card motion for dense lists', () => {
+  assert.equal(shouldAnimateSkillCards(18), true)
+  assert.equal(shouldAnimateSkillCards(19), false)
+})

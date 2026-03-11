@@ -3,6 +3,7 @@ import { BackupNow, GetConfig, GetLastBackupChanges, GetLastBackupCompletedAt, R
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { Cloud, Download, RefreshCw, Upload } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
+import { subscribeToEvents } from '../lib/wailsEvents'
 
 type BackupChange = {
   path: string
@@ -96,28 +97,31 @@ export default function Backup() {
         if (active) setLoading(false)
       })
 
-    EventsOn('backup.progress', (data: string) => {
-      try { setCurrentFile(JSON.parse(data).currentFile ?? '') } catch {}
-    })
-    EventsOn('backup.completed', (data: string) => {
-      const payload = parseCompletedPayload(data)
-      setResultStatus('done')
-      setFiles(payload.files)
-      setLastCompletedAt(payload.completedAt)
-      setCurrentFile('')
-    })
-    EventsOn('backup.failed', () => setResultStatus('error'))
-    EventsOn('git.sync.completed', (data: string) => {
-      const payload = parseCompletedPayload(data)
-      setResultStatus('done')
-      setFiles(payload.files)
-      setLastCompletedAt(payload.completedAt)
-      setCurrentFile('')
-    })
-    EventsOn('git.sync.failed', () => setResultStatus('error'))
+    const cleanup = subscribeToEvents(EventsOn, [
+      ['backup.progress', (data: string) => {
+        try { setCurrentFile(JSON.parse(data).currentFile ?? '') } catch {}
+      }],
+      ['backup.completed', (data: string) => {
+        const payload = parseCompletedPayload(data)
+        setResultStatus('done')
+        setFiles(payload.files)
+        setLastCompletedAt(payload.completedAt)
+        setCurrentFile('')
+      }],
+      ['backup.failed', () => setResultStatus('error')],
+      ['git.sync.completed', (data: string) => {
+        const payload = parseCompletedPayload(data)
+        setResultStatus('done')
+        setFiles(payload.files)
+        setLastCompletedAt(payload.completedAt)
+        setCurrentFile('')
+      }],
+      ['git.sync.failed', () => setResultStatus('error')],
+    ])
 
     return () => {
       active = false
+      cleanup()
     }
   }, [])
 

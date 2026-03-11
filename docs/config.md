@@ -21,6 +21,20 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, and `star_repo
 | `config_local.json` | Machine-specific paths, secrets, and local runtime state | No |
 | `star_repos.json` | Starred repository cache metadata | Yes |
 | `meta/<skill-id>.json` | One sidecar metadata file per installed skill | Yes |
+| `cache/viewstate/*.json` | Local derived UI/cache snapshots | No |
+
+## `cache/viewstate/*.json`
+
+Path: `<AppDataDir>/cache/viewstate/*.json`
+
+These files store local-only derived state used to speed up page entry and reduce repeated directory scans. Typical payloads include installed-skill card snapshots and tool-presence indexes.
+
+Rules:
+
+- They are optimization artifacts, not source-of-truth records.
+- They must be rebuilt from `skills/`, `meta/`, tool directories, and other existing truth-layer files.
+- They must not be uploaded by cloud backup or written back into synced metadata files.
+- Cross-device cache differences are expected and harmless.
 
 ## `config.json`
 

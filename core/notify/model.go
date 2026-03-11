@@ -23,6 +23,7 @@ const (
 	EventAppUpdateAvailable    EventType = "app.update.available"
 	EventAppUpdateDownloadDone EventType = "app.update.download.done"
 	EventAppUpdateDownloadFail EventType = "app.update.download.fail"
+	EventAppWindowVisibilityChanged EventType = "app.window.visibility.changed"
 )
 
 type Event struct {
@@ -62,4 +63,8 @@ type StarSyncProgressPayload struct {
 type GitConflictPayload struct {
 	Message string   `json:"message"`
 	Files   []string `json:"files,omitempty"`
+}
+
+type AppWindowVisibilityPayload struct {
+	Visible bool `json:"visible"`
 }

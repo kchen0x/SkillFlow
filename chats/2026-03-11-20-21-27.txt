@@ -1,0 +1,283 @@
+[User]
+目前应用启动卡顿明显，页面切换，卡片展示动画等不流畅。extra hard thinking 如何改进性能，减少系统cpu,memory占用
+
+[Assistant]
+我先把现状结论说清楚：
+
+1. 前端卡顿不是单点问题。
+`Dashboard` 的技能卡片里，`SkillStatusStrip.tsx` 给每张卡都挂了 `ResizeObserver`，还会反复测量宽度；卡片一多，动画和滚动都会被拖慢。
+
+2. 页面切换成本偏高。
+`App.tsx` 用 `AnimatePresence + motion` 包整页路由，切页时会整页重新做进出场动画，页面树较大时更明显。
+
+3. 启动首屏会做过重的后端扫描。
+`app.go` 的 `ListSkills()` 会连带扫描所有工具的 `PushDir`；同时启动后 750ms 又并发触发更新检查、star repo 刷新、app 更新检查、git pull。这会把 UI 初始阶段和后台 I/O/CPU 抢在一起。
+
+先确认一个方向：你希望我这次优先做“低风险、立刻见效”的优化，还是直接做“更大幅度的性能重构（会改动更多前后端路径）”？
+
+[User]
+更大幅度的性能重构，但是不要影响现有功能，尤其是要考虑云同步到其他设备后不要产生问题。
+
+[User]
+可以的
+
+[Assistant]
+再确认一个关键取舍：你是否接受“动画保留，但改成自适应降级”，例如列表超过一定数量时关闭逐卡入场、页面切换改为更轻的淡入、拖拽和悬浮效果只保留必要反馈？
+
+[User]
+可以的
+
+[User]
+可以，但是你考虑到从远程同步过来的新的skill，新的star repo等资源吗？这些会和你本地缓存不一致吗？
+
+[User]
+采用方案2，但是一定要保证用户即使长时间不操作页面，也能实现最终一致性，即页面展示的数据要包含云同步的解耦股
+
+[User]
+好的，继续
+
+[User]
+好的
+
+[User]
+好的
+
+[Assistant]
+设计稿和实现计划已经落库并提交。设计文档在 `docs/superpowers/specs/2026-03-11-performance-rearchitecture-design.md`，实现计划在 `docs/plans/2026-03-11-performance-rearchitecture.md`。最新提交是 `b918380 docs: add performance rearchitecture design and plan`，当前工作区干净。
+
+计划已完成并保存到 `docs/plans/2026-03-11-performance-rearchitecture.md`。两种执行方式：
+
+1. `Subagent-Driven（当前会话）`：我按计划逐任务推进，每个任务后做检查和收口，适合现在直接开工。
+2. `Parallel Session（独立会话）`：你开一个新会话，按 `executing-plans` 批量执行这份计划，适合长链路改造。
+
+你选哪一种？
+
+[User]
+1
+
+[User]
+go on
+
+[User]
+页面静置先不用刷新了，但是用户切换页面后需要刷新
+
+[User]
+go on
+
+[Assistant]
+继续按现有性能重构计划推进。我先补齐前端事件监听泄漏和页面切换后的刷新链路，然后再跑前后端验证，确认这轮改动没有引入云同步一致性问题。
+
+[Assistant]
+使用 `subagent-driven-development`、`test-driven-development` 和 `systematic-debugging` 来继续执行现有计划，当前这一步聚焦在页面重入时的刷新触发与事件订阅清理，避免切页后累积监听器带来的 CPU 抖动。
+
+[Assistant]
+现状已经确认：`Dashboard`、`Backup`、`App` 都存在 `EventsOn(...)` 未解绑的路径，切页后会叠加监听器；`StarredRepos` 已经是正确模式。我接下来先补一个最小回归测试，锁住“注册后必须在清理阶段解绑”的行为，再改实现。
+
+[Assistant]
+我现在要加一个最小测试支点：抽出统一的事件订阅清理助手，并先让它以“缺少实现”的方式失败。这样后面的页面改动都能复用同一套解绑逻辑，风险更低。
+
+[Assistant]
+测试已经进入红灯阶段，我在确认失败是否正好落在“缺少订阅清理助手”这个点上，而不是别的编译噪音。随后我会补最小实现，再把三个页面一起切过去。
+
+[Assistant]
+红灯符合预期，失败点就是 `src/lib/wailsEvents.ts` 缺失。现在我补这个最小实现，并把 `App`、`Dashboard`、`Backup` 接到统一清理逻辑上，避免切页后监听器继续存活。
+
+[Assistant]
+监听器清理这块已经落地并过了单元测试。现在我重新扫一遍前端订阅点，确认没有剩余的高频泄漏路径，然后做整体验证。
+
+[Assistant]
+当前这轮核心代码改动已经收口，接下来是强校验：前端单测和构建、后端包测试都要重新跑一遍，确认性能修复没有把缓存一致性或页面数据刷新链路弄坏。
+
+[Assistant]
+构建和后端验证都过了。我再补一轮快速单测和一次针对本轮差异的代码审查，主要盯监听器清理、页面重入刷新、以及本地派生缓存不会污染云同步数据。
+
+[Assistant]
+我在顺手做一轮差异审查，确认这轮没有把“切页即刷新、缓存只做本地派生、不进入云同步真值层”这几个约束破坏掉。接着我会核对计划文件，看看是否还有未完成的性能任务需要继续补。
+
+[Assistant]
+云同步这一条确认了：`cache/` 整体就已经被备份过滤，不会把 `cache/viewstate` 同步到其他设备，所以本地派生缓存不会污染远端真值。接下来我转回启动阶段，看看 `domReady` 后那串后台任务是不是还挤在首屏附近。
+
+[Assistant]
+启动期还有空间。现在 `domReady` 后 750ms 会并发打出四个后台任务，这正好会和首屏交互抢 CPU / I/O。我准备把它改成分层调度：先保留最关键的同步任务，其他检查错峰启动，降低首屏抖动。
+
+[Assistant]
+我要给启动调度补一个可测试的最小抽象，不直接在 `time.AfterFunc` 上硬改。先写一个顺序调度测试，锁定“任务错峰、按顺序执行”的新行为，再切到生产代码。
+
+[Assistant]
+红灯符合预期，缺口就是启动调度抽象本身。现在我补一个小的 `app_startup.go`，只承载调度计划和错峰注册，不碰现有后台任务的业务逻辑。
+
+[Assistant]
+启动调度测试已经转绿。我补一处小收口，把每个后台任务的日志写成可检索的稳定格式，后续排查启动卡顿时能直接看到哪一项在什么时刻启动。
+
+[Assistant]
+刚才那处日志收口在 Go 里不能直接比较函数值，我直接把调度器签名改成传整个任务对象，避免埋一个编译错误进去。然后重新跑整套验证。
+
+[Assistant]
+我要把这次新增的启动错峰调度补到文档里，避免架构说明和实际代码不一致。更新量会控制在高信号范围，只写用户能感知到的“启动更平滑”和内部“后台任务错峰”这两个点。
+
+[Assistant]
+文档主体已经跟上实现，我再把更新时间和新增测试一起跑完，避免最后留下“代码对了、文档日期还是旧的”这种低级不一致。
+
+[Assistant]
+最后一轮是完整验证，不再只跑增量测试。我要重新执行前端单测、前端构建、`cmd/skillflow` 和 `core/viewstate`，把本轮新增的监听器清理和启动错峰调度一起覆盖进去。
+
+[Assistant]
+这轮又补了两块高影响优化。
+
+前端方面，我新增了统一的事件解绑助手 `wailsEvents.ts`，并把 `App.tsx`、`Dashboard.tsx`、`Backup.tsx` 接到这套清理逻辑上。这样页面切换后不会继续累积 `EventsOn(...)` 监听器，能明显降低切页后越来越卡、CPU 抖动和内存滞留。按你最新要求，页面静置时不自动刷新；重新进入页面时仍会刷新，因为路由子树按 `location.pathname` 重建。
+
+后端方面，我把启动期的后台任务改成错峰调度，代码在 `app_startup.go` 和 `app.go`。现在不再是 `domReady` 后 750ms 四个任务一起起飞，而是分批启动：`git pull` 750ms，技能更新检查 3s，收藏仓库刷新 5.25s，应用更新检查 8s。这样首屏可交互的前几秒不会和所有远程检查同时抢资源。云同步安全这块也确认过了：`cache/` 本来就在备份过滤里，所以 `cache/viewstate` 不会同步到其他设备，不会污染真值层。
+
+我已经重新验证过：`npm run test:unit`、`npm run build`、`go test ./cmd/skillflow`、`go test ./core/viewstate/...` 全部通过。文档也同步更新了 `docs/features.md`、`docs/features_zh.md`、`docs/architecture.md`、`docs/architecture_zh.md`、`README.md`、`README_zh.md`。如果你要，我下一步可以继续做最后一轮性能收尾，重点放在 hover 元数据请求去抖/防过期返回，以及大列表页的进一步渲染削峰。
+
+[User]
+目前应用后台运行（窗口未激活）的内存占用有100多M，看看有无优化空间
+
+[User]
+[Image #1: Activity Monitor screenshot showing wails://wails 42.9MB, SkillFlow 33.3MB, SkillFlow Graphics and Media 26.1MB, SkillFlow Networking 3.0MB]
+
+[User]
+目前应用后台运行（窗口未激活）的内存占用有100多M，看看有无优化空间
+
+[Assistant]
+我先从“隐藏窗口后为什么还常驻 100MB+”这个问题做根因排查，重点看两类东西：一是 Wails/WebView 本身的基线进程占用，二是我们自己的后台定时器、页面状态和缓存是否在窗口隐藏后还继续保留或增长。
+
+[Assistant]
+我先把“可优化空间”和“框架基线”分开看。你截图里这 100 多 MB 是 4 个进程叠加出来的，里面很可能有一部分是 Wails/WebKit 在 macOS 下的固定基线，不全是我们自己的业务内存。下一步我会把隐藏窗口相关生命周期、定时器和前端常驻状态都扫一遍，看看哪些是我们能主动释放的。
+
+[Assistant]
+我已经有一个初步判断：这 100 多 MB 里，有相当一部分是 Wails/WebKit 在 macOS 的多进程基线，不可能全压到很低；但我们自己还有一块可优化空间，主要在“隐藏窗口后仍保留当前页面的大块 React 状态和已加载数据”。我再把事件模型和生命周期钩子看完，然后给你一组带取舍的方案。
+
+[Assistant]
+我把可优化空间收敛成几条了：
+
+1. 你截图里的 `100MB+` 不是全是业务内存。
+按截图拆开看，大约是：
+- `wails://wails` 42.9MB
+- `SkillFlow` 主进程 33.3MB
+- `SkillFlow Graphics and Media` 26.1MB
+- `SkillFlow Networking` 3.0MB
+
+这说明有相当一部分是 Wails/WebKit 在 macOS 下的多进程基线，尤其是渲染/GPU 进程。这个部分能优化，但不可能压到非常低。
+
+2. 我们自己还有一块明确的可回收内存。
+当前代码里，窗口隐藏或失焦后没有任何“内存收缩”动作：
+- `Prompts.tsx` 会把所有 prompt 的完整 `content` 常驻在前端状态里。
+- `app_prompt.go` 的 `ListPrompts()` 直接把所有 prompt 的完整内容读出来；`storage.go` 也是全量加载。
+- `StarredRepos.tsx` 会同时保留 `repos`、`allSkills`、`repoSkills` 等多份列表。
+- 隐藏窗口相关后端回调目前只记日志，没有给前端发“进入后台/恢复前台”的生命周期事件：`tray_darwin_callbacks.go`。
+
+3. 我建议的方案分三档：
+- 方案 A，低风险，推荐：窗口隐藏或失焦一段时间后，主动释放当前页面的大数组状态；恢复时重新加载当前路由数据。
+- 方案 B，中风险，中收益：把 Prompt 列表改成“元数据 + 预览”，完整内容按需加载，不再让 `ListPrompts()` 常驻全量文本。
+- 方案 C，高风险，不推荐：隐藏时销毁并重建整个 WebView/窗口，内存会降更多，但唤起变慢且容易影响托盘/恢复链路。
+
+我建议先做方案 A，再视效果决定是否继续叠加方案 B。你是否接受“窗口隐藏或失焦超过一段时间后主动释放当前页面内存，重新唤起时自动重载当前页面数据”这个取舍？
+
+[User]
+方案A
+
+[Assistant]
+采用方案 A。我先把“后台隐藏后的内存收缩”落成一个小计划，再补最小回归测试，确保只释放页面内存、不影响数据一致性和重新唤起后的自动刷新。
+
+[Assistant]
+我在用 `writing-plans` 和 `subagent-driven-development` 的思路把这轮改动拆成小任务：先做前端路由树后台卸载，再补后端窗口可见性事件，最后做文档和验证。先把这份小计划落到 `docs/plans`，然后立刻按 TDD 执行。
+
+[Assistant]
+我现在进入红灯阶段：先把前端状态机测试和后端事件去重测试写出来，确认它们按预期失败，再补最小实现。这样能避免“看起来在省内存，实际只是偶然工作”的情况。
+
+[Assistant]
+红灯结果干净：前端就是缺 `appActivity.ts`，后端就是缺窗口可见性事件和去重 helper。现在补最小实现，并把它接到 `App.tsx` 的主路由树卸载逻辑上。
+
+[Assistant]
+我在做实现前再收一下边界：这版只释放“当前路由页面树”的 React 状态，不动托盘、更新弹窗、冲突弹窗这些全局状态。这样能回收大数组和大文本，但不会影响后台同步和唤起后的最终一致性。
+
+[Assistant]
+核心逻辑已经接上，而且两组新增回归测试都转绿了。现在我补最后两个收口：把后台收缩提示文案接进中英文 i18n，并同步用户文档，再跑整体验证。
+
+[Assistant]
+我在补本地化和文档同步。这个功能是明确的用户可感知行为变化，必须把中英文说明跟上，否则之后排查“为什么后台回来会重载页面”会很混乱。
+
+[Assistant]
+架构文档那一段和我预想的行文有差异，我先打开目标片段精确补位，避免把最近那轮性能文档更新撞掉。
+
+[Assistant]
+代码和文档都已接齐，最后进入整体验证。我会重新跑前端单测、前端构建、`cmd/skillflow` 和 `core/viewstate`，确认后台内存收缩没有把现有性能重构链路打回去。
+
+[Assistant]
+前后端测试已经过了，前端构建还在收尾。我等它结束后再给你一个结论，避免把“应该没问题”当成验证结果。
+
+[Assistant]
+这轮已经把方案 A 做进去了，核心改动在 `App.tsx`、`appActivity.ts`、`app_visibility.go` 和 `core/notify/model.go`。现在窗口隐藏或不活跃大约 30 秒后，会卸载当前路由页面树；重新激活时自动重新挂载并重新加载当前页面数据。这样释放的是页面级 React 状态和已加载的大数组/大文本，像提示词全文、收藏仓库技能列表这类常驻内存会被回收，但不会影响云同步真值层，因为只是前端页面树卸载，不改磁盘数据。macOS 托盘隐藏回调也补了窗口可见性事件去重，避免重复触发。
+
+文档和中英文提示也同步更新了 `README.md`、`README_zh.md`、`features.md`、`features_zh.md`、`architecture.md`、`architecture_zh.md`。验证已完成：`npm run test:unit`、`npm run build`、`go test ./cmd/skillflow`、`go test ./core/viewstate/...` 全部通过。
+
+需要明确一点：这只能压低“应用自己持有的页面内存”，不能消掉 Wails/WebKit 的渲染/GPU 进程基线，所以总占用不会掉到很小。如果你要继续深挖，下一步最值得做的是把提示词列表改成“只加载元数据和预览，正文按需读取”，这会比现在这一步更直接地继续压内存。
+
+[User]
+[Image #1: Activity Monitor screenshot showing wails://wails 67.7MB, SkillFlow 39.4MB, SkillFlow Graphics and Media 25.0MB, SkillFlow Networking 2.9MB]
+看上去内存并没有下降，我多了了几个页面，后台状态还是很占内存
+
+[Assistant]
+这张图说明得很直接：方案 A 对 Activity Monitor 里的总 RSS 几乎没有可见效果，原因不是它完全没生效，而是它打到的不是现在最大的占用项。
+
+结论有三点：
+
+1. “多进几个页面”本来就不会明显累加页面树。
+`App.tsx` 现在切路由时已经按 `location.pathname` 重建页面子树，旧页面不会长期挂着。也就是说，方案 A 只能释放“当前页面”的状态，不会把你访问过的所有页面一起堆住。
+
+2. 你图里最大的内存是 WebView/Wails 基线，不是业务数组。
+现在最大的进程是：
+- `wails://wails` 67.7MB
+- `SkillFlow Graphics and Media` 25.0MB
+- 主进程 `SkillFlow` 39.4MB
+
+前两个主要是 Wails/WebKit 的内容进程和图形进程。卸载 React 路由树不等于 WebKit 立刻把 RSS 还给系统，所以 Activity Monitor 不一定会明显掉。
+
+3. 真正还值得继续压的，是“当前页面的数据模型太重”。
+比较典型的是：
+- `app_prompt.go` 的 `ListPrompts()` 直接把所有 prompt 的完整 `content` 都返回了。
+- `Prompts.tsx` 会把这些全文常驻在前端状态里。
+- `StarredRepos.tsx` 同时保留 `repos`、`allSkills`、`repoSkills` 几份数据。
+
+所以如果目标是“后台时系统内存数字真往下掉”，下一步最有效的不是继续修 A，而是做方案 B：
+- Prompt 列表只返回元数据和预览，正文按需加载
+- Starred Repos 改成按视图/按仓库懒加载，不同时常驻多份技能数组
+
+这个方向能继续压你自己的业务内存，但仍然不会大幅消掉 `wails://wails` 这类框架基线。真正要动那 67.7MB，基本就得走“隐藏时销毁 WebView、唤起时重建窗口”的高风险方案。
+
+我建议现在继续做方案 B。你确认的话，我就直接开做。
+
+[User]
+保持现状吧
+
+[Assistant]
+可以，先停在这里更合理。
+
+现在的判断比较明确：继续为了压这张图上的总内存去折腾，收益已经开始变差。当前主要占用是 Wails/WebKit 的内容进程和图形进程基线，不是简单的页面状态泄漏。我们已经把应用自己最明显的可控项处理了一轮：监听器清理、启动错峰、后台页面树卸载。再往下要么是收益有限的业务数据瘦身，要么就是高风险的“隐藏即销毁窗口/WebView”。
+
+所以现阶段建议保持现状，把精力放回更有体感收益的方向。如果后面你还想继续做性能，我会优先建议盯 CPU 卡顿和交互流畅度，而不是继续追这个 RSS 数字。
+
+[User]
+1. 将本次聊天对话的所有内容输出到chats目录下，新建文件名为YYYY-MM-DD-HH-mm-SS.txt
+执行 git diff HEAD 获取当前所有未提交的文件变更内容，生成修改内容摘要{{generated_summary}}，和一句简单的修改主题{{generated_title}}。
+1. 按以下格式追加到changelog文件末尾。changelog备份地址为changelog/change_YYYYMM.md（每个月生成一个change log）。如果文件不存在，则按命名要求创建。
+## {{generated_title}}
+date: YYYY-MM-DD
+{{generated_summary}}
+2. 按新增changelog相同格式用作git commit的message
+ - 执行 git add -A
+ - 执行 git commit -m
+ - 然后执行 git push 推送到远程仓库
+
+[Assistant]
+我会先生成时间戳、检查当前变更和现有 `changelog`/`chats` 目录，再基于 `git diff HEAD` 生成摘要与标题，随后落盘聊天记录、更新 changelog，最后执行 `git add`、`git commit` 和 `git push`。
+
+[Assistant]
+我先看一下现有 `changelog/change_202603.md` 的写法，确保追加格式和仓库已有记录一致；同时开始整理本次对话文本，准备落到 `chats/2026-03-11-20-21-27.txt`。
+
+[Assistant]
+我补一个细节：先参考现有 `chats/*.txt` 的写法，尽量让这次导出的对话文件格式和仓库里已有记录保持一致，然后再落盘 changelog。
+
+[Assistant]
+我现在落两份持久化文件：一份完整聊天记录到 `chats/2026-03-11-20-21-27.txt`，一份本月 changelog 追加到 `changelog/change_202603.md`。随后我会直接用同一份 changelog 文案作为 commit message 提交并推送。

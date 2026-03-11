@@ -1,15 +1,21 @@
-import { Variants } from 'framer-motion'
+import type { Variants } from 'framer-motion'
+
+const CARD_ANIMATION_THRESHOLD = 18
+
+export function shouldAnimateSkillCards(itemCount: number) {
+  return itemCount <= CARD_ANIMATION_THRESHOLD
+}
 
 export const pageVariants: Variants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
-  exit: { opacity: 0, transition: { duration: 0.15 } },
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: 0.16, ease: 'easeOut' } },
+  exit: { opacity: 0, transition: { duration: 0.1 } },
 }
 
 export const gridContainerVariants = (itemCount: number): Variants => ({
   animate: {
     transition: {
-      staggerChildren: itemCount > 30 ? 0 : 0.04,
+      staggerChildren: shouldAnimateSkillCards(itemCount) ? 0.025 : 0,
     },
   },
 })

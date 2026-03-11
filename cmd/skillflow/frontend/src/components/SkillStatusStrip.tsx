@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { type CSSProperties } from 'react'
 import { ToolIcon } from '../config/toolIcons'
 import { useLanguage } from '../contexts/LanguageContext'
+import { summarizePushedTools } from '../lib/skillStatusStrip'
 
 type BadgeTone = 'accent' | 'success' | 'warning' | 'muted' | 'info'
 
@@ -54,60 +55,12 @@ export default function SkillStatusStrip({
   singleLine = true,
 }: Props) {
   const { t } = useLanguage()
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [shouldWrap, setShouldWrap] = useState(false)
-  const visibleTools = pushedTools.slice(0, maxVisiblePushedTools)
-  const overflowCount = pushedTools.length - visibleTools.length
-  const effectiveSingleLine = singleLine && !shouldWrap
-
-  useEffect(() => {
-    if (!singleLine) {
-      setShouldWrap(false)
-      return
-    }
-
-    const el = containerRef.current
-    if (!el) return
-
-    let frame = 0
-    let observer: ResizeObserver | null = null
-
-    const measure = () => {
-      frame = 0
-      const styles = window.getComputedStyle(el)
-      const gap = Number.parseFloat(styles.columnGap || styles.gap || '0') || 0
-      const children = Array.from(el.children) as HTMLElement[]
-      const totalWidth = children.reduce((sum, child) => sum + Math.max(child.getBoundingClientRect().width, child.scrollWidth), 0)
-        + Math.max(children.length - 1, 0) * gap
-      const hasTruncatedLabel = children.some((child) => {
-        const label = child.querySelector('[data-status-label]') as HTMLElement | null
-        return !!label && label.scrollWidth > label.clientWidth + 1
-      })
-      const nextShouldWrap = totalWidth > el.clientWidth + 1 || hasTruncatedLabel
-      setShouldWrap(prev => (prev === nextShouldWrap ? prev : nextShouldWrap))
-    }
-
-    const scheduleMeasure = () => {
-      if (frame) cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(measure)
-    }
-
-    scheduleMeasure()
-    observer = new ResizeObserver(scheduleMeasure)
-    observer.observe(el)
-    Array.from(el.children).forEach((child) => observer?.observe(child))
-
-    return () => {
-      if (frame) cancelAnimationFrame(frame)
-      observer?.disconnect()
-    }
-  }, [badges, pushedTools, maxVisiblePushedTools, singleLine])
+  const { visibleTools, overflowCount } = summarizePushedTools(pushedTools, maxVisiblePushedTools)
 
   return (
     <div
-      ref={containerRef}
       className={`flex min-w-0 min-h-[1.75rem] gap-1.5 ${
-        effectiveSingleLine ? 'flex-nowrap items-center overflow-hidden' : 'flex-wrap content-start items-start overflow-visible'
+        singleLine ? 'flex-nowrap items-center overflow-hidden' : 'flex-wrap content-start items-start overflow-visible'
       } ${className}`}
     >
       {badges.map((badge) => (
@@ -127,7 +80,7 @@ export default function SkillStatusStrip({
           style={toneStyles.success}
           title={t('common.pushedToTools', { tools: pushedTools.join(', ') })}
         >
-          <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+          <span className="flex min-w-0 max-w-[8rem] items-center gap-1 overflow-hidden">
             {visibleTools.map((toolName) => (
               <ToolIcon key={toolName} name={toolName} size={16} />
             ))}

@@ -77,7 +77,7 @@ Key repository rules:
 1. Resolve `config.AppDataDir()`
 2. Load config via `core/config.Service`
 3. Initialize the rotating file logger
-4. Create skill storage and starred-repo storage
+4. Create skill storage, starred-repo storage, and the local derived view-state cache manager
 5. Register tool adapters and cloud providers
 6. Start backend event forwarding
 7. Start the auto-sync timer for cloud backup
@@ -87,13 +87,15 @@ Key repository rules:
 1. Restore or compute the initial window size
 2. Initialize the system tray
 3. Schedule background startup tasks after a short delay
+4. Stagger those tasks so the first interactive second does not fan out all remote checks at once
+5. Maintain a frontend activity state machine that can trim the routed page tree after prolonged background or inactive time
 
 Deferred background tasks currently include:
 
+- Git backup startup pull (earliest)
 - skill update check
 - starred repo refresh
 - app release update check
-- Git backup startup pull
 
 `App.beforeClose()` persists the current window size. `App.shutdown()` tears down tray resources.
 
@@ -111,7 +113,9 @@ By default, SkillFlow stores app data under `config.AppDataDir()`:
   skills/                 installed library
   meta/                   one JSON sidecar per installed skill
   prompts/                prompt library
-  cache/                  cloned starred repositories
+  cache/
+    <repo-cache>/         cloned starred repositories
+    viewstate/            local-only derived UI snapshots
   logs/
     skillflow.log
     skillflow.log.1
@@ -127,6 +131,7 @@ Important storage rules:
 - Synced files such as `meta/*.json` and `star_repos.json` persist local paths as **forward-slash relative paths** whenever the target is inside the synchronized root.
 - If `SkillsStorageDir` is moved outside the default app data directory, the synchronized root becomes the shared parent of `skills/` and `meta/`.
 - Logs are bounded to **two files** (`skillflow.log`, `skillflow.log.1`) at **1MB each**.
+- `cache/viewstate/*.json` stores only rebuildable derived state such as installed-skill snapshots and tool-presence indexes. These files are local-only and must never be treated as synced truth.
 
 ---
 
@@ -148,6 +153,7 @@ Important storage rules:
 | `core/skillkey` | Stable logical-key derivation for git and content-based skills |
 | `core/sync` | `ToolAdapter` interface and filesystem-based adapter implementation |
 | `core/update` | GitHub commit-based update checker for installed git-backed skills |
+| `core/viewstate` | Local-only derived snapshot cache, fingerprinting, and incremental tool-presence helpers |
 
 ---
 
@@ -159,6 +165,7 @@ The Wails app package must remain flat, so responsibilities are grouped by file 
 |-----------|---------|
 | `main.go`, `version.go` | entrypoint and build-time version |
 | `app.go` | main `App` struct and most frontend-callable methods |
+| `app_viewstate.go`, `app_perf.go` | local snapshot caching, fingerprints, and lightweight performance timing helpers |
 | `app_prompt.go` | prompt CRUD and prompt import/export |
 | `app_update.go` | app release update check, download, apply, skip-version behavior |
 | `app_log.go` | logger initialization and runtime/file log bridging |
@@ -167,6 +174,22 @@ The Wails app package must remain flat, so responsibilities are grouped by file 
 | `adapters.go`, `providers.go` | register `core/sync` adapters and `core/backup` providers |
 | `events.go`, `push_conflict.go`, `skill_state.go` | frontend DTOs and aggregated card state |
 | `tray_*.go`, `single_instance_*.go`, `window_*.go` | platform-specific shell behavior |
+
+---
+
+## Derived View-State Cache
+
+To keep navigation and large-list rendering responsive, the backend now maintains a local-only derived cache under `cache/viewstate/`.
+
+- `ListSkills()` is snapshot-first: when the installed-skill fingerprint matches, it returns the cached `InstalledSkillEntry[]` directly instead of rebuilding push presence immediately.
+- The installed-skill fingerprint is based on sync-relevant skill metadata plus tool push-directory summaries, so switching away from a page and coming back will reload current truth when those dependencies changed.
+- Tool push presence is rebuilt incrementally per tool using per-tool fingerprints rather than rescanning every configured `PushDir` on every request.
+
+These caches are optimization artifacts only:
+
+- they are rebuilt from authoritative disk state
+- they are safe to delete
+- they are not synced across devices
 
 ---
 
@@ -355,6 +378,7 @@ Important event groups:
 - starred repos: `star.sync.progress`, `star.sync.done`
 - Git backup: `git.sync.started`, `git.sync.completed`, `git.sync.failed`, `git.conflict`
 - app update: `app.update.available`, `app.update.download.done`, `app.update.download.fail`
+- window lifecycle: `app.window.visibility.changed`
 
 ### Wails bindings
 
@@ -392,6 +416,12 @@ Key frontend areas:
 - `src/i18n/` — translation dictionaries
 - `src/lib/` — shared list/search/clipboard/state helpers
 - `tests/` — frontend unit tests run outside the Wails build
+
+`App.tsx` also owns the app-activity state machine:
+
+- backend hide/show signals and browser focus/visibility are merged into one foreground/background model
+- after roughly 30 seconds in the background, the routed page subtree is unmounted to release page-local arrays and prompt content
+- when the window becomes active again, the current route mounts from scratch and reloads fresh data
 
 Frontend code imports backend methods from the generated Wails module, for example:
 
@@ -456,4 +486,4 @@ import { ListSkills } from '../../wailsjs/go/main/App'
 
 ---
 
-*Last updated: 2026-03-10*
+*Last updated: 2026-03-11*

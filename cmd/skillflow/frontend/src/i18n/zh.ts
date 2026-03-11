@@ -32,6 +32,8 @@ export const zh = {
   'common.imported': '已导入',
   'common.updatable': '可更新',
   'common.pushedToTools': '已推送到 {tools}',
+  'app.backgroundTrimTitle': '后台内存收缩中',
+  'app.backgroundTrimDesc': '窗口再次激活后，当前页面数据会自动重新加载。',
   'update.newVersion': '发现新版本',
   'update.ready': '更新已就绪',
   'update.failed': '下载失败',
