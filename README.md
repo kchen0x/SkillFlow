@@ -2,7 +2,9 @@
 
 > 🌐 [中文](README_zh.md) | **English**
 
-SkillFlow is a cross-platform desktop app for managing LLM Skills and reusable prompts across multiple AI coding tools. It combines GitHub install, cross-tool sync, starred repo browsing, update checking, and cloud backup in one local-first workflow.
+Slogan: Master once. Apply everywhere.
+
+SkillFlow is a cross-platform desktop app for managing skills and reusable prompts across diverse agentic AI environments. It combines GitHub install, cross-environment sync, starred repo browsing, update checking, and cloud backup in one local-first workflow.
 
 ![skilflow](docs/skillflow.gif)
 
