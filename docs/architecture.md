@@ -164,7 +164,7 @@ Important storage rules:
 | `core/skill` | Skill model, storage, validation, installed-skill indexing |
 | `core/skillkey` | Stable logical-key derivation for git and content-based skills |
 | `core/sync` | `ToolAdapter` interface and filesystem-based adapter implementation |
-| `core/update` | GitHub commit-based update checker for installed git-backed skills |
+| `core/update` | Direct GitHub commit-check helper kept for tests and fallback-style utilities; installed skill update state now comes from local repo-cache SHA comparison |
 | `core/viewstate` | Local-only derived snapshot cache, fingerprinting, and incremental tool-presence helpers |
 
 ---
@@ -345,7 +345,7 @@ SkillFlow distinguishes two identities:
 - **imported** — wording alias for `installed` on external-source pages
 - **pushed** — the logical skill exists in a tool's configured `PushDir`
 - **seenInToolScan** — the logical skill exists in a tool's configured `ScanDirs`; this does **not** imply SkillFlow pushed it
-- **updatable** — at least one installed git-backed instance has a newer remote SHA than its installed `SourceSHA`
+- **updatable** — at least one installed git-backed instance has a newer cached-repo SHA than its installed `SourceSHA`
 
 ### Status and dedupe rules
 
@@ -357,8 +357,10 @@ SkillFlow distinguishes two identities:
 
 ### Update rules
 
-- Remote update checks apply only to installed git-backed skills with a stable repo source and subpath.
-- Remote lookup and installed-instance correlation must use the same logical git key.
+- Installed skill update checks apply only to git-backed skills with a stable repo source and subpath whose corresponding repo clone already exists under the local `cache/` tree.
+- Cache lookup and installed-instance correlation must use the same logical git key.
+- `CheckUpdates()` compares installed `SourceSHA` against the latest commit SHA for that same `SourceSubPath` inside the local cached repo clone; it does not call the GitHub Commits API directly.
+- `UpdateSkill()` copies files from that cached repo subdirectory into the installed library directory, then refreshes any existing pushed tool copies from the updated installed instance.
 - `LatestSHA` is cleared when a fresh check confirms the installed copy is already current.
 - `LastCheckedAt` is updated on every completed check attempt and persisted in local-only `meta_local/<skill-id>.local.json` (not synced).
 

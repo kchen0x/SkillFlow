@@ -67,7 +67,7 @@ Central library for managing your skill collection.
 |---------|--------|
 | **Search input** | Wide search field for real-time case-insensitive filter by skill name; the toolbar wraps on narrower window widths so controls stay visible |
 | **Sort toggle** | Two-button toggle for alphabetical order by skill name: **A-Z** or **Z-A** |
-| **Update** (RefreshCw) | Calls backend `CheckUpdates()`; groups installed Git-backed skills by normalized repo source + subpath, refreshes `LatestSHA` (synced) and `LastCheckedAt` (local-only), marks updatable cards with a red dot and Update action, and clears stale markers when an installed instance is already current. This checks only — it does not overwrite local files by itself |
+| **Update** (RefreshCw) | Calls backend `CheckUpdates()`; groups installed Git-backed skills by normalized repo source + subpath, compares installed `SourceSHA` against the same subpath inside the local repo cache, refreshes `LatestSHA` (synced) and `LastCheckedAt` (local-only), marks updatable cards with a red dot and Update action, and clears stale markers when an installed instance is already current. This checks only — it does not overwrite local files by itself |
 | **Batch Delete** (CheckSquare) | Toggles multi-select mode |
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
 | **Remote Install** (Github) | Opens the GitHub Install dialog |
@@ -115,12 +115,13 @@ Central library for managing your skill collection.
 
 ### Skill Update Flow
 
-- Toolbar **Update** performs a remote update check for installed Git-backed skills and only marks cards as updatable.
-- Card-level **Update** is the action that actually downloads the latest files, overwrites the installed copy in **My Skills**, and refreshes any same-skill copies that already exist in tool `PushDir`s.
+- Toolbar **Update** compares installed Git-backed skills against their locally cached repo clones and only marks cards as updatable.
+- Card-level **Update** is the action that copies the latest files from the local repo cache, overwrites the installed copy in **My Skills**, and refreshes any same-skill copies that already exist in tool `PushDir`s.
 - While a card update is running, that card keeps the Update action visible, disables repeat clicks, and spins the Refresh icon until the request finishes.
 - The Dashboard also shows a temporary top-of-page status banner for skill update progress, success, or failure so users can tell whether the click really triggered work.
-- Remote checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
-- When multiple installed instances point at the same logical git skill, one remote SHA lookup updates their check state together, but each installed instance still decides its own `updatable` state by comparing its own `SourceSHA`.
+- Cache-based checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
+- When multiple installed instances point at the same logical git skill, one cached SHA lookup updates their check state together, but each installed instance still decides its own `updatable` state by comparing its own `SourceSHA`.
+- If the corresponding local repo cache is missing or stale, SkillFlow does not fall back to a direct GitHub API lookup here; users need the normal repo-cache sync path to refresh that clone first.
 
 ```text
 [Dashboard toolbar Update]
@@ -129,7 +130,7 @@ Central library for managing your skill collection.
      CheckUpdates()
           |
           v
-Compare installed SourceSHA with remote latest SHA
+Compare installed SourceSHA with cached repo subpath SHA
           |
           +--> no newer SHA  -> keep card unchanged
           |
@@ -141,7 +142,7 @@ Compare installed SourceSHA with remote latest SHA
    UpdateSkill(skillID)
           |
           v
-Download latest repo subpath again
+Copy latest repo subpath from local cache clone
           |
           v
 Overwrite installed folder in My Skills
@@ -526,7 +527,7 @@ Log files are stored under the app log directory, with rolling limits:
 
 ### Proxy Tab
 
-Proxy settings for all remote operations (repo scan, GitHub install, update check):
+Proxy settings for all remote operations (repo scan, GitHub install, repo-cache sync):
 
 | Mode | Description |
 |------|-------------|
@@ -681,7 +682,7 @@ Events emitted from the Go backend to the frontend via Wails runtime:
 | `backup.progress` | Each file uploaded | `{ currentFile: string }` |
 | `backup.completed` | Backup finished | `{ files: Array<{ path, size, action }> }` |
 | `backup.failed` | Backup error | — |
-| `update.available` | New commit found for a skill | `{ skillID, skillName, currentSHA, latestSHA }` |
+| `update.available` | New cached commit found for a skill | `{ skillID, skillName, currentSHA, latestSHA }` |
 | `star.sync.progress` | One repo synced | `{ repoURL, repoName, syncError }` |
 | `star.sync.done` | All repos synced | — |
 | `git.sync.started` | Git pull/push begins | — |

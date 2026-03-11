@@ -84,6 +84,9 @@ func NewService(dataDir string) *Service {
 	}
 }
 
+// DataDir returns the app data root used by this config service.
+func (s *Service) DataDir() string { return s.dataDir }
+
 // LocalConfigPath returns the path to the local (non-synced) config file.
 func (s *Service) LocalConfigPath() string { return s.localConfigPath }
 

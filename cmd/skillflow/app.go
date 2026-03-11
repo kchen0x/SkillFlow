@@ -24,7 +24,6 @@ import (
 	"github.com/shinerio/skillflow/core/skill"
 	"github.com/shinerio/skillflow/core/skillkey"
 	toolsync "github.com/shinerio/skillflow/core/sync"
-	"github.com/shinerio/skillflow/core/update"
 	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -1588,24 +1587,24 @@ func (a *App) CheckUpdates() error {
 		group.Skills = append(group.Skills, sk)
 	}
 
-	checker := update.NewChecker("", a.proxyHTTPClient())
 	for _, group := range groups {
 		reference := group.Skills[0]
 		a.logInfof("check skill updates started: logicalKey=%s instances=%d", group.LogicalKey, len(group.Skills))
-		result, err := checker.Check(a.ctx, reference)
 		checkedAt := time.Now()
+		_, latestSHA, err := a.cachedSkillSourceDir(reference)
 		if err != nil {
 			a.logErrorf("check skill updates failed: logicalKey=%s repo=%s subPath=%s err=%v", group.LogicalKey, reference.SourceURL, reference.SourceSubPath, err)
 			for _, sk := range group.Skills {
 				sk.LastCheckedAt = checkedAt
+				sk.LatestSHA = ""
 				_ = a.storage.SaveMeta(sk)
 			}
 			continue
 		}
 		for _, sk := range group.Skills {
 			sk.LastCheckedAt = checkedAt
-			if result.LatestSHA != "" && result.LatestSHA != sk.SourceSHA {
-				sk.LatestSHA = result.LatestSHA
+			if latestSHA != "" && latestSHA != sk.SourceSHA {
+				sk.LatestSHA = latestSHA
 			} else {
 				sk.LatestSHA = ""
 			}
@@ -1617,18 +1616,18 @@ func (a *App) CheckUpdates() error {
 						SkillID:    sk.ID,
 						SkillName:  sk.Name,
 						CurrentSHA: sk.SourceSHA,
-						LatestSHA:  result.LatestSHA,
+						LatestSHA:  latestSHA,
 					},
 				})
 			}
 		}
-		a.logInfof("check skill updates completed: logicalKey=%s latestSHA=%s", group.LogicalKey, result.LatestSHA)
+		a.logInfof("check skill updates completed: logicalKey=%s latestSHA=%s", group.LogicalKey, latestSHA)
 	}
 	a.logInfof("check skill updates completed")
 	return nil
 }
 
-// UpdateSkill re-downloads a GitHub skill and updates local files and SHA.
+// UpdateSkill refreshes an installed GitHub skill from the local cached repo copy.
 func (a *App) UpdateSkill(skillID string) error {
 	a.logInfof("update skill requested: id=%s", skillID)
 	sk, err := a.storage.Get(skillID)
@@ -1636,20 +1635,17 @@ func (a *App) UpdateSkill(skillID string) error {
 		a.logErrorf("update skill failed: %v", err)
 		return err
 	}
-	inst := a.newGitHubDownloader()
-	tmpDir := filepath.Join(os.TempDir(), "skillflow-update", sk.Name)
-	defer os.RemoveAll(tmpDir)
-
-	c := install.SkillCandidate{Name: sk.Name, Path: sk.SourceSubPath}
-	if err := inst.DownloadTo(a.ctx, install.InstallSource{Type: "github", URI: sk.SourceURL}, c, tmpDir); err != nil {
-		a.logErrorf("update skill download failed: %v", err)
+	cacheSourceDir, latestSHA, err := a.cachedSkillSourceDir(sk)
+	if err != nil {
+		a.logErrorf("update skill cache prepare failed: id=%s name=%s repo=%s subPath=%s err=%v", skillID, sk.Name, sk.SourceURL, sk.SourceSubPath, err)
 		return err
 	}
-	if err := a.storage.OverwriteFromDir(skillID, tmpDir); err != nil {
+	a.logInfof("update skill cache copy started: id=%s name=%s source=%s", skillID, sk.Name, cacheSourceDir)
+	if err := a.storage.OverwriteFromDir(skillID, cacheSourceDir); err != nil {
 		a.logErrorf("update skill overwrite failed: %v", err)
 		return err
 	}
-	sk.SourceSHA = sk.LatestSHA
+	sk.SourceSHA = latestSHA
 	sk.LatestSHA = ""
 	_ = a.storage.UpdateMeta(sk)
 	if err := a.refreshUpdatedPushedSkillCopies(sk); err != nil {
@@ -1660,6 +1656,54 @@ func (a *App) UpdateSkill(skillID string) error {
 	a.scheduleAutoBackup()
 	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
 	return nil
+}
+
+func (a *App) cachedSkillSourceDir(sk *skill.Skill) (string, string, error) {
+	if sk == nil {
+		return "", "", fmt.Errorf("skill is required")
+	}
+	if a.config == nil {
+		return "", "", fmt.Errorf("config service is not initialized")
+	}
+
+	cacheDir, err := coregit.CacheDir(a.config.DataDir(), sk.SourceURL)
+	if err != nil {
+		return "", "", err
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, ".git")); err != nil {
+		if os.IsNotExist(err) {
+			return "", "", fmt.Errorf("local cache missing for repo: %s", sk.SourceURL)
+		}
+		return "", "", err
+	}
+
+	subPath := strings.TrimSpace(sk.SourceSubPath)
+	sourceDir := cacheDir
+	shaPath := "."
+	if subPath != "" {
+		sourceDir = filepath.Join(cacheDir, filepath.FromSlash(subPath))
+		shaPath = filepath.ToSlash(filepath.Clean(filepath.FromSlash(subPath)))
+	}
+	info, err := os.Stat(sourceDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", "", fmt.Errorf("cached skill path missing: %s", sk.SourceSubPath)
+		}
+		return "", "", err
+	}
+	if !info.IsDir() {
+		return "", "", fmt.Errorf("cached skill path is not a directory: %s", sk.SourceSubPath)
+	}
+
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	latestSHA, err := coregit.GetSubPathSHA(ctx, cacheDir, shaPath)
+	if err != nil {
+		return "", "", err
+	}
+	return sourceDir, latestSHA, nil
 }
 
 func (a *App) newGitHubDownloader() githubSkillDownloader {

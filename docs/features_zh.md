@@ -65,7 +65,7 @@
 |------|------|
 | **搜索框** | 加宽显示，实时按技能名过滤（不区分大小写）；窗口较窄时工具栏会自动换行，保证按钮完整可见 |
 | **排序切换** | 两个按钮在 **A-Z** 与 **Z-A** 间切换，按 Skill 名称首字母正序或逆序排列 |
-| **更新**（RefreshCw） | 调用后端 `CheckUpdates()`；按规范化后的仓库来源 + 子路径聚合同一个 Git Skill，刷新可同步的 `LatestSHA` 与仅本地保存的 `LastCheckedAt`，为可更新卡片显示红点与“更新”操作，并在实例已是最新时清理过期更新标记。该按钮只检查，不会直接覆盖本地文件 |
+| **更新**（RefreshCw） | 调用后端 `CheckUpdates()`；按规范化后的仓库来源 + 子路径聚合同一个 Git Skill，把已安装实例的 `SourceSHA` 与本地仓库缓存中同一子路径的最新 SHA 做比较，刷新可同步的 `LatestSHA` 与仅本地保存的 `LastCheckedAt`，为可更新卡片显示红点与“更新”操作，并在实例已是最新时清理过期更新标记。该按钮只检查，不会直接覆盖本地文件 |
 | **批量删除**（CheckSquare） | 切换多选模式 |
 | **导入**（FolderOpen） | 打开系统文件夹选择器 → `ImportLocal(dir)` |
 | **远程安装**（Github） | 打开 GitHub 安装对话框 |
@@ -113,12 +113,13 @@
 
 ### Skill 更新流转
 
-- 工具栏的 **更新** 只负责对已安装的 Git Skill 做远端版本检查，并把卡片标记为“可更新”。
-- 卡片上的 **更新** 才会真正下载最新文件，覆盖 **我的skills** 中已安装的那一份副本，并同步刷新已经存在于各工具 `PushDir` 中的同一 Skill 副本。
+- 工具栏的 **更新** 只负责把已安装的 Git Skill 与本地缓存仓库中的对应子路径做比较，并把卡片标记为“可更新”。
+- 卡片上的 **更新** 才会真正从本地仓库缓存复制最新文件，覆盖 **我的skills** 中已安装的那一份副本，并同步刷新已经存在于各工具 `PushDir` 中的同一 Skill 副本。
 - 卡片更新进行中时，该卡片会保持“更新”操作可见、禁止重复点击，并持续旋转 Refresh 图标直到请求结束。
 - 主面板顶部还会显示临时状态提示条，明确告知当前正在更新、更新成功或更新失败，方便用户确认点击确实已触发操作。
-- 远端检查会按应用内统一使用的 Git 逻辑主键聚合：规范化仓库来源 + 仓库子路径。
-- 当多个已安装实例指向同一个逻辑 Git Skill 时，远端 SHA 只查询一次，但每个实例仍会用自己的 `SourceSHA` 决定自己是否 `updatable`。
+- 基于缓存的检查会按应用内统一使用的 Git 逻辑主键聚合：规范化仓库来源 + 仓库子路径。
+- 当多个已安装实例指向同一个逻辑 Git Skill 时，缓存中的 SHA 只读取一次，但每个实例仍会用自己的 `SourceSHA` 决定自己是否 `updatable`。
+- 如果对应的本地仓库缓存不存在或尚未刷新，这里不会退回到直接请求 GitHub API；需要先通过正常的仓库缓存同步链路更新该 clone。
 
 ```text
 [主面板工具栏 更新]
@@ -127,7 +128,7 @@
     CheckUpdates()
          |
          v
-比较本地 SourceSHA 与远端最新 SHA
+比较本地 SourceSHA 与缓存仓库子路径的最新 SHA
          |
          +--> 没有更新  -> 卡片保持不变
          |
@@ -139,7 +140,7 @@
  UpdateSkill(skillID)
          |
          v
-重新下载该 skill 对应的仓库子路径
+从本地缓存 clone 复制该 skill 对应的仓库子路径
          |
          v
 覆盖“我的skills”中的安装目录
@@ -524,7 +525,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 
 ### 代理标签页
 
-所有远程操作（仓库扫描、GitHub 安装、更新检查）的代理设置：
+所有远程操作（仓库扫描、GitHub 安装、仓库缓存同步）的代理设置：
 
 | 模式 | 说明 |
 |------|------|
@@ -679,7 +680,7 @@ Go 后端通过 Wails runtime 向前端推送的事件：
 | `backup.progress` | 每上传一个文件 | `{ currentFile: string }` |
 | `backup.completed` | 备份完成 | `{ files: Array<{ path, size, action }> }` |
 | `backup.failed` | 备份出错 | — |
-| `update.available` | 发现 Skill 有新提交 | `{ skillID, skillName, currentSHA, latestSHA }` |
+| `update.available` | 发现 Skill 的缓存仓库中有新提交 | `{ skillID, skillName, currentSHA, latestSHA }` |
 | `star.sync.progress` | 单个仓库同步完成 | `{ repoURL, repoName, syncError }` |
 | `star.sync.done` | 所有仓库同步完成 | — |
 | `git.sync.started` | Git 拉取/推送开始 | — |

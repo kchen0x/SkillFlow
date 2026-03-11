@@ -164,7 +164,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 | `core/skill` | Skill 模型、存储、校验、已安装索引 |
 | `core/skillkey` | Git Skill 与内容型 Skill 的稳定逻辑主键生成 |
 | `core/sync` | `ToolAdapter` 接口和基于文件系统的适配器实现 |
-| `core/update` | 基于 GitHub commit 的已安装 Git Skill 更新检测 |
+| `core/update` | 保留给测试和直连式辅助场景的 GitHub commit 检测工具；已安装 Skill 的更新状态现在来自本地仓库缓存 SHA 比较 |
 | `core/viewstate` | 本地派生快照缓存、fingerprint 计算，以及增量工具 presence 辅助逻辑 |
 
 ---
@@ -345,7 +345,7 @@ SkillFlow 区分两类身份：
 - **imported**：外部来源页面对 `installed` 的文案别名
 - **pushed**：该逻辑 Skill 已存在于某工具配置的 `PushDir`
 - **seenInToolScan**：该逻辑 Skill 已出现在某工具配置的 `ScanDirs`；这 **不代表** SkillFlow 已经推送过它
-- **updatable**：至少有一个已安装 Git Skill 实例的远端 SHA 更新了
+- **updatable**：至少有一个已安装 Git Skill 实例在本地缓存仓库中的 SHA 比本地 `SourceSHA` 更新
 
 ### 状态与去重规则
 
@@ -357,8 +357,10 @@ SkillFlow 区分两类身份：
 
 ### 更新规则
 
-- 只有具备稳定 repo source + subpath 的已安装 Git Skill 才参与远端更新检测。
-- 远端查询与已安装实例关联必须使用同一逻辑 Git 主键。
+- 只有具备稳定 repo source + subpath，且其对应仓库 clone 已经存在于本地 `cache/` 树中的已安装 Git Skill 才参与更新检测。
+- 缓存查询与已安装实例关联必须使用同一逻辑 Git 主键。
+- `CheckUpdates()` 会把已安装 Skill 的 `SourceSHA` 与本地缓存仓库中同一 `SourceSubPath` 的最新提交 SHA 做比较，不会直接调用 GitHub Commits API。
+- `UpdateSkill()` 会把该缓存仓库子目录的文件复制到已安装库目录中，然后再基于更新后的已安装副本刷新已推送到工具目录的副本。
 - 当最新检查确认本地已是最新时，应清空 `LatestSHA`。
 - 每次完成检查后都应更新 `LastCheckedAt`，并将其写入仅本地持久化的 `meta_local/<skill-id>.local.json`（不参与同步）。
 
