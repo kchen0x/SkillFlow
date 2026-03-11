@@ -10,7 +10,7 @@ import CategoryPanel from '../components/CategoryPanel'
 import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
 import GitHubInstallDialog from '../components/GitHubInstallDialog'
-import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine } from 'lucide-react'
+import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { gridContainerVariants, cardVariants, shouldAnimateSkillCards } from '../lib/motionVariants'
 import SkillListControls from '../components/SkillListControls'
 import { getListLoadState } from '../lib/listLoadState'
@@ -19,6 +19,11 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { ToolIcon } from '../config/toolIcons'
 import { subscribeToEvents } from '../lib/wailsEvents'
+
+type SkillUpdateNotice = {
+  tone: 'progress' | 'success' | 'error'
+  message: string
+}
 
 export default function Dashboard() {
   const { t } = useLanguage()
@@ -39,14 +44,17 @@ export default function Dashboard() {
   const [dashboardCfg, setDashboardCfg] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingAutoPush, setSavingAutoPush] = useState(false)
+  const [updatingSkillIDs, setUpdatingSkillIDs] = useState<Set<string>>(new Set())
+  const [updateNotice, setUpdateNotice] = useState<SkillUpdateNotice | null>(null)
 
   // Hover tooltip state
   const [hoveredSkill, setHoveredSkill] = useState<{ skill: any; rect: DOMRect } | null>(null)
   const [hoveredMeta, setHoveredMeta] = useState<any | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const updateNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true)
     try {
       const [s, c, cfg] = await Promise.all([ListSkills(), ListCategories(), GetConfig()])
       setSkills(s ?? [])
@@ -55,7 +63,7 @@ export default function Dashboard() {
       setToolOptions((cfg?.tools ?? []).filter((tool: any) => tool.enabled))
       setAutoPushTools(new Set(cfg?.autoPushTools ?? []))
     } finally {
-      setLoading(false)
+      if (!options?.silent) setLoading(false)
     }
   }, [])
 
@@ -66,6 +74,24 @@ export default function Dashboard() {
       ['update.available', load],
     ])
   }, [load])
+
+  useEffect(() => {
+    if (updateNoticeTimer.current) {
+      clearTimeout(updateNoticeTimer.current)
+      updateNoticeTimer.current = null
+    }
+
+    if (updateNotice && updateNotice.tone !== 'progress') {
+      updateNoticeTimer.current = setTimeout(() => setUpdateNotice(null), 4200)
+    }
+
+    return () => {
+      if (updateNoticeTimer.current) {
+        clearTimeout(updateNoticeTimer.current)
+        updateNoticeTimer.current = null
+      }
+    }
+  }, [updateNotice])
 
   const filtered = useMemo(
     () => filterAndSortSkills(
@@ -232,6 +258,43 @@ export default function Dashboard() {
     clearHover()
   }
 
+  const handleSkillUpdate = async (sk: any) => {
+    if (updatingSkillIDs.has(sk.id)) return
+
+    setUpdatingSkillIDs(prev => {
+      const next = new Set(prev)
+      next.add(sk.id)
+      return next
+    })
+    setUpdateNotice({
+      tone: 'progress',
+      message: t('dashboard.skillUpdateRunning', { name: sk.name }),
+    })
+
+    try {
+      await UpdateSkill(sk.id)
+      await load({ silent: true })
+      setUpdateNotice({
+        tone: 'success',
+        message: t('dashboard.skillUpdateSuccess', { name: sk.name }),
+      })
+    } catch (error: any) {
+      setUpdateNotice({
+        tone: 'error',
+        message: t('dashboard.skillUpdateFailed', {
+          name: sk.name,
+          msg: String(error?.message ?? error ?? t('common.confirm')),
+        }),
+      })
+    } finally {
+      setUpdatingSkillIDs(prev => {
+        const next = new Set(prev)
+        next.delete(sk.id)
+        return next
+      })
+    }
+  }
+
   const containerVariants = gridContainerVariants(filtered.length)
 
   return (
@@ -333,6 +396,65 @@ export default function Dashboard() {
           )}
         </div>
 
+        <AnimatePresence initial={false}>
+          {updateNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="mx-6 mt-4 rounded-xl border px-4 py-3"
+              style={updateNotice.tone === 'success' ? {
+                background: 'color-mix(in srgb, var(--color-success) 14%, var(--bg-elevated) 86%)',
+                borderColor: 'color-mix(in srgb, var(--color-success) 34%, transparent)',
+              } : updateNotice.tone === 'error' ? {
+                background: 'color-mix(in srgb, var(--color-error) 14%, var(--bg-elevated) 86%)',
+                borderColor: 'color-mix(in srgb, var(--color-error) 34%, transparent)',
+              } : {
+                background: 'color-mix(in srgb, var(--accent-primary) 12%, var(--bg-elevated) 88%)',
+                borderColor: 'color-mix(in srgb, var(--accent-primary) 28%, transparent)',
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 shrink-0" style={updateNotice.tone === 'success' ? {
+                  color: 'var(--color-success)',
+                } : updateNotice.tone === 'error' ? {
+                  color: 'var(--color-error)',
+                } : {
+                  color: 'var(--accent-primary)',
+                }}>
+                  {updateNotice.tone === 'success'
+                    ? <CheckCircle2 size={16} />
+                    : updateNotice.tone === 'error'
+                      ? <AlertCircle size={16} />
+                      : <RefreshCw size={16} className="animate-spin" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium break-words" style={{ color: 'var(--text-primary)' }}>
+                    {updateNotice.message}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setUpdateNotice(null)}
+                  className="shrink-0 rounded-md p-1 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  title={t('common.close')}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
+                    e.currentTarget.style.color = 'var(--text-primary)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.backgroundColor = ''
+                    e.currentTarget.style.color = 'var(--text-muted)'
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div
           className="px-6 py-3 flex flex-wrap items-center gap-3"
           style={{
@@ -421,8 +543,9 @@ export default function Dashboard() {
                     showPushedTools={visibility.includes('pushedTools')}
                     categories={categories}
                     onDelete={async () => { await DeleteSkill(sk.id); load() }}
-                    onUpdate={async () => { await UpdateSkill(sk.id); load() }}
+                    onUpdate={() => handleSkillUpdate(sk)}
                     onMoveCategory={async cat => { await MoveSkillCategory(sk.id, cat); load() }}
+                    updating={updatingSkillIDs.has(sk.id)}
                     dragging={draggingSkillID === sk.id}
                     dropTargetActive={draggingSkillID === sk.id && categoryDragActive}
                     onDragStateChange={(dragging) => {

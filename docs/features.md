@@ -117,6 +117,8 @@ Central library for managing your skill collection.
 
 - Toolbar **Update** performs a remote update check for installed Git-backed skills and only marks cards as updatable.
 - Card-level **Update** is the action that actually downloads the latest files, overwrites the installed copy in **My Skills**, and refreshes any same-skill copies that already exist in tool `PushDir`s.
+- While a card update is running, that card keeps the Update action visible, disables repeat clicks, and spins the Refresh icon until the request finishes.
+- The Dashboard also shows a temporary top-of-page status banner for skill update progress, success, or failure so users can tell whether the click really triggered work.
 - Remote checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
 - When multiple installed instances point at the same logical git skill, one remote SHA lookup updates their check state together, but each installed instance still decides its own `updatable` state by comparing its own `SourceSHA`.
 
@@ -555,7 +557,8 @@ Reusable card component shown in the My Skills grid and Sync pages.
 | **Skill name** | Two-line clamp; padded to avoid overlap with action buttons |
 | **Open folder button** (FolderOpenDot, top-right) | `OpenPath(skill.path)` — opens directory in OS file manager; visible on hover only |
 | **Select checkbox** (top-left) | Visible in select mode only |
-| **Hover actions** (bottom-right) | Update (if available) · Copy · Delete — all hidden until hover |
+| **Hover actions** (bottom-right) | Update (if available) · Copy · Delete — hidden until hover, except the Update action stays visible while that card is actively updating |
+| **Update action feedback** | Hover adds a lift/highlight animation; clicking switches the action into a disabled spinner state until the update finishes |
 | **Copy button** | Reads `skill.md` content, copies to clipboard, shows "Copied ✓" for 2 s |
 | **Drag handle** | Cards are draggable in normal mode; dragged `skillId` moves skill to drop target category |
 | **Right-click context menu** | Update (if available) · Move to [Category] (one item per other category) · Delete (red) |

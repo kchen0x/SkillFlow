@@ -21,8 +21,9 @@ interface Props {
   showPushedTools: boolean
   categories: string[]
   onDelete: () => void
-  onUpdate?: () => void
+  onUpdate?: () => Promise<void> | void
   onMoveCategory: (category: string) => void
+  updating?: boolean
   dragging?: boolean
   dropTargetActive?: boolean
   onDragStateChange?: (dragging: boolean) => void
@@ -35,13 +36,14 @@ interface Props {
 
 export default function SkillCard({
   skill, showUpdatable, showPushedTools, categories, onDelete, onUpdate, onMoveCategory,
-  dragging = false, dropTargetActive = false, onDragStateChange,
+  updating = false, dragging = false, dropTargetActive = false, onDragStateChange,
   selectMode, selected, onToggleSelect,
   onHoverStart, onHoverEnd,
 }: Props) {
   const { t } = useLanguage()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [updateHovered, setUpdateHovered] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const dragGhostRef = useRef<HTMLDivElement | null>(null)
 
@@ -120,7 +122,7 @@ export default function SkillCard({
   }
 
   const menuItems = [
-    ...(showUpdatable && skill.hasUpdate ? [{ label: t('skillCard.update'), onClick: () => onUpdate?.() }] : []),
+    ...(showUpdatable && skill.hasUpdate ? [{ label: updating ? t('skillCard.updating') : t('skillCard.update'), onClick: () => void onUpdate?.() }] : []),
     ...categories.filter(c => c !== skill.category).map(c => ({
       label: t('skillCard.moveTo', { cat: c }),
       onClick: () => onMoveCategory(c),
@@ -220,14 +222,34 @@ export default function SkillCard({
           {skill.name}
         </p>
         {!selectMode && (
-          <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className={`mt-3 flex gap-2 transition-opacity ${updating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
             {showUpdatable && skill.hasUpdate && (
               <button
-                onClick={e => { e.stopPropagation(); onUpdate?.() }}
-                className="text-xs flex items-center gap-1 transition-colors"
-                style={{ color: 'var(--accent-primary)' }}
+                onClick={e => { e.stopPropagation(); void onUpdate?.() }}
+                onMouseEnter={() => setUpdateHovered(true)}
+                onMouseLeave={() => setUpdateHovered(false)}
+                disabled={updating}
+                aria-busy={updating}
+                className={`text-xs flex items-center gap-1 rounded-md border px-2 py-1 transition-all duration-200 ${
+                  updating ? 'cursor-wait' : 'hover:-translate-y-px hover:shadow-sm'
+                } disabled:opacity-100`}
+                style={updating ? {
+                  color: 'var(--accent-primary)',
+                  background: 'var(--accent-glow)',
+                  borderColor: 'var(--border-accent)',
+                  boxShadow: 'var(--glow-accent-sm)',
+                } : updateHovered ? {
+                  color: 'var(--active-text)',
+                  background: 'var(--active-surface)',
+                  borderColor: 'var(--active-border)',
+                  boxShadow: 'var(--active-shadow)',
+                } : {
+                  color: 'var(--accent-primary)',
+                  background: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)',
+                  borderColor: 'color-mix(in srgb, var(--accent-primary) 24%, transparent)',
+                }}
               >
-                <RefreshCw size={12} /> {t('skillCard.update')}
+                <RefreshCw size={12} className={updating ? 'animate-spin' : ''} /> {updating ? t('skillCard.updating') : t('skillCard.update')}
               </button>
             )}
             {skill.path && (
