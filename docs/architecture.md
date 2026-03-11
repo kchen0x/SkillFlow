@@ -355,7 +355,7 @@ SkillFlow distinguishes two identities:
 - Remote update checks apply only to installed git-backed skills with a stable repo source and subpath.
 - Remote lookup and installed-instance correlation must use the same logical git key.
 - `LatestSHA` is cleared when a fresh check confirms the installed copy is already current.
-- `LastCheckedAt` is updated on every completed check attempt.
+- `LastCheckedAt` is updated on every completed check attempt and persisted in local-only `meta_local/<skill-id>.local.json` (not synced).
 
 ### Implementation guidance
 

@@ -20,3 +20,7 @@
 
 .worktree
 .gocache/
+
+# Local-only runtime metadata overlays (not synced)
+/meta_local/
+/star_repos_local.json

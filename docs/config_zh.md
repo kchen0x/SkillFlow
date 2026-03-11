@@ -18,7 +18,9 @@
 | `config.json` | 共享的、可同步的安全配置 | 是 |
 | `config_local.json` | 机器相关路径、敏感信息和本地运行状态 | 否 |
 | `star_repos.json` | 收藏仓库的本地缓存元数据 | 是 |
+| `star_repos_local.json` | 收藏仓库本地同步状态覆盖文件 | 否 |
 | `meta/<skill-id>.json` | 每个已安装 Skill 的 sidecar 元数据 | 是 |
+| `meta_local/<skill-id>.local.json` | 每个 Skill 的本地易变元数据覆盖文件 | 否 |
 | `cache/viewstate/*.json` | 本地派生 UI / 缓存快照 | 否 |
 
 ## `cache/viewstate/*.json`
@@ -233,9 +235,7 @@
     "url": "https://github.com/example/awesome-skills.git",
     "name": "example/awesome-skills",
     "source": "github.com/example/awesome-skills",
-    "localDir": "cache/github.com/example/awesome-skills",
-    "lastSync": "2026-03-11T08:15:00Z",
-    "syncError": "authentication failed"
+    "localDir": "cache/github.com/example/awesome-skills"
   }
 ]
 ```
@@ -248,8 +248,33 @@
 | `name` | string | 便于展示的仓库名，通常是 `<owner>/<repo>` 或 `<group>/<subgroup>/<repo>`。 |
 | `source` | string | 跨模块关联使用的规范化仓库源键，通常形如 `<host>/<repo-path>`。 |
 | `localDir` | string | 本地克隆/缓存目录。如果目录位于 `<AppDataDir>` 内，会以正斜杠相对路径保存，例如 `cache/github.com/example/awesome-skills`。 |
-| `lastSync` | string | 最近一次成功同步时间，采用 RFC3339 格式。尚未同步过时可能是零时间。 |
-| `syncError` | string | 最近一次同步失败的错误信息。没有错误时该键会被省略。 |
+
+## `star_repos_local.json`
+
+路径：`<AppDataDir>/star_repos_local.json`
+
+这个仅本地文件用于保存每个收藏仓库变化频繁、且不应跨设备同步的同步状态。
+
+### 示例
+
+```json
+{
+  "repos": {
+    "github.com/example/awesome-skills": {
+      "lastSync": "2026-03-11T08:15:00Z",
+      "syncError": "authentication failed"
+    }
+  }
+}
+```
+
+### 字段说明
+
+| 键 | 类型 | 说明 |
+|----|------|------|
+| `repos` | object | 以仓库 source 键（或 URL 兜底）为 key 的本地同步状态映射。 |
+| `repos.<key>.lastSync` | string | 当前设备最近一次成功同步时间（RFC3339）。 |
+| `repos.<key>.syncError` | string | 当前设备最近一次同步失败错误信息；为空时省略。 |
 
 ## `meta/<skill-id>.json`
 
@@ -271,8 +296,7 @@
   "SourceSHA": "8f3d4c2",
   "LatestSHA": "31ad9be",
   "InstalledAt": "2026-03-10T09:30:00Z",
-  "UpdatedAt": "2026-03-11T07:45:00Z",
-  "LastCheckedAt": "2026-03-11T08:00:00Z"
+  "UpdatedAt": "2026-03-11T07:45:00Z"
 }
 ```
 
@@ -291,8 +315,27 @@
 | `LatestSHA` | string | 更新检测最近一次发现的远端最新 SHA。 |
 | `InstalledAt` | string | Skill 首次导入到 SkillFlow 的时间。 |
 | `UpdatedAt` | string | 最近一次修改元数据的时间，例如移动分类或完成更新。 |
-| `LastCheckedAt` | string | 最近一次执行更新检查的时间。 |
 
 ### 重要说明
 
 `meta/<skill-id>.json` 保存的是安装状态，不是 `SKILL.md` 里的 YAML frontmatter。像 `name`、`description`、`allowed-tools` 这类 frontmatter 字段仍然保存在 Skill 内容本身。
+
+## `meta_local/<skill-id>.local.json`
+
+路径：`<SyncRoot>/meta_local/<skill-id>.local.json`
+
+这个文件用于保存当前设备本地、变化频繁且不应跨设备同步的 Skill 字段。
+
+### 示例
+
+```json
+{
+  "lastCheckedAt": "2026-03-11T08:00:00Z"
+}
+```
+
+### 字段说明
+
+| 键 | 类型 | 说明 |
+|----|------|------|
+| `lastCheckedAt` | string | 当前设备最近一次执行更新检查的时间。 |

@@ -27,7 +27,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones into your library. |
 | **Cross-tool Sync** | Push or pull skills across Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, and custom tools. |
 | **Starred Repos** | Watch Git repos, browse their skills, and import or push them without installing everything into My Skills first. |
-| **Cloud Backup** | Back up skills, prompts, and metadata to object storage providers or Git, with local-only secret storage. |
+| **Cloud Backup** | Back up skills, prompts, and sync-safe metadata to object storage providers or Git, while keeping secrets and high-churn local runtime metadata on-device only. |
 | **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app, including any copies already pushed to tool directories. |
 | **Desktop Experience** | Bilingual UI, multiple themes, helper-backed tray/menu bar reopen after window close, launch-at-login, per-tool settings, and background route-memory trimming when a hidden window stays inactive. |
 
@@ -62,6 +62,8 @@ Configure backup in **Settings → Cloud Storage**.
 - Supported providers: **Aliyun OSS**, **AWS S3**, **Azure Blob Storage**, **Google Cloud Storage**, **Tencent COS**, **Huawei OBS**, and **Git**.
 - Skills, prompts, and synced metadata are backed up together so a new device can restore the same library state.
 - Synced metadata stores portable relative paths where possible, which keeps cross-device restore working across macOS and Windows.
+- High-churn per-skill check timestamps are kept in local-only `meta_local/*.local.json`, so multi-device backup syncs avoid unnecessary merge conflicts.
+- High-churn starred-repo sync state (`lastSync`, `syncError`) is kept in local-only `star_repos_local.json` to reduce multi-device merge churn.
 - Machine-specific paths, proxy settings, auto-push targets, launch-at-login state, window size, and sensitive cloud credentials stay local in `config_local.json`.
 - Git backup supports startup pull, periodic auto-sync, and explicit conflict-resolution actions.
 

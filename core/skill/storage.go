@@ -18,18 +18,20 @@ var ErrSkillNotFound = errors.New("skill not found")
 var ErrCategoryNotEmpty = errors.New("category not empty")
 
 type Storage struct {
-	root     string
-	metaDir  string
-	syncRoot string
+	root         string
+	metaDir      string
+	localMetaDir string
+	syncRoot     string
 }
 
 func NewStorage(root string) *Storage {
 	cleanRoot := filepath.Clean(root)
 	syncRoot := filepath.Dir(cleanRoot)
 	return &Storage{
-		root:     cleanRoot,
-		metaDir:  filepath.Join(syncRoot, "meta"),
-		syncRoot: syncRoot,
+		root:         cleanRoot,
+		metaDir:      filepath.Join(syncRoot, "meta"),
+		localMetaDir: filepath.Join(syncRoot, "meta_local"),
+		syncRoot:     syncRoot,
 	}
 }
 
@@ -112,6 +114,9 @@ func (s *Storage) ListAll() ([]*Skill, error) {
 			if s.resolveLoadedSkillPath(&sk) {
 				_ = s.saveMeta(&sk)
 			}
+			if checkedAt, localMetaErr := s.loadLocalCheckedAt(sk.ID); localMetaErr == nil && !checkedAt.IsZero() {
+				sk.LastCheckedAt = checkedAt
+			}
 			skills = append(skills, &sk)
 		}
 	}
@@ -126,7 +131,13 @@ func (s *Storage) Delete(id string) error {
 	if err := os.RemoveAll(sk.Path); err != nil {
 		return err
 	}
-	return os.Remove(filepath.Join(s.metaDir, id+".json"))
+	if err := os.Remove(filepath.Join(s.metaDir, id+".json")); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Remove(filepath.Join(s.localMetaDir, id+".local.json")); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func (s *Storage) MoveCategory(id, newCategory string) error {
@@ -205,16 +216,82 @@ func (s *Storage) OverwriteFromDir(id, srcDir string) error {
 }
 
 func (s *Storage) saveMeta(sk *Skill) error {
+	if err := s.saveSharedMeta(sk); err != nil {
+		return err
+	}
+	return s.saveLocalMeta(sk)
+}
+
+func (s *Storage) saveSharedMeta(sk *Skill) error {
 	if err := os.MkdirAll(s.metaDir, 0755); err != nil {
 		return err
 	}
-	snapshot := *sk
-	snapshot.Path = pathutil.StorePath(s.syncRoot, sk.Path, s.skillPath(sk.Category, sk.Name))
+	type syncedMetaSnapshot struct {
+		ID            string
+		Name          string
+		Path          string
+		Category      string
+		Source        SourceType
+		SourceURL     string
+		SourceSubPath string
+		SourceSHA     string
+		LatestSHA     string
+		InstalledAt   time.Time
+		UpdatedAt     time.Time
+	}
+	snapshot := syncedMetaSnapshot{
+		ID:            sk.ID,
+		Name:          sk.Name,
+		Path:          pathutil.StorePath(s.syncRoot, sk.Path, s.skillPath(sk.Category, sk.Name)),
+		Category:      sk.Category,
+		Source:        sk.Source,
+		SourceURL:     sk.SourceURL,
+		SourceSubPath: sk.SourceSubPath,
+		SourceSHA:     sk.SourceSHA,
+		LatestSHA:     sk.LatestSHA,
+		InstalledAt:   sk.InstalledAt,
+		UpdatedAt:     sk.UpdatedAt,
+	}
 	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(s.metaDir, sk.ID+".json"), data, 0644)
+}
+
+type localMetaSnapshot struct {
+	LastCheckedAt time.Time `json:"lastCheckedAt,omitempty"`
+}
+
+func (s *Storage) saveLocalMeta(sk *Skill) error {
+	localPath := filepath.Join(s.localMetaDir, sk.ID+".local.json")
+	if sk.LastCheckedAt.IsZero() {
+		if err := os.Remove(localPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	if err := os.MkdirAll(s.localMetaDir, 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(localMetaSnapshot{LastCheckedAt: sk.LastCheckedAt}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(localPath, data, 0644)
+}
+
+func (s *Storage) loadLocalCheckedAt(id string) (time.Time, error) {
+	data, err := os.ReadFile(filepath.Join(s.localMetaDir, id+".local.json"))
+	if err != nil {
+		return time.Time{}, err
+	}
+	var local localMetaSnapshot
+	if err := json.Unmarshal(data, &local); err != nil {
+		return time.Time{}, err
+	}
+	return local.LastCheckedAt, nil
 }
 
 func (s *Storage) resolveLoadedSkillPath(sk *Skill) bool {

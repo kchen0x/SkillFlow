@@ -5,13 +5,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/shinerio/skillflow/core/pathutil"
 )
 
 type StarStorage struct {
 	path            string
+	localPath       string
 	dataDir         string
 	builtinRepoURLs []string
 	mu              sync.Mutex
@@ -24,7 +27,13 @@ func NewStarStorage(path string) *StarStorage {
 func NewStarStorageWithBuiltins(path string, builtinRepoURLs []string) *StarStorage {
 	cleanPath := filepath.Clean(path)
 	builtins := append([]string(nil), builtinRepoURLs...)
-	return &StarStorage{path: cleanPath, dataDir: filepath.Dir(cleanPath), builtinRepoURLs: builtins}
+	dataDir := filepath.Dir(cleanPath)
+	return &StarStorage{
+		path:            cleanPath,
+		localPath:       filepath.Join(dataDir, "star_repos_local.json"),
+		dataDir:         dataDir,
+		builtinRepoURLs: builtins,
+	}
 }
 
 func (s *StarStorage) Load() ([]StarredRepo, error) {
@@ -51,10 +60,21 @@ func (s *StarStorage) Load() ([]StarredRepo, error) {
 	if err := json.Unmarshal(data, &repos); err != nil {
 		return repos, err
 	}
+	localState, localErr := s.loadLocalStateLocked()
+	if localErr != nil {
+		return nil, localErr
+	}
 	changed := false
 	for i := range repos {
 		if s.resolveLocalDir(&repos[i]) {
 			changed = true
+		}
+		if !repos[i].LastSync.IsZero() || strings.TrimSpace(repos[i].SyncError) != "" {
+			changed = true
+		}
+		if local, ok := localState[s.localStateKey(repos[i])]; ok {
+			repos[i].LastSync = local.LastSync
+			repos[i].SyncError = local.SyncError
 		}
 	}
 	if changed {
@@ -75,7 +95,7 @@ func (s *StarStorage) saveLocked(repos []StarredRepo) error {
 	if repos == nil {
 		repos = []StarredRepo{}
 	}
-	snapshot := make([]StarredRepo, len(repos))
+	snapshot := make([]syncedStarredRepo, len(repos))
 	for i := range repos {
 		snapshot[i] = s.serializedRepo(repos[i])
 	}
@@ -102,13 +122,110 @@ func (s *StarStorage) saveLocked(repos []StarredRepo) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, s.path)
+	if err := os.Rename(tmpName, s.path); err != nil {
+		return err
+	}
+	return s.saveLocalStateLocked(repos)
 }
 
-func (s *StarStorage) serializedRepo(repo StarredRepo) StarredRepo {
-	snapshot := repo
-	snapshot.LocalDir = pathutil.StorePath(s.dataDir, repo.LocalDir, s.derivedLocalDir(repo.URL))
-	return snapshot
+type syncedStarredRepo struct {
+	URL      string `json:"url"`
+	Name     string `json:"name"`
+	Source   string `json:"source"`
+	LocalDir string `json:"localDir"`
+}
+
+func (s *StarStorage) serializedRepo(repo StarredRepo) syncedStarredRepo {
+	return syncedStarredRepo{
+		URL:      repo.URL,
+		Name:     repo.Name,
+		Source:   repo.Source,
+		LocalDir: pathutil.StorePath(s.dataDir, repo.LocalDir, s.derivedLocalDir(repo.URL)),
+	}
+}
+
+type localRepoState struct {
+	LastSync  time.Time `json:"lastSync,omitempty"`
+	SyncError string    `json:"syncError,omitempty"`
+}
+
+type starredReposLocalSnapshot struct {
+	Repos map[string]localRepoState `json:"repos"`
+}
+
+func (s *StarStorage) localStateKey(repo StarredRepo) string {
+	if source := strings.TrimSpace(repo.Source); source != "" {
+		return strings.ToLower(source)
+	}
+	if source, err := RepoSource(repo.URL); err == nil && strings.TrimSpace(source) != "" {
+		return strings.ToLower(strings.TrimSpace(source))
+	}
+	return strings.ToLower(strings.TrimSpace(repo.URL))
+}
+
+func (s *StarStorage) saveLocalStateLocked(repos []StarredRepo) error {
+	snapshot := starredReposLocalSnapshot{Repos: map[string]localRepoState{}}
+	for _, repo := range repos {
+		if repo.LastSync.IsZero() && strings.TrimSpace(repo.SyncError) == "" {
+			continue
+		}
+		key := s.localStateKey(repo)
+		if key == "" {
+			continue
+		}
+		snapshot.Repos[key] = localRepoState{
+			LastSync:  repo.LastSync,
+			SyncError: repo.SyncError,
+		}
+	}
+	if len(snapshot.Repos) == 0 {
+		if err := os.Remove(s.localPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	data, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(s.localPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".star_repos_local_*.json")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		tmp.Close()
+		os.Remove(tmpName)
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, s.localPath)
+}
+
+func (s *StarStorage) loadLocalStateLocked() (map[string]localRepoState, error) {
+	data, err := os.ReadFile(s.localPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]localRepoState{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var snapshot starredReposLocalSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return nil, err
+	}
+	if snapshot.Repos == nil {
+		return map[string]localRepoState{}, nil
+	}
+	return snapshot.Repos, nil
 }
 
 func (s *StarStorage) resolveLocalDir(repo *StarredRepo) bool {

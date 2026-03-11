@@ -10,6 +10,7 @@ import (
 var excludedDirs = []string{
 	"cache",
 	"logs",
+	"meta_local",
 	".git",
 }
 
@@ -18,6 +19,7 @@ var excludedDirs = []string{
 var excludedFiles = []string{
 	".DS_Store",
 	"config_local.json",
+	"star_repos_local.json",
 }
 
 // ShouldSkipBackupPath reports whether a relative path should be excluded from backup sync/list/restore.

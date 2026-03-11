@@ -65,7 +65,7 @@
 |------|------|
 | **搜索框** | 加宽显示，实时按技能名过滤（不区分大小写）；窗口较窄时工具栏会自动换行，保证按钮完整可见 |
 | **排序切换** | 两个按钮在 **A-Z** 与 **Z-A** 间切换，按 Skill 名称首字母正序或逆序排列 |
-| **更新**（RefreshCw） | 调用后端 `CheckUpdates()`；按规范化后的仓库来源 + 子路径聚合同一个 Git Skill，刷新 `LatestSHA` / `LastCheckedAt`，为可更新卡片显示红点与“更新”操作，并在实例已是最新时清理过期更新标记。该按钮只检查，不会直接覆盖本地文件 |
+| **更新**（RefreshCw） | 调用后端 `CheckUpdates()`；按规范化后的仓库来源 + 子路径聚合同一个 Git Skill，刷新可同步的 `LatestSHA` 与仅本地保存的 `LastCheckedAt`，为可更新卡片显示红点与“更新”操作，并在实例已是最新时清理过期更新标记。该按钮只检查，不会直接覆盖本地文件 |
 | **批量删除**（CheckSquare） | 切换多选模式 |
 | **导入**（FolderOpen） | 打开系统文件夹选择器 → `ImportLocal(dir)` |
 | **远程安装**（Github） | 打开 GitHub 安装对话框 |
@@ -414,6 +414,8 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 - **对象存储自定义前缀** — 对象存储服务商允许用户填写父级 `remotePath`；SkillFlow 最终总是写入 `<存储桶>/<remotePath>/skillflow/`（若父级路径为空，则为 `<存储桶>/skillflow/`）。
 - **云服务商独立配置档案** — 每个云服务商都会保留自己独立的存储桶、路径和凭据配置；在设置中切换服务商时，会恢复该服务商上次保存的表单值，而不会覆盖其他服务商的配置。
 - **同步路径可移植** — `meta/*.json`、`star_repos.json` 等同步元数据中的本地路径会以同步根目录下的正斜杠相对路径保存，确保 macOS 与 Windows 间恢复后仍能正确定位。
+- **Skill 易变检查时间仅本地保存** — 变化频繁的 `LastCheckedAt` 会写入本地 `meta_local/*.local.json`，不参与 git/云端同步，降低多机并行时的冲突概率。
+- **收藏仓库同步运行态仅本地保存** — 每个仓库的 `lastSync` 与 `syncError` 会写入本地 `star_repos_local.json`，避免某台设备后台同步导致其他设备的同步元数据频繁抖动与冲突。
 - **本地路径配置隔离** — `config_local.json` 保存机器相关的文件系统路径与代理设置，例如应用目录外的 `SkillsStorageDir`、工具 `ScanDirs` / `PushDir` 以及代理配置；该文件不参与备份和 git 同步。
 - **云端敏感凭据仅本地保存** — Access Key ID、Secret Key、访问令牌等敏感云凭据只会写入 `config_local.json` 中按服务商分组的本地配置；可同步的 `config.json` 仅保留云服务商、存储桶、远端路径、Endpoint、仓库地址、分支等非敏感配置。
 - **Git 备份兼容处理** — 当 Git 备份以父目录作为工作树时，SkillFlow 会自动迁移旧的 `skills/.git` 嵌套元数据，避免真实 Skill 文件被当作嵌套仓库而无法跟踪。

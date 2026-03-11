@@ -20,7 +20,9 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, and `star_repo
 | `config.json` | Shared, sync-safe settings | Yes |
 | `config_local.json` | Machine-specific paths, secrets, and local runtime state | No |
 | `star_repos.json` | Starred repository cache metadata | Yes |
+| `star_repos_local.json` | Local-only starred-repo runtime sync state overlay | No |
 | `meta/<skill-id>.json` | One sidecar metadata file per installed skill | Yes |
+| `meta_local/<skill-id>.local.json` | Local-only per-skill volatile metadata overlay | No |
 | `cache/viewstate/*.json` | Local derived UI/cache snapshots | No |
 
 ## `cache/viewstate/*.json`
@@ -235,9 +237,7 @@ Path: `<AppDataDir>/star_repos.json`
     "url": "https://github.com/example/awesome-skills.git",
     "name": "example/awesome-skills",
     "source": "github.com/example/awesome-skills",
-    "localDir": "cache/github.com/example/awesome-skills",
-    "lastSync": "2026-03-11T08:15:00Z",
-    "syncError": "authentication failed"
+    "localDir": "cache/github.com/example/awesome-skills"
   }
 ]
 ```
@@ -250,8 +250,33 @@ Path: `<AppDataDir>/star_repos.json`
 | `name` | string | Human-friendly repo name, usually `<owner>/<repo>` or `<group>/<subgroup>/<repo>`. |
 | `source` | string | Canonical repo source key used for matching across modules, usually `<host>/<repo-path>`. |
 | `localDir` | string | Local clone/cache directory. When it lives inside `<AppDataDir>`, it is stored as a forward-slash relative path such as `cache/github.com/example/awesome-skills`. |
-| `lastSync` | string | Last successful sync timestamp in RFC3339 format. Zero time is possible for repos that have not synced yet. |
-| `syncError` | string | Last sync error message. This key is omitted when there is no error. |
+
+## `star_repos_local.json`
+
+Path: `<AppDataDir>/star_repos_local.json`
+
+This local-only overlay stores per-repo volatile sync state that should not be synced across devices.
+
+### Example
+
+```json
+{
+  "repos": {
+    "github.com/example/awesome-skills": {
+      "lastSync": "2026-03-11T08:15:00Z",
+      "syncError": "authentication failed"
+    }
+  }
+}
+```
+
+### Keys
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `repos` | object | Map keyed by repo source key (or URL fallback) to local sync state entries. |
+| `repos.<key>.lastSync` | string | Last successful sync timestamp on the current device (RFC3339). |
+| `repos.<key>.syncError` | string | Last sync error message on the current device. Omitted when empty. |
 
 ## `meta/<skill-id>.json`
 
@@ -273,8 +298,7 @@ Each installed skill gets one JSON sidecar file named after `Skill.ID` rather th
   "SourceSHA": "8f3d4c2",
   "LatestSHA": "31ad9be",
   "InstalledAt": "2026-03-10T09:30:00Z",
-  "UpdatedAt": "2026-03-11T07:45:00Z",
-  "LastCheckedAt": "2026-03-11T08:00:00Z"
+  "UpdatedAt": "2026-03-11T07:45:00Z"
 }
 ```
 
@@ -293,8 +317,27 @@ Each installed skill gets one JSON sidecar file named after `Skill.ID` rather th
 | `LatestSHA` | string | Latest remote SHA most recently discovered by the update checker. |
 | `InstalledAt` | string | Timestamp when the skill was first imported into SkillFlow. |
 | `UpdatedAt` | string | Timestamp when the skill metadata was last changed, such as category moves or updates. |
-| `LastCheckedAt` | string | Timestamp of the most recent update-check attempt. |
 
 ### Important note
 
 `meta/<skill-id>.json` stores installation state, not the YAML frontmatter parsed from `SKILL.md`. Frontmatter fields such as `name`, `description`, and `allowed-tools` stay in the skill content itself.
+
+## `meta_local/<skill-id>.local.json`
+
+Path: `<SyncRoot>/meta_local/<skill-id>.local.json`
+
+This file stores local-only, high-churn per-skill fields that should not be synced across devices.
+
+### Example
+
+```json
+{
+  "lastCheckedAt": "2026-03-11T08:00:00Z"
+}
+```
+
+### Keys
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `lastCheckedAt` | string | Timestamp of the most recent update-check attempt on the current device. |

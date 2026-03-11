@@ -355,7 +355,7 @@ SkillFlow 区分两类身份：
 - 只有具备稳定 repo source + subpath 的已安装 Git Skill 才参与远端更新检测。
 - 远端查询与已安装实例关联必须使用同一逻辑 Git 主键。
 - 当最新检查确认本地已是最新时，应清空 `LatestSHA`。
-- 每次完成检查后都应更新 `LastCheckedAt`。
+- 每次完成检查后都应更新 `LastCheckedAt`，并将其写入仅本地持久化的 `meta_local/<skill-id>.local.json`（不参与同步）。
 
 ### 实现指导
 

@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/shinerio/skillflow/core/skill"
 	"github.com/stretchr/testify/assert"
@@ -36,6 +38,13 @@ func readStoredPath(t *testing.T, root, id string) string {
 	var stored skill.Skill
 	require.NoError(t, json.Unmarshal(data, &stored))
 	return stored.Path
+}
+
+func readStoredMetaRaw(t *testing.T, root, id string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(root), "meta", id+".json"))
+	require.NoError(t, err)
+	return string(data)
 }
 
 func foreignAbsolutePath() string {
@@ -189,4 +198,54 @@ func TestStorageListAllRecoversFromForeignAbsoluteMetaPath(t *testing.T) {
 	require.Len(t, items, 1)
 	assert.Equal(t, actual, items[0].Path)
 	assert.Equal(t, "skills/coding/portable-skill", readStoredPath(t, root, stored.ID))
+}
+
+func TestStorageSaveMetaStoresLastCheckedAtInLocalMetaOnly(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "skills")
+	require.NoError(t, os.MkdirAll(root, 0755))
+	src := t.TempDir()
+	skillDir := makeTestSkillDir(t, src, "local-meta-skill")
+	svc := skill.NewStorage(root)
+
+	imported, err := svc.Import(skillDir, "coding", skill.SourceGitHub, "https://github.com/example/repo.git", "skills/local-meta-skill")
+	require.NoError(t, err)
+	checkedAt := time.Now().UTC().Truncate(time.Second)
+	imported.LastCheckedAt = checkedAt
+	require.NoError(t, svc.SaveMeta(imported))
+
+	metaRaw := readStoredMetaRaw(t, root, imported.ID)
+	if strings.Contains(metaRaw, "LastCheckedAt") {
+		t.Fatalf("expected synced meta to exclude LastCheckedAt, got %s", metaRaw)
+	}
+
+	localPath := filepath.Join(filepath.Dir(root), "meta_local", imported.ID+".local.json")
+	localRaw, err := os.ReadFile(localPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(localRaw), "\"lastCheckedAt\"")
+
+	reloaded, err := svc.Get(imported.ID)
+	require.NoError(t, err)
+	assert.Equal(t, checkedAt, reloaded.LastCheckedAt.UTC().Truncate(time.Second))
+}
+
+func TestStorageDeleteRemovesLocalMeta(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "skills")
+	require.NoError(t, os.MkdirAll(root, 0755))
+	src := t.TempDir()
+	skillDir := makeTestSkillDir(t, src, "delete-local-meta-skill")
+	svc := skill.NewStorage(root)
+
+	imported, err := svc.Import(skillDir, "coding", skill.SourceGitHub, "https://github.com/example/repo.git", "skills/delete-local-meta-skill")
+	require.NoError(t, err)
+	imported.LastCheckedAt = time.Now().UTC()
+	require.NoError(t, svc.SaveMeta(imported))
+
+	localPath := filepath.Join(filepath.Dir(root), "meta_local", imported.ID+".local.json")
+	_, err = os.Stat(localPath)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.Delete(imported.ID))
+
+	_, err = os.Stat(localPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }

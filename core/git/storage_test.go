@@ -43,12 +43,112 @@ func TestStarStorageSaveLoad(t *testing.T) {
 	if !strings.Contains(string(raw), `"localDir": "cache/github.com/a/b"`) {
 		t.Fatalf("expected relative localDir in persisted file, got %s", string(raw))
 	}
+	if strings.Contains(string(raw), `"lastSync"`) || strings.Contains(string(raw), `"syncError"`) {
+		t.Fatalf("expected synced file to exclude local fields, got %s", string(raw))
+	}
 	got, err := s.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("mismatch:\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestStarStorageSaveLoadPersistsLocalStateInLocalFileOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "star_repos.json")
+	s := NewStarStorage(path)
+	localDir, err := CacheDir(dir, "https://github.com/a/b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastSync := time.Now().UTC().Truncate(time.Second)
+	want := []StarredRepo{
+		{
+			URL:       "https://github.com/a/b",
+			Name:      "a/b",
+			Source:    "github.com/a/b",
+			LocalDir:  localDir,
+			LastSync:  lastSync,
+			SyncError: "network timeout",
+		},
+	}
+	if err := s.Save(want); err != nil {
+		t.Fatal(err)
+	}
+
+	syncedRaw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(syncedRaw), `"lastSync"`) || strings.Contains(string(syncedRaw), `"syncError"`) {
+		t.Fatalf("expected synced file to exclude local state fields, got %s", string(syncedRaw))
+	}
+
+	localRaw, err := os.ReadFile(filepath.Join(dir, "star_repos_local.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(localRaw), `"lastSync"`) || !strings.Contains(string(localRaw), `"syncError"`) {
+		t.Fatalf("expected local state file to include local fields, got %s", string(localRaw))
+	}
+
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(got))
+	}
+	if got[0].SyncError != "network timeout" {
+		t.Fatalf("unexpected syncError: %q", got[0].SyncError)
+	}
+	if got[0].LastSync.UTC().Truncate(time.Second) != lastSync {
+		t.Fatalf("unexpected lastSync: got %s want %s", got[0].LastSync.UTC().Format(time.RFC3339), lastSync.Format(time.RFC3339))
+	}
+}
+
+func TestStarStorageLoadMigratesLegacyLocalFieldsToLocalFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "star_repos.json")
+	legacy := []StarredRepo{{
+		URL:       "https://github.com/a/b",
+		Name:      "a/b",
+		Source:    "github.com/a/b",
+		LocalDir:  "cache/github.com/a/b",
+		LastSync:  time.Now().UTC().Truncate(time.Second),
+		SyncError: "legacy err",
+	}}
+	data, err := json.MarshalIndent(legacy, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := NewStarStorage(path)
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 repo, got %+v", got)
+	}
+	if got[0].SyncError != "legacy err" || got[0].LastSync.IsZero() {
+		t.Fatalf("expected local state to survive migration, got %+v", got[0])
+	}
+
+	syncedRaw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(syncedRaw), `"lastSync"`) || strings.Contains(string(syncedRaw), `"syncError"`) {
+		t.Fatalf("expected migrated synced file to drop local fields, got %s", string(syncedRaw))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "star_repos_local.json")); err != nil {
+		t.Fatalf("expected local state file created after migration: %v", err)
 	}
 }
 

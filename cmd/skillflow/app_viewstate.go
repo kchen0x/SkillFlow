@@ -56,6 +56,11 @@ func (a *App) installedSkillsFingerprint() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	metaLocalDir := filepath.Join(filepath.Dir(filepath.Clean(cfg.SkillsStorageDir)), "meta_local")
+	metaLocalFingerprint, err := directorySummaryFingerprint(metaLocalDir)
+	if err != nil {
+		return "", err
+	}
 
 	toolsConfig, err := json.Marshal(cfg.Tools)
 	if err != nil {
@@ -66,6 +71,7 @@ func (a *App) installedSkillsFingerprint() (string, error) {
 		strconv.Itoa(cfg.RepoScanMaxDepth),
 		string(toolsConfig),
 		metaFingerprint,
+		metaLocalFingerprint,
 	}
 	for _, tool := range cfg.Tools {
 		pushDirFingerprint, err := directorySummaryFingerprint(tool.PushDir)

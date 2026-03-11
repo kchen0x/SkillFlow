@@ -93,6 +93,12 @@ func TestGitProviderSyncInitializesRepoAndPushes(t *testing.T) {
 	if !strings.Contains(string(gitignore), "cache/") {
 		t.Fatalf("expected .gitignore to contain cache/, got: %q", string(gitignore))
 	}
+	if !strings.Contains(string(gitignore), "meta_local/") {
+		t.Fatalf("expected .gitignore to contain meta_local/, got: %q", string(gitignore))
+	}
+	if !strings.Contains(string(gitignore), "star_repos_local.json") {
+		t.Fatalf("expected .gitignore to contain star_repos_local.json, got: %q", string(gitignore))
+	}
 
 	_ = runGit(t, "", "--git-dir", remoteDir, "rev-parse", "--verify", "refs/heads/main")
 	remoteFiles := runGit(t, "", "--git-dir", remoteDir, "ls-tree", "-r", "--name-only", "main")
