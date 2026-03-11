@@ -22,6 +22,7 @@
 | `meta/<skill-id>.json` | 每个已安装 Skill 的 sidecar 元数据 | 是 |
 | `meta_local/<skill-id>.local.json` | 每个 Skill 的本地易变元数据覆盖文件 | 否 |
 | `cache/viewstate/*.json` | 本地派生 UI / 缓存快照 | 否 |
+| `runtime/*.json`、`runtime/helper.lock` | 本地 helper/UI 进程协调状态 | 否 |
 
 ## `cache/viewstate/*.json`
 
@@ -35,6 +36,19 @@
 - 必须从 `skills/`、`meta/`、工具目录等现有真值层文件重建。
 - 不能被云备份上传，也不能反向写回任何可同步元数据文件。
 - 不同设备上的缓存内容不同是正常且无害的。
+
+## `runtime/*.json`、`runtime/helper.lock`
+
+路径：`<AppDataDir>/runtime/`
+
+这些文件保存 helper/UI 双进程在当前设备上的本地协调状态。典型文件包括 `helper-control.json`、`ui-control.json` 和 `helper.lock`。
+
+规则：
+
+- 文件里保存的是回环地址、随机 token 和 PID，只对当前设备、当前这次运行有效。
+- 它们必须被排除在云备份、Git 同步和跨设备恢复之外。
+- 如果旧版本曾把 `runtime/` 跟踪进 Git 备份，下一次推送时会自动清理掉。
+- 在 SkillFlow 完全退出时可以删除；应用下次启动会自动重建。
 
 ## `config.json`
 

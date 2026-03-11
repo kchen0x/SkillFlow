@@ -1,0 +1,660 @@
+Chat Export Time: 2026-03-11 22:04:37
+Scope: user/assistant conversation content in this session
+
+[User]
+目前应用启动卡顿明显，页面切换，卡片展示动画等不流畅。extra hard thinking 如何改进性能，减少系统cpu,memory占用
+
+[Assistant]
+我先把现状结论说清楚：
+
+1. 前端卡顿不是单点问题。
+`Dashboard` 的技能卡片里，[SkillStatusStrip.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/components/SkillStatusStrip.tsx) 给每张卡都挂了 `ResizeObserver`，还会反复测量宽度；卡片一多，动画和滚动都会被拖慢。
+
+2. 页面切换成本偏高。
+[App.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx) 用 `AnimatePresence + motion` 包整页路由，切页时会整页重新做进出场动画，页面树较大时更明显。
+
+3. 启动首屏会做过重的后端扫描。
+[app.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/app.go) 的 `ListSkills()` 会连带扫描所有工具的 `PushDir`；同时启动后 750ms 又并发触发更新检查、star repo 刷新、app 更新检查、git pull。这会把 UI 初始阶段和后台 I/O/CPU 抢在一起。
+
+先确认一个方向：你希望我这次优先做“低风险、立刻见效”的优化，还是直接做“更大幅度的性能重构（会改动更多前后端路径）”？
+
+[User]
+更大幅度的性能重构，但是不要影响现有功能，尤其是要考虑云同步到其他设备后不要产生问题。
+
+[Assistant]
+[空响应]
+
+[User]
+可以的
+
+[Assistant]
+再确认一个关键取舍：你是否接受“动画保留，但改成自适应降级”，例如列表超过一定数量时关闭逐卡入场、页面切换改为更轻的淡入、拖拽和悬浮效果只保留必要反馈？
+
+[User]
+可以的
+
+[Assistant]
+[空响应]
+
+[User]
+可以，但是你考虑到从远程同步过来的新的skill，新的star repo等资源吗？这些会和你本地缓存不一致吗？
+
+[Assistant]
+[空响应]
+
+[User]
+采用方案2，但是一定要保证用户即使长时间不操作页面，也能实现最终一致性，即页面展示的数据要包含云同步的解耦股
+
+[Assistant]
+[空响应]
+
+[User]
+好的，继续
+
+[Assistant]
+[空响应]
+
+[User]
+好的
+
+[Assistant]
+[空响应]
+
+[User]
+好的
+
+[Assistant]
+设计稿和实现计划已经落库并提交。设计文档在 [2026-03-11-performance-rearchitecture-design.md](/Users/shinerio/Workspace/code/SkillFlow/docs/superpowers/specs/2026-03-11-performance-rearchitecture-design.md)，实现计划在 [2026-03-11-performance-rearchitecture.md](/Users/shinerio/Workspace/code/SkillFlow/docs/plans/2026-03-11-performance-rearchitecture.md)。最新提交是 `b918380 docs: add performance rearchitecture design and plan`，当前工作区干净。
+
+计划已完成并保存到 [2026-03-11-performance-rearchitecture.md](/Users/shinerio/Workspace/code/SkillFlow/docs/plans/2026-03-11-performance-rearchitecture.md)。两种执行方式：
+
+1. `Subagent-Driven（当前会话）`：我按计划逐任务推进，每个任务后做检查和收口，适合现在直接开工。
+2. `Parallel Session（独立会话）`：你开一个新会话，按 `executing-plans` 批量执行这份计划，适合长链路改造。
+
+你选哪一种？
+
+[User]
+1
+
+[User]
+go on
+
+[User]
+页面静置先不用刷新了，但是用户切换页面后需要刷新
+
+[User]
+go on
+
+[User]
+继续完成性能优化
+
+[Assistant]
+这轮又补了两块高影响优化。
+
+前端方面，我新增了统一的事件解绑助手 [wailsEvents.ts](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/lib/wailsEvents.ts)，并把 [App.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx)、[Dashboard.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Dashboard.tsx)、[Backup.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Backup.tsx) 接到这套清理逻辑上。这样页面切换后不会继续累积 `EventsOn(...)` 监听器，能明显降低切页后越来越卡、CPU 抖动和内存滞留。按你最新要求，页面静置时不自动刷新；重新进入页面时仍会刷新，因为路由子树按 `location.pathname` 重建。
+
+后端方面，我把启动期的后台任务改成错峰调度，代码在 [app_startup.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/app_startup.go) 和 [app.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/app.go)。现在不再是 `domReady` 后 750ms 四个任务一起起飞，而是分批启动：`git pull` 750ms，技能更新检查 3s，收藏仓库刷新 5.25s，应用更新检查 8s。这样首屏可交互的前几秒不会和所有远程检查同时抢资源。云同步安全这块也确认过了：`cache/` 本来就在备份过滤里，所以 `cache/viewstate` 不会同步到其他设备，不会污染真值层。
+
+我已经重新验证过：`npm run test:unit`、`npm run build`、`go test ./cmd/skillflow`、`go test ./core/viewstate/...` 全部通过。文档也同步更新了 [docs/features.md](/Users/shinerio/Workspace/code/SkillFlow/docs/features.md)、[docs/features_zh.md](/Users/shinerio/Workspace/code/SkillFlow/docs/features_zh.md)、[docs/architecture.md](/Users/shinerio/Workspace/code/SkillFlow/docs/architecture.md)、[docs/architecture_zh.md](/Users/shinerio/Workspace/code/SkillFlow/docs/architecture_zh.md)、[README.md](/Users/shinerio/Workspace/code/SkillFlow/README.md)、[README_zh.md](/Users/shinerio/Workspace/code/SkillFlow/README_zh.md)。如果你要，我下一步可以继续做最后一轮性能收尾，重点放在 hover 元数据请求去抖/防过期返回，以及大列表页的进一步渲染削峰。
+
+[User]
+目前应用后台运行（窗口未激活）的内存占用有100多M，看看有无优化空间
+
+[User]
+[附图 Image #1]
+目前应用后台运行（窗口未激活）的内存占用有100多M，看看有无优化空间
+
+[Assistant]
+[空响应]
+
+[User]
+方案A
+
+[Assistant]
+这轮已经把方案 A 做进去了，核心改动在 [App.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx)、[appActivity.ts](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/lib/appActivity.ts)、[app_visibility.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/app_visibility.go) 和 [model.go](/Users/shinerio/Workspace/code/SkillFlow/core/notify/model.go)。现在窗口隐藏或不活跃大约 30 秒后，会卸载当前路由页面树；重新激活时自动重新挂载并重新加载当前页面数据。这样释放的是页面级 React 状态和已加载的大数组/大文本，像提示词全文、收藏仓库技能列表这类常驻内存会被回收，但不会影响云同步真值层，因为只是前端页面树卸载，不改磁盘数据。macOS 托盘隐藏回调也补了窗口可见性事件去重，避免重复触发。
+
+文档和中英文提示也同步更新了 [README.md](/Users/shinerio/Workspace/code/SkillFlow/README.md)、[README_zh.md](/Users/shinerio/Workspace/code/SkillFlow/README_zh.md)、[features.md](/Users/shinerio/Workspace/code/SkillFlow/docs/features.md)、[features_zh.md](/Users/shinerio/Workspace/code/SkillFlow/docs/features_zh.md)、[architecture.md](/Users/shinerio/Workspace/code/SkillFlow/docs/architecture.md)、[architecture_zh.md](/Users/shinerio/Workspace/code/SkillFlow/docs/architecture_zh.md)。验证已完成：`npm run test:unit`、`npm run build`、`go test ./cmd/skillflow`、`go test ./core/viewstate/...` 全部通过。
+
+需要明确一点：这只能压低“应用自己持有的页面内存”，不能消掉 Wails/WebKit 的渲染/GPU 进程基线，所以总占用不会掉到很小。如果你要继续深挖，下一步最值得做的是把提示词列表改成“只加载元数据和预览，正文按需读取”，这会比现在这一步更直接地继续压内存。
+
+[User]
+[附图 Image #1]
+看上去内存并没有下降，我多了了几个页面，后台状态还是很占内存
+
+[Assistant]
+[空响应]
+
+[User]
+保持现状吧
+
+[Assistant]
+可以，先停在这里更合理。
+
+现在的判断比较明确：继续为了压这张图上的总内存去折腾，收益已经开始变差。当前主要占用是 Wails/WebKit 的内容进程和图形进程基线，不是简单的页面状态泄漏。我们已经把应用自己最明显的可控项处理了一轮：监听器清理、启动错峰、后台页面树卸载。再往下要么是收益有限的业务数据瘦身，要么就是高风险的“隐藏即销毁窗口/WebView”。
+
+所以现阶段建议保持现状，把精力放回更有体感收益的方向。如果后面你还想继续做性能，我会优先建议盯 CPU 卡顿和交互流畅度，而不是继续追这个 RSS 数字。
+
+[User]
+1. 将本次聊天对话的所有内容输出到chats目录下，新建文件名为YYYY-MM-DD-HH-mm-SS.txt
+执行 git diff HEAD 获取当前所有未提交的文件变更内容，生成修改内容摘要{{generated_summary}}，和一句简单的修改主题{{generated_title}}。
+1. 按以下格式追加到changelog文件末尾。changelog备份地址为changelog/change_YYYYMM.md（每个月生成一个change log）。如果文件不存在，则按命名要求创建。
+## {{generated_title}}
+date: YYYY-MM-DD
+{{generated_summary}}
+2. 按新增changelog相同格式用作git commit的message
+ - 执行 git add -A
+ - 执行 git commit -m 
+ - 然后执行 git push 推送到远程仓库
+
+[Assistant]
+已完成。
+
+聊天记录已写入 [2026-03-11-20-21-27.txt](/Users/shinerio/Workspace/code/SkillFlow/chats/2026-03-11-20-21-27.txt)，changelog 已追加到 [change_202603.md](/Users/shinerio/Workspace/code/SkillFlow/changelog/change_202603.md)。
+
+我基于 `git diff HEAD` 生成并使用了这次提交主题：
+`perf: 重构视图缓存与后台页面内存收缩`
+
+随后执行了：
+- `git add -A`
+- `git commit -m ...`
+- `git push`
+
+推送过程中远端 `main` 先于本地新增了提交，所以我先做了 `git pull --rebase`，然后重新推送成功。最终远端提交是 `4bfdd87`，当前工作区已干净。
+
+[User]
+[附图 Image #1]
+我又打开有了几下，内存涨得更厉害了，你能分析出来是什么占用吗
+
+[Assistant]
+能，大致已经可以拆出来了。
+
+这张图里总占用大约 `355 MB`，其中真正属于 Go 后端主进程的只有 `SkillFlow 40.1 MB`，其余大头是 WebKit：
+- `wails://wails 208.8 MB`：Web 内容进程，主要是 React 状态、DOM、JS heap、从 Go 拉回来的数据。
+- `SkillFlow Graphics and Media 103.3 MB`：WebKit 图形/GPU 进程，主要是图层、纹理、阴影、模糊、动画的渲染缓存。
+- `SkillFlow Networking 3.0 MB`：网络进程，基本可以忽略。
+
+结合代码，我的判断是 `wails://wails` 才是现在最大的业务侧来源，里面最可疑的是这几块：
+- `Prompts` 页面会一次性把所有 prompt 的 `content` 全文放进前端状态，[Prompts.tsx:22](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Prompts.tsx#L22) 和 [Prompts.tsx:83](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Prompts.tsx#L83)。后端返回结构本身也包含 `Content` 字段，[storage.go:29](/Users/shinerio/Workspace/code/SkillFlow/core/prompt/storage.go#L29)。如果 prompt 多、正文长，这一页最容易把 WebContent 顶上去。
+- `Prompts` 的搜索还会把 `name + description + content` 拼起来做匹配，[Prompts.tsx:101](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Prompts.tsx#L101)。这会制造不少瞬时字符串分配。
+- `StarredRepos` 页面同时保留 `repos`、`repoSkills`、`allSkills` 三份列表，而且进入页面就预加载全部 star skills，[StarredRepos.tsx:32](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/StarredRepos.tsx#L32) 和 [StarredRepos.tsx:85](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/StarredRepos.tsx#L85)。
+- `Dashboard` 也会常驻完整 `skills`、分类、配置和 hover 元数据状态，[Dashboard.tsx:26](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Dashboard.tsx#L26) 和 [Dashboard.tsx:48](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Dashboard.tsx#L48)。
+
+`Graphics and Media` 高的原因则更像渲染层，不是数据层：
+- 弹窗遮罩用了 `backdropFilter: blur(4px)`，[AnimatedDialog.tsx:23](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/components/ui/AnimatedDialog.tsx#L23)。
+- 全局样式和卡片 hover 大量用 glow/shadow，[style.css:172](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/style.css#L172) 和 [SkillCard.tsx:161](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/components/SkillCard.tsx#L161)。
+- Tooltip 是 portal + fixed 浮层，[SkillTooltip.tsx:73](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/components/SkillTooltip.tsx#L73)。这些都会让 GPU 进程保留更多图层和纹理缓存。
+
+还有一个关键点：你现在看到“点了几个页面后内存涨了，但没掉”，这不代表我们前面的后台 trim 没生效。当前逻辑只会在窗口非前台持续约 `30s` 后卸载页面树，[appActivity.ts:1](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/lib/appActivity.ts#L1) 和 [App.tsx:374](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx#L374)。而且即使 React 页面卸载，WebKit 也经常不会立刻把 RSS 还给系统，这就是你在活动监视器里看到“涨了不回落”的主要原因之一。
+
+结论很明确：现在不是 Go 后端或同步缓存把内存吃掉了，主要是 `WKWebView` 的 WebContent + GPU 进程；业务代码里第一嫌疑是 `Prompts` 全量正文加载，其次是 `StarredRepos` 的双/三份列表常驻，最后是大量 blur/shadow/浮层造成的 GPU 常驻缓存。
+
+如果你后面还想继续压这块，最有效的顺序应该是：
+1. `Prompts` 改成“列表只返回元数据和预览，正文按需读取”。
+2. `StarredRepos` 去掉 `allSkills` / `repoSkills` 双持有。
+3. 后台或大列表场景下再降级 blur / glow / portal 浮层。
+
+[User]
+prompts数据很小，现在只有几行文本，其他角度再考虑下，或者有没有什么调试手段之间看应用内存里面到底是什么
+
+[Assistant]
+如果 `prompts` 现在只有几行文本，那它基本不够解释你图里这级别的占用。现在更像是 `WKWebView/WebKit` 自己在吃内存，不是业务数据本身。
+
+从你那张图看，内存主要分三块：
+- `SkillFlow 40 MB`：Go 主进程，不大，通常不是主因。
+- `wails://wails 200+ MB`：Web 内容进程，主要是 JavaScriptCore、已加载页面模块、DOM、样式布局缓存、桥接过来的对象。
+- `Graphics and Media 100+ MB`：图形/GPU 进程，主要是图层、纹理、模糊、阴影、动画的栅格缓存。
+
+而且你现在的前端是懒加载路由，页面一旦点开，对应模块就会常驻在 JS 运行时里，不会因为 React 卸载就回到冷启动状态，[App.tsx:27](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx#L27)。我们之前做的后台 trim 只是卸载页面树，[App.tsx:375](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx#L375) 和 [appActivity.ts:1](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/lib/appActivity.ts#L1)，不会强制 JavaScriptCore 和 GPU 进程把缓存立刻还给系统。图形进程偏高也符合现有 UI：弹窗和遮罩有 `blur`，[AnimatedDialog.tsx:23](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/components/ui/AnimatedDialog.tsx#L23)，全局还有不少 glow/shadow，[style.css:172](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/style.css#L172)。
+
+最有用的调试手段是直接看“进程里的内存类型”，不要再盲猜：
+
+1. 看 WebKit 里的 JS heap / DOM
+`Wails` 本身支持 inspector。你可以在 `dev/debug` 下跑：
+```bash
+cd cmd/skillflow
+~/go/bin/wails dev
+```
+然后在 macOS 里按 `fn + cmd + shift + F12` 打开 inspector。  
+在里面重点看：
+- `Timelines/Memory/JS Allocations`
+- 页面点击前后 heap snapshot 对比
+- 是否有大量 `Array` / `Object` / `String` / detached DOM 持续保留
+
+2. 看系统层到底是 JS heap 还是 GPU surface
+先找 PID：
+```bash
+ps -axo pid,rss,comm | rg 'SkillFlow|wails://wails'
+```
+再分别看：
+```bash
+vmmap <wails内容进程PID> | rg 'JavaScriptCore|JIT|MALLOC|WebKit|VM_ALLOCATE'
+vmmap <Graphics进程PID> | rg 'IOSurface|IOAccelerator|CoreAnimation|MALLOC'
+```
+判断规则很直接：
+- `JavaScriptCore` / `JIT` / `MALLOC_LARGE` 高：偏 JS heap、字符串、对象、代码缓存
+- `IOSurface` / `IOAccelerator` / `CoreAnimation` 高：偏 GPU 图层、模糊、阴影、纹理缓存
+- `__TEXT` / `mapped file` 高：多半只是框架映射，不算泄漏
+
+3. 用 Instruments 看增长路径
+Xcode Instruments 里分别 attach：
+- `wails://wails` 用 `Allocations`
+- `SkillFlow Graphics and Media` 也单独 attach 一次
+
+这一步比活动监视器有意义得多，因为它能看“增长后有没有回收”和“主要是哪个栈分配的”。
+
+如果你要，我下一步可以直接给项目加一套“debug-only 内存画像”：
+- 导出 Go `heap profile`
+- 导出 `runtime.MemStats`
+- 提供一个一键触发的 debug action
+
+但要看清 `200MB + 100MB` 这两块到底是什么，核心还是 `Web Inspector + vmmap + Instruments`。
+
+[User]
+你直接来吧
+
+[User]
+不需要在应用里提供这个功能，仅本次定位问题使用，最简实现，也不需要文档
+
+[Assistant]
+我直接查了系统级内存，不再猜业务数据。
+
+结论先说：
+
+`SkillFlow` 自己的 Go 主进程不是问题核心。真正大的占用在 `WebKit WebContent`，而且主要是 `WebKit Malloc`，不是 Go heap，也不是 GPU 当前正在吃很多独占内存。
+
+我刚刚抓到的实际结果是这样的，时间是 2026-03-11 20:43:
+- 主进程 `SkillFlow` PID `82397`
+  - `vmmap` 的 `Physical footprint` 只有 `37.3 MB`
+- 内容进程 `com.apple.WebKit.WebContent` PID `82400`
+  - `Physical footprint` `139.8 MB`
+  - `peak` 到过 `282.0 MB`
+- 图形进程 `com.apple.WebKit.GPU` PID `82399`
+  - `Physical footprint` `32.3 MB`
+  - `peak` 到过 `310.6 MB`
+
+关键判断：
+
+1. Go 主进程占用不高  
+主进程虽然有很多 `__TEXT` / `__DATA_CONST` / `JS JIT generated code` / `IOSurface` 映射，但这些不是你真正该担心的独占脏内存。它自己的实际 footprint 只有 `37.3 MB`，说明后端 Go 内存不是主因。
+
+2. 真正吃内存的是 WebContent 的 `WebKit Malloc`  
+`82400` 这个 WebContent 进程里，最大的有效桶是：
+- `WebKit Malloc` `287.2 MB resident`，其中 `118.8 MB dirty`
+- `DefaultMallocZone` `13.2 MB resident`
+- `JS JIT generated code` 只有 `5.1 MB resident`
+
+这说明大头不是 JIT 代码，也不是 Go 对象，而是 WebKit 自己的页面堆内存: DOM、JS 对象、布局缓存、解码后的页面资源、WebKit/bmalloc 缓存这一类。
+
+3. GPU 进程现在不是主因  
+GPU 进程里最吓人的一项是：
+- `IOSurface 303.1 MB`
+但它是 `0K resident`，而且 `271.5 MB empty`
+
+这类数字更多是图形表面池和保留映射，不代表当前真的占了那么多物理内存。它当前真实 footprint 只有 `32.3 MB`。所以你截图里那个 “Graphics and Media 100+ MB” 更像 Activity Monitor 的映射/驻留视角，不是当前独占压力。
+
+所以这次定位可以落成一句话：
+
+当前最可疑的不是 Go 后端泄漏，也不是 GPU 常驻爆炸，而是 `WKWebView` 的 `WebContent` 进程把页面访问后的对象和 WebKit 内部缓存留在了 `WebKit Malloc` 里。
+
+还有两个很重要的附带结论：
+- `JS VM Gigacage` 那种几十 GB 是保留地址空间，不是实际内存。
+- Activity Monitor 的“内存”数字比 `Physical footprint` 更容易把共享映射和保留区也算得很吓人，所以它比真实压力更悲观。
+
+这轮我没改任何代码，工作区是干净的。
+
+如果你要继续往下钻，最有效的下一步不是改 Go，而是直接抓 `WebContent` 的堆：
+- 用 `wails dev` 跑起来
+- 按 `fn + cmd + shift + F12` 开 Web Inspector
+- 做一次页面切换前后的 heap snapshot
+
+那一步就能继续把 `WebKit Malloc` 拆成更接近 “JS 对象 / DOM / 样式 / 页面缓存” 的层面。
+
+[User]
+你直接说实际目前总共占用了系统多少内存
+
+[Assistant]
+按 `vmmap` 的 `Physical footprint` 算，当前这套应用实际占用系统内存大约是 `213 MB`。
+
+拆开是：
+- `SkillFlow` 主进程: `37.3 MB`
+- `WebKit WebContent`: `139.8 MB`
+- `WebKit GPU`: `32.3 MB`
+- `WebKit Networking`: `3.1 MB`
+
+合计约 `212.5 MB`，可以近似看成 `213 MB`。
+
+所以你在活动监视器里看到的三百多 MB，更接近 `RSS / 映射视角`，不是这组进程当前真正占用的独占物理内存。真正的大头还是 `WebContent 139.8 MB`。
+
+[User]
+太大了，详细分析下如何优化，目标是让1G系统内存的机器能够流畅运行，不能这个应用吃掉太多内存
+
+[Assistant]
+当前更接近“真实系统压力”的占用是约 `213 MB`，不是活动监视器里那种三百多 MB 的 RSS 视角。里面大头是 `WebKit WebContent 139.8 MB`，主进程 `SkillFlow` 只有 `37.3 MB`，GPU 进程当前实际 footprint 只有 `32.3 MB`。更关键的是，`WebContent` 的峰值已经到过 `282 MB`，所以问题不只是“静态偏大”，而是页面访问后会把 WebKit 的运行时堆顶上去。
+
+这说明方向已经很明确了：当前瓶颈不是 Go 后端，也不是单个大文件，而是 `WKWebView` 的内容进程。`vmmap` 里最大的有效占用是 `WebKit Malloc`，不是 `JS JIT`，也不是 GPU 独占纹理。这类内存通常来自页面对象、DOM、布局样式缓存、解码后的资源、WebKit 自己的 bmalloc 缓存。另一个关键约束是你现在窗口关闭后默认只是隐藏，不退出，[main.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/main.go#L27)；而我们之前做的后台 trim 只是在前端卸载页面树，[App.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx#L375)，不会销毁 `WebView` 本身，所以低内存机器上后台常驻依然不友好。
+
+优化顺序
+1. 先把“低内存模式”的底线定死：`关闭窗口=退出应用`，不要默认托盘常驻。这一条收益最大，能把“后台占用”从两百 MB 级直接打到接近零。对 1GB 机器，这是硬约束，不是可选项。
+2. 取消“全量列表一次性进前端内存”的页面模型。现在 [StarredRepos.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/StarredRepos.tsx#L32) 同时保留 `repos`、`allSkills`、`repoSkills`，`SyncPush` 初始化就把全部技能拉进来，[SyncPush.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/SyncPush.tsx#L48)；`ToolSkills`、`SyncPull` 也是整表持有，[ToolSkills.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/ToolSkills.tsx#L16) 和 [SyncPull.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/SyncPull.tsx#L18)。这类页面都应该改成“摘要列表 + 按需详情 + 分页/分段加载”。
+3. 给所有长列表上虚拟滚动。`Dashboard`、`StarredRepos` 平铺视图、`ToolSkills`、`SyncPush`、`SyncPull` 都不该把全部卡片 DOM 一次性挂出来。当前 [Dashboard.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/pages/Dashboard.tsx#L26) 也是整表进状态，再做筛选和卡片渲染。虚拟化能同时降内存和 CPU。
+4. 做一套真正的 `lite UI`。现在 `motion-vendor`、模糊遮罩、阴影和 glow 都在帮 WebKit 留更多布局和绘制缓存。`framer-motion` 不是主因，但它和 `blur/shadow` 叠加后，会让低内存机器更不稳。建议低内存模式下直接关掉 `AnimatePresence`、`backdrop-filter`、复杂阴影、主题预览卡。
+5. 页面切换时主动“丢状态”，而不是只靠 React unmount。重型页面离开时把列表数组、hover 元数据、过滤结果、选择集显式清空；重新进入再拉数据。现在路由虽是 `lazy import`，[App.tsx](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/frontend/src/App.tsx#L27) 但访问过的模块会常驻 JS 运行时，不能指望它自己回到冷启动。
+6. 不要把 bundle 体积当成主战场。当前构建里 `react-vendor` 约 `181 KB`，`motion-vendor` 约 `128 KB`，大页面 chunk 也就二三十 KB。说明“代码包太大”不是 `140 MB WebContent` 的主解释，真正该砍的是运行时对象数和 DOM 数。
+7. 如果目标是“1GB 机器也能流畅”，现实目标应该是：前台空闲压到 `110-140 MB`，重页面峰值压到 `150-180 MB`，后台接近 `0 MB`。如果你坚持“后台常驻 + Wails/WebKit + 丰富动画视觉”，那这个目标不现实。
+
+一句话建议：要把它做成 1GB 机器可用，最重要的不是继续抠 Go 或缓存层，而是接受两个硬改动: `关闭即退出`，以及 `所有大列表改成按需加载 + 虚拟化`。没有这两个前提，当前这套 Wails/WebKit 栈很难把内存打到足够低。
+
+[User]
+关闭即退出是不是意味着没有办法在windows的托盘区重新打开或者macos的菜单栏重新打开。
+
+[Assistant]
+对，如果这里的“关闭即退出”指的是进程真正退出，那就不能再靠 Windows 托盘区或 macOS 菜单栏图标把窗口重新打开了。
+
+原因很直接。现在这两个入口都依赖主进程还活着：
+- 现在关闭是隐藏，不是退出，[main.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/main.go#L27)
+- Windows 托盘菜单里的 `Show` / `Exit` 都是在当前进程里调 `showMainWindow()` 和 `quitApp()`，[tray_windows.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_windows.go#L400) 和 [tray_windows.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_windows.go#L404)
+- macOS 菜单栏也是同样逻辑，`Show SkillFlow` / `Hide SkillFlow` / `Quit SkillFlow` 都挂在当前进程上，[tray_darwin.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_darwin.go#L109) 和 [tray_darwin_callbacks.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_darwin_callbacks.go#L9)
+- 一旦退出，托盘/菜单栏也会被 teardown 掉，[tray_windows.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_windows.go#L159) 和 [tray_darwin.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_darwin.go#L290)
+
+所以这件事本质上是二选一：
+- 要“关闭后还能从托盘/菜单栏秒开”，就必须保留一个常驻进程。
+- 要“尽量省内存”，关闭时就应该真正退出，之后只能从 Dock、开始菜单、桌面图标、登录项重新启动。
+
+如果目标是 1GB 内存机器可用，我建议不要默认常驻。更合理的是：
+- 默认：`关闭=退出`
+- 另外提供一个明确的“隐藏到托盘/菜单栏”动作，给需要后台常驻的用户手动用
+
+如果你还想同时保留“关闭后还能从托盘/菜单栏打开”且内存很低，那就不是当前架构能免费做到的了，得做一个单独的轻量 helper 进程专门托管托盘/菜单栏，主窗口进程按需拉起。这个可做，但复杂度明显更高。
+
+[User]
+是否可以保留go后端，把webkit相关进程退出，然后可以通过托盘和菜单栏重新打开
+
+[Assistant]
+可以，但分两种情况看：
+
+1. 以当前 `Wails` 架构来说，基本不能“低风险直接这么做”
+现在主窗口和 `WKWebView/WebView2` 是在启动时一次性创建的，[frontend.go](/Users/shinerio/go/pkg/mod/github.com/wailsapp/wails/v2@v2.11.0/internal/frontend/desktop/darwin/frontend.go#L21) 里的 `Run()` 只走一次 `NewWindow(...)`。现成公开能力只有 `Show/Hide`，没有“销毁主 WebView 后再重建”的应用层 API。  
+macOS 里 `HideWindowOnClose` 只是 `[NSApp hide:nil]`，[WindowDelegate.m](/Users/shinerio/go/pkg/mod/github.com/wailsapp/wails/v2@v2.11.0/internal/frontend/desktop/darwin/WindowDelegate.m#L14)，不会杀掉 WebKit 进程。  
+而 `WindowClose()` 走的是 `ReleaseContext()`，[frontend.go](/Users/shinerio/go/pkg/mod/github.com/wailsapp/wails/v2@v2.11.0/internal/frontend/desktop/darwin/frontend.go#L86) 和 [Application.m](/Users/shinerio/go/pkg/mod/github.com/wailsapp/wails/v2@v2.11.0/internal/frontend/desktop/darwin/Application.m#L396)，它会释放整个原生上下文，但框架没有给你一条“之后再创建一个新的 mainWindow 并重新挂 dispatcher/bindings”的正常路径。
+
+2. 从原理上说，这事是能做的，但已经不是“小改”
+托盘和菜单栏本身在主进程里，不依赖 WebKit 内容进程。  
+所以“保留一个轻量常驻进程，只保留托盘/菜单栏和 Go 后端；把 WebView/窗口销毁；需要时再重建窗口”在原理上可行。  
+但要做到稳定跨平台，你基本有两个选择：
+
+- `高风险方案`
+  深改 `Wails` 内部生命周期，让主进程在没有窗口时继续活着，并支持重建 `mainWindow + webview`。这会碰框架内部，不只是业务代码。macOS 和 Windows 都要分别处理，维护成本高。
+
+- `正确方案`
+  拆成两个进程：
+  - 常驻的轻量 tray/menu 进程，只负责托盘、菜单栏、单实例协调、唤起 UI
+  - 真正的 SkillFlow UI 进程，关闭后完全退出
+  这样才能同时满足“托盘还能重新打开”和“WebKit 不常驻吃内存”。
+
+所以直接回答你的问题：
+
+可以做到“保留 Go 后端/托盘，退出 WebKit，再从托盘或菜单栏重新打开”，但在当前代码结构里不适合硬做成单进程小改。真正靠谱的是做成“轻量常驻壳进程 + 按需启动 UI 进程”。
+
+如果你要继续往这个方向走，我建议不要尝试在现有 `Wails main process` 里热销毁/热重建 WebView；那条路太脆。更合理的是我帮你设计一个最小的双进程方案。
+
+[User]
+好的，设计一个最小双进程方案
+
+[Assistant]
+建议采用“常驻壳进程 + 按需 UI 进程”的最小双进程方案，不做“单进程热销毁 WebKit”。
+
+方案对比
+1. 单进程里销毁 WebKit、保留 Go 和托盘  
+风险最高。当前 `Wails` 只支持启动时创建主窗口和 WebView，[main.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/main.go) 和 Wails 内部生命周期都不是为“销毁后再重建主窗口”设计的。这条路会深改框架内部。
+
+2. 常驻壳进程 + UI 进程，业务后端迁到壳进程  
+这是推荐方案。窗口关闭后 UI 进程彻底退出，`WebKit WebContent/GPU` 一起消失；托盘和菜单栏继续存在，点击即可重新拉起 UI。功能完整，长期结构也最稳。
+
+3. 常驻壳进程 + UI 进程，但业务后端仍留在 UI  
+实现更快，但关闭窗口后后台同步、备份、状态检查都会停掉，功能会退化，不符合“尽量不影响现有功能”。
+
+推荐设计
+- 进程角色  
+`shell` 进程常驻，负责托盘/菜单栏、单实例、配置加载、后台定时任务、业务服务宿主。  
+`ui` 进程是现在的 Wails 窗口，只负责界面和交互，不再直接拥有核心状态。
+
+- 运行方式  
+仍然一个安装包，但同一可执行文件支持两种模式：`--mode=shell` 和 `--mode=ui`。  
+用户启动应用时先进 `shell`。  
+`shell` 再按需启动 `ui` 子进程。  
+这样包结构最小，不需要额外安装独立 helper。
+
+- 窗口关闭行为  
+点击关闭按钮时，`ui` 进程直接退出，不是隐藏。  
+`shell` 保留托盘和菜单栏。  
+Windows 托盘点击 `Show` 时，如果 `ui` 不在，重新启动；如果已在，发送聚焦命令。  
+macOS 菜单栏同理，`Show SkillFlow` 拉起或聚焦 `ui`。  
+这部分现有托盘逻辑可保留，只是目标从 `showMainWindow()` 改成“启动/聚焦 UI 子进程”，参考 [tray_windows.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_windows.go) 和 [tray_darwin.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_darwin.go)。
+
+- IPC  
+`shell` 提供本机 IPC 服务。  
+macOS/Linux 用 Unix domain socket。  
+Windows 用 named pipe。  
+协议只做两类：请求-响应 RPC 和事件订阅。  
+现有 `App` 导出方法迁到 `shell` 服务层，`ui` 只是转发调用。  
+现有通知中心 `notify.Hub` 可以继续作为事件源，UI 通过 IPC 订阅事件。
+
+- 数据与一致性  
+所有磁盘读写、云同步、git、star repo、config、技能库变更都只在 `shell` 执行。  
+UI 不再直接碰真实存储，只拿结果。  
+这样不会引入跨设备同步不一致问题，也不会出现两个进程同时写同一份数据。
+
+- 单实例  
+`shell` 是全局主实例。  
+`ui` 也单实例，但只受 `shell` 管。  
+再次启动应用时：
+如果 `shell` 不存在，启动 `shell`。  
+如果 `shell` 存在且 `ui` 不存在，命令 `shell` 拉起 `ui`。  
+如果两者都存在，命令 `shell` 聚焦 `ui`。
+
+- 内存目标  
+关闭窗口后，只剩 `shell`。  
+目标常驻内存控制在 `25-40 MB`。  
+这样 1GB 机器在“后台待机”场景会比现在从约 `213 MB` 降很多。  
+窗口打开时仍会有 Wails/WebKit 成本，所以双进程方案主要解决“后台占太多”，不是全部前台内存问题。
+
+边界
+- 这套方案能显著解决“关闭窗口后还占两百 MB”。
+- 但它不能单独解决“窗口打开时也要非常省内存”。
+- 如果目标是 1GB 机器前台也流畅，还要继续做两件事：
+  - 大列表虚拟化和按需加载
+  - 低内存模式下关闭 blur / glow / 重动画
+
+最小实施范围
+1. 抽出一个无 Wails 依赖的 `shell service` 层，承接当前 `App` 的业务方法。
+2. 加本机 IPC 层，先覆盖高频核心接口。
+3. 托盘/菜单栏改成启动或聚焦 `ui` 子进程，而不是直接显示隐藏窗口。
+4. `ui` 关闭即退出。
+5. 保留现有磁盘格式、同步格式、配置文件，不改用户数据结构。
+
+这个设计如果你认可，我下一步可以把它写成一份可执行的最小实现计划，按“先后台降内存，再逐步迁 RPC”的顺序拆任务。
+
+[User]
+不要有两种运行模式，太复杂了，用户只需要双击.app或.exe即可打开应用
+
+[Assistant]
+可以，用户侧完全可以保持“只双击 `.app` / `.exe` 打开”，不暴露两种模式。
+
+但有个事实要说清楚：  
+只要你想要“后台常驻托盘/菜单栏”和“前台 UI 进程可退出重开”，内部就一定有两个角色。这个角色区分可以完全隐藏，不让用户感知。
+
+我建议改成：
+
+单入口、双进程、内部自举
+
+用户视角始终只有一个应用：
+- 双击 `SkillFlow.app` 或 `SkillFlow.exe`
+- 托盘/菜单栏点击“显示 SkillFlow”
+- Dock/开始菜单再次打开
+
+内部流程是这样：
+1. 启动时先进入一个很薄的 bootstrap。
+2. bootstrap 检查本机 IPC/socket/pipe，看后台 helper 是否已存在。
+3. 如果 helper 不存在：
+   - 当前进程转为后台 helper
+   - helper 立即拉起一个 UI 子进程
+4. 如果 helper 已存在：
+   - 当前新启动的进程只给 helper 发送“显示/拉起 UI”命令
+   - 然后自己立刻退出
+
+这样用户永远只看到“打开 SkillFlow”，不会看到 `--shell`、`--ui` 之类概念。
+
+职责划分
+- helper 进程：
+  - 托盘/菜单栏
+  - 单实例
+  - 后台同步/备份/检查更新
+  - 持有业务服务和数据真值
+  - 负责启动/聚焦 UI
+- UI 进程：
+  - 仅负责 Wails 窗口和前端界面
+  - 关闭窗口时直接退出
+  - 不再长期占着 WebKit 进程
+
+这样能满足你的要求
+- 双击 `.app` / `.exe` 就能打开
+- 托盘区或菜单栏还能重新打开
+- 关闭窗口后 WebKit 相关进程退出
+- 后端和托盘仍常驻
+
+最小实现建议
+- 仍然用当前主程序作为唯一入口文件，不新增第二个用户可执行文件
+- 只是内部加一个 bootstrap 分支和一个隐藏子进程启动参数
+- 这个隐藏参数不属于用户使用面，不出现在文档、不出现在设置、不需要用户理解
+
+如果你连“内部隐藏参数”也不想要，那这件事基本做不成，因为操作系统必须区分“当前这个进程是 helper 还是 UI”。  
+但如果只是“不让用户感知两种模式”，完全可以做到。  
+
+我建议下一步按这个方向设计最小实现：
+- 单入口自举
+- helper 单实例
+- UI 可退出重开
+- 业务服务迁到 helper
+- UI 通过本机 IPC 调 helper
+
+[User]
+可以
+
+[Assistant]
+可以，按你这个约束，最小可落地方案应该是：
+
+单入口、隐藏双角色  
+用户永远只启动 `SkillFlow.app` / `SkillFlow.exe`。内部由同一个可执行文件自举成两个隐藏角色：
+- `helper`：常驻，负责托盘/菜单栏、单实例、后台服务、拉起/聚焦 UI
+- `ui`：Wails 窗口进程，负责界面；关闭窗口后直接退出，连带 WebKit 进程一起退出
+
+这个“角色”只能在内部存在，通常用隐藏参数或环境变量区分。用户不会看到，也不需要理解。没有这个内部区分，操作系统层面就没法知道当前进程到底该当 helper 还是 UI。
+
+结合当前代码的最小切口
+我看过现在的结构，最小改法是：
+
+1. 启动入口改成 bootstrap  
+当前 [main.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/main.go) 一上来就 `ensureSingleInstance()` 然后直接 `wails.Run(...)`。  
+要改成：
+- 先执行 `bootstrapLaunch()`
+- 如果当前进程应该成为 `helper`，就不进 Wails 主窗口
+- 如果当前进程应该成为 `ui`，才进入 `wails.Run(...)`
+
+2. 单实例从“窗口实例”改成“helper 实例”  
+现在只有 Windows 有单实例，而且它默认“已有实例就是能直接 show 的窗口”，见 [single_instance_windows.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/single_instance_windows.go)。  
+这要改成：
+- helper 才是唯一主实例
+- 第二次双击应用时，不是唤醒当前窗口，而是给 helper 发 `show-ui` 命令然后退出
+
+3. 托盘/菜单栏从“直接控窗口”改成“控 UI 进程”  
+现在 Windows 托盘菜单直接调用 `showMainWindow()` / `quitApp()`，[tray_windows.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_windows.go#L400)。  
+macOS 菜单栏也是同样模式，[tray_darwin_callbacks.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_darwin_callbacks.go#L9)。  
+最小改法是把这层抽成：
+- `Show` -> `helper.ensureUIRunningAndFocused()`
+- `Hide` -> 对 UI 发隐藏/退出命令
+- `Quit` -> helper 杀 UI，再自己退出
+
+4. UI 关闭时不再隐藏  
+当前窗口关闭仍是隐藏，见 [main.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/main.go#L27)。  
+双进程后应该改成：
+- `HideWindowOnClose: false`
+- UI 关闭按钮直接退出 UI
+- helper 继续活着，托盘/菜单栏仍可重新打开
+
+最小内部通信
+第一版不需要重 RPC 框架，只要一个本机控制通道：
+- 命令：`show-ui`、`focus-ui`、`quit-all`
+- Unix 用 domain socket
+- Windows 用 named pipe
+
+这足够先把“关闭窗口释放 WebKit，但托盘还能重开”做出来。
+
+最关键的结构判断
+如果你要“保留 Go 后端、退出 WebKit”，那业务真值最终必须落到 helper，不应继续绑在 Wails `App` 上。否则 UI 一退出，后端也一起没了。  
+所以真正稳的演进顺序是：
+
+1. 先做 `bootstrap + helper 单实例 + tray/menu 控制 UI`
+2. 再把当前 `App` 里的业务方法逐步抽到一个 headless service
+3. UI 改成只通过 IPC 调 service
+
+这比“在单进程里强行热销毁并重建 WebView”稳得多。
+
+如果你要，我下一步就按这个方案写一份精简实现计划，并直接开始做第一阶段：`bootstrap/helper/UI 生命周期切分`。
+
+[User]
+go
+
+[Assistant]
+这轮已经把“单入口、隐藏双角色”的第一阶段做进去了。
+
+核心改动在 [main.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/main.go#L15)、[process_helper.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/process_helper.go#L31)、[process_ui_control.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/process_ui_control.go#L8)、[app.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/app.go#L143)。现在双击应用时会先走内部 bootstrap：如果 helper 已经在，就转发 `show-ui` 后退出当前启动实例；如果没有，就由当前进程成为 helper，并拉起一个带隐藏内部标记的 UI 子进程。Wails UI 进程现在是 `HideWindowOnClose: false`，所以点窗口关闭会真正退出 UI，WebKit/Wails 相关进程也会跟着退出；helper 继续保留托盘/菜单栏，用来重新打开或聚焦窗口。
+
+托盘/菜单栏这层也改成 helper 承载了，相关代码在 [tray_windows.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_windows.go) 和 [tray_darwin.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/tray_darwin.go)。UI 进程不再初始化托盘，而是在启动后注册一个本地控制通道，helper 通过它发送 `show` / `hide` / `quit`。我也补了单实例锁和基础测试，文档同步到了 [README.md](/Users/shinerio/Workspace/code/SkillFlow/README.md)、[README_zh.md](/Users/shinerio/Workspace/code/SkillFlow/README_zh.md)、[features.md](/Users/shinerio/Workspace/code/SkillFlow/docs/features.md)、[features_zh.md](/Users/shinerio/Workspace/code/SkillFlow/docs/features_zh.md)、[architecture.md](/Users/shinerio/Workspace/code/SkillFlow/docs/architecture.md)、[architecture_zh.md](/Users/shinerio/Workspace/code/SkillFlow/docs/architecture_zh.md)。
+
+验证已完成：`go test ./...` 通过。  
+需要明确的剩余边界是：现在只是把“壳层生命周期”拆开了，业务 `App` 方法还在 UI 进程里，所以关闭窗口后后台同步/定时任务也会停；下一阶段如果要“helper 常驻且后台逻辑继续跑”，就得继续做业务服务和 IPC 迁移。GUI 托盘/菜单栏的真实交互我在这个终端环境里没法替你点一遍，只做了编译和测试级验证。
+
+[User]
+make is always stuck
+
+[Assistant]
+`make` 本身没有“卡住逻辑”，真正的问题有两层。
+
+第一层是代码问题，我已经修了。默认 `make` 会直接执行 `build`，也就是 `wails build`，不是 `help`。Wails 在 `Generating bindings` 阶段会编译并运行一个带 `bindings` tag 的临时二进制，但我们新的 helper bootstrap 也在这个阶段被执行了，导致它误碰运行时锁文件和本地控制路径，所以看起来像一直卡在 `Generating bindings`。修复在 [main.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/main.go#L19) 和新增的 [process_bootstrap_mode.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/process_bootstrap_mode.go)、[process_bootstrap_mode_bindings.go](/Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/process_bootstrap_mode_bindings.go)：`bindings` 模式下会直接跳过 helper bootstrap，只走 Wails 自己的 bindings 路径。
+
+第二层是我当前沙箱环境的限制，不是仓库代码问题。修完后，`make` 已经能越过 `Generating bindings` 和前端编译；剩下失败点是 Wails 调用 `go build` 时无法写 `~/Library/Caches/go-build`，这是当前执行环境的权限限制。对应测试我已经补了并跑通：
+- `go test ./...`
+- `go test -tags bindings ./cmd/skillflow`
+
+所以仓库里的真实构建阻塞点已经修掉了。你本地再跑时，如果还是有问题，先注意两点：
+- 直接输入 `make` 等价于 `make build`
+- 如果要看可用目标，用 `make help`
+
+如果你要，我下一步可以继续把这次修复提交掉，或者我再帮你把 `make build` / `make dev` 的默认体验也收得更清楚一些。
+
+[User]
+1. 将本次聊天对话的所有内容输出到chats目录下，新建文件名为YYYY-MM-DD-HH-mm-SS.txt
+执行 git diff HEAD 获取当前所有未提交的文件变更内容，生成修改内容摘要{{generated_summary}}，和一句简单的修改主题{{generated_title}}。
+1. 按以下格式追加到changelog文件末尾。changelog备份地址为changelog/change_YYYYMM.md（每个月生成一个change log）。如果文件不存在，则按命名要求创建。
+## {{generated_title}}
+date: YYYY-MM-DD
+{{generated_summary}}
+2. 按新增changelog相同格式用作git commit的message
+ - 执行 git add -A
+ - 执行 git commit -m
+ - 然后执行 git push 推送到远程仓库
+
+[Assistant]
+本次请求包含会话归档、生成变更摘要、更新 `changelog`、提交并推送。我先读取相关技能说明和当前仓库状态，确认应按仓库规则执行哪些文件修改与 git 操作。
+
+[Assistant]
+我已经确认当前工作区有一组未提交改动，且仓库里已有 `changelog/change_202603.md` 与 `chats/` 目录。下一步我会读取 `git diff HEAD` 和现有 changelog 格式，生成可用的标题与摘要，然后落盘会话记录并补写 changelog。
+
+[Assistant]
+我已经拿到完整 diff，改动主题很集中：一部分是把 `runtime/` 明确标记为本地专属并从备份/Git 同步里排除，另一部分是启动前清理失效的 loopback 控制状态。现在我会先写入会话归档文件，再把这次变更摘要追加到 `changelog/change_202603.md`。
+
+[Assistant]
+我先检查一下最近一次聊天导出文件覆盖到了哪一条消息，避免新文件重复或漏掉后半段内容。随后直接在新文件里生成完整会话版本。
+
+[Assistant]
+我现在开始落盘两个实际改动：先复制上一次完整聊天导出作为基底并补齐本轮新增消息，再把本次 diff 生成的标题和摘要追加进本月 changelog。接着我会跑一次针对本次 Go 改动的测试，再执行提交和推送。

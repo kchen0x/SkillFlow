@@ -123,6 +123,10 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
   cache/
     <repo-cache>/         收藏仓库的本地克隆缓存
     viewstate/            本地专属的派生 UI 快照
+  runtime/
+    helper-control.json   helper 回环控制端点
+    ui-control.json       UI 回环控制端点
+    helper.lock           本地单实例锁 / 进程协调状态
   logs/
     skillflow.log
     skillflow.log.1
@@ -139,6 +143,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 - 如果 `SkillsStorageDir` 被移出默认应用数据目录，同步根目录会变成 `skills/` 与 `meta/` 的共同父目录。
 - 日志文件固定为 **两个**，每个 **1MB** 上限：`skillflow.log` 与 `skillflow.log.1`。
 - `cache/viewstate/*.json` 只保存可重建的派生状态，例如已安装 Skill 快照和工具 presence 索引。这些文件只存在于本机，绝不能被视为可同步真值。
+- `runtime/*` 保存 helper/UI 的回环端点、token、PID 以及单实例协调状态。这些文件只属于当前设备，绝不能参与同步，需要时会自动重建。
 
 ---
 

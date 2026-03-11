@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/shinerio/skillflow/core/config"
 )
@@ -61,6 +62,9 @@ func uiControlPath() string {
 
 func startLoopbackControlServer(statePath string, handler func(command string) error) (*loopbackControlServer, error) {
 	if err := os.MkdirAll(filepath.Dir(statePath), 0755); err != nil {
+		return nil, err
+	}
+	if err := pruneStaleLoopbackControlState(statePath); err != nil {
 		return nil, err
 	}
 
@@ -183,6 +187,32 @@ func readControlEndpoint(statePath string) (controlEndpoint, error) {
 		return endpoint, fmt.Errorf("invalid control endpoint")
 	}
 	return endpoint, nil
+}
+
+func pruneStaleLoopbackControlState(statePath string) error {
+	endpoint, err := readControlEndpoint(statePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		removeErr := os.Remove(statePath)
+		if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return removeErr
+		}
+		return nil
+	}
+
+	conn, err := net.DialTimeout("tcp", endpoint.Address, 200*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		return nil
+	}
+
+	removeErr := os.Remove(statePath)
+	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+		return removeErr
+	}
+	return nil
 }
 
 func writeControlEndpoint(statePath string, endpoint controlEndpoint) error {

@@ -412,7 +412,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - Deleted entries show a deletion label instead of a file size.
 - Refresh reloads the latest in-memory backup result for the current app session.
 - Scrollable, max-height container.
-- **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `prompts/`, `config.json`, etc.); `cache/` and `.git/` are excluded.
+- **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `prompts/`, `config.json`, etc.); local-only `cache/`, `runtime/`, and `.git/` are excluded.
 - **Custom object-storage prefix** — object storage providers let the user choose a parent `remotePath`; SkillFlow always writes under `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
 - **Provider-specific cloud profiles** — each cloud provider keeps its own bucket/path/credential set; switching providers in Settings restores that provider's saved values instead of overwriting another provider's form state.
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json` and `star_repos.json`) are stored as forward-slash relative paths under the synchronized root, so restores continue to work across macOS and Windows.
@@ -452,6 +452,7 @@ When the **git** provider is selected:
 - **Staggered startup background work** — the startup pull is still automatic, but it no longer starts in the same burst as every other startup check; SkillFlow spreads those jobs out after the UI becomes interactive.
 - **Missing branch tolerance** — if the configured remote branch does not exist yet (first-time setup), startup pull is skipped without failing the backup page.
 - **Auto-push after mutations** — same post-mutation trigger as object storage; runs `git add -A && git commit && git push`.
+- **Excluded-path cleanup** — on every Git backup push, local-only excluded directories such as `cache/` and `runtime/` are removed from the Git index if an older version ever tracked them.
 - **Periodic auto-sync** — controlled by the "Auto-sync interval" setting (in minutes, 0 = disabled). A background timer fires `autoBackup()` on the configured interval.
 - **Manual actions with conflict detection** — both **Backup Now** and **Restore / Pull** detect git conflicts/divergence and emit `git.conflict` when user action is required.
 - **Conflict resolution dialog** — if `git pull` or `git push` detects a conflict or diverged history, a modal appears:

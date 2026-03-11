@@ -9,6 +9,7 @@ import (
 // A path matches if it equals the dir name or starts with "<dir>/".
 var excludedDirs = []string{
 	"cache",
+	"runtime",
 	"logs",
 	"meta_local",
 	".git",

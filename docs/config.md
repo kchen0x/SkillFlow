@@ -24,6 +24,7 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, and `star_repo
 | `meta/<skill-id>.json` | One sidecar metadata file per installed skill | Yes |
 | `meta_local/<skill-id>.local.json` | Local-only per-skill volatile metadata overlay | No |
 | `cache/viewstate/*.json` | Local derived UI/cache snapshots | No |
+| `runtime/*.json`, `runtime/helper.lock` | Local helper/UI process coordination state | No |
 
 ## `cache/viewstate/*.json`
 
@@ -37,6 +38,19 @@ Rules:
 - They must be rebuilt from `skills/`, `meta/`, tool directories, and other existing truth-layer files.
 - They must not be uploaded by cloud backup or written back into synced metadata files.
 - Cross-device cache differences are expected and harmless.
+
+## `runtime/*.json`, `runtime/helper.lock`
+
+Path: `<AppDataDir>/runtime/`
+
+These files store local-only helper/UI process coordination state. Typical files include `helper-control.json`, `ui-control.json`, and `helper.lock`.
+
+Rules:
+
+- They contain loopback endpoint addresses, random tokens, and process IDs that are valid only on the current machine and current run.
+- They must be excluded from cloud backup, Git sync, and cross-device restore.
+- Older Git backups that once tracked `runtime/` are cleaned up on the next push.
+- They may be deleted while SkillFlow is fully stopped; the app recreates them on the next launch.
 
 ## `config.json`
 

@@ -142,6 +142,56 @@ func TestGitProviderSyncAddsOriginForExistingRepo(t *testing.T) {
 	}
 }
 
+func TestGitProviderSyncRemovesTrackedExcludedRuntimeDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+
+	base := t.TempDir()
+	remoteDir := filepath.Join(base, "remote.git")
+	runGit(t, "", "init", "--bare", remoteDir)
+
+	localDir := filepath.Join(base, "skills")
+	if err := os.MkdirAll(filepath.Join(localDir, "runtime"), 0755); err != nil {
+		t.Fatalf("mkdir runtime dir: %v", err)
+	}
+	runGit(t, localDir, "init")
+	runGit(t, localDir, "config", "user.email", "skillflow@test")
+	runGit(t, localDir, "config", "user.name", "SkillFlow Test")
+	writeRepoFiles(t, localDir, map[string]string{
+		"skill.md":                    "# test\n",
+		"runtime/helper-control.json": "{\"address\":\"127.0.0.1:9999\"}\n",
+	})
+	runGit(t, localDir, "add", "-A")
+	runGit(t, localDir, "commit", "-m", "seed runtime")
+	runGit(t, localDir, "remote", "add", "origin", remoteDir)
+	runGit(t, localDir, "push", "-u", "origin", "HEAD:main")
+
+	p := NewGitProvider()
+	if err := p.Init(map[string]string{
+		"repo_url": remoteDir,
+		"branch":   "main",
+	}); err != nil {
+		t.Fatalf("init provider: %v", err)
+	}
+	if err := p.Sync(context.Background(), localDir, "", "", func(string) {}); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+
+	remoteFiles := runGit(t, "", "--git-dir", remoteDir, "ls-tree", "-r", "--name-only", "main")
+	if strings.Contains(remoteFiles, "runtime/") {
+		t.Fatalf("runtime should not remain tracked after sync, remote files: %s", remoteFiles)
+	}
+
+	gitignore, err := os.ReadFile(filepath.Join(localDir, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), "runtime/") {
+		t.Fatalf("expected .gitignore to contain runtime/, got: %q", string(gitignore))
+	}
+}
+
 func TestGitProviderRestoreAllowsMissingRemoteBranch(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")

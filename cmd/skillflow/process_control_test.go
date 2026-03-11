@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"net"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -43,4 +46,43 @@ func TestLoopbackControlServerRoundTrip(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for control command")
 	}
+}
+
+func TestPruneStaleLoopbackControlStateRemovesDeadEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "helper-control.json")
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	address := listener.Addr().String()
+	require.NoError(t, listener.Close())
+
+	payload, err := json.Marshal(controlEndpoint{
+		Address: address,
+		Token:   "dead-token",
+		PID:     999999,
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(statePath, payload, 0644))
+
+	require.NoError(t, pruneStaleLoopbackControlState(statePath))
+	_, err = os.Stat(statePath)
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestPruneStaleLoopbackControlStateKeepsLiveEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "helper-control.json")
+
+	server, err := startLoopbackControlServer(statePath, func(command string) error {
+		return nil
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = server.Close()
+	})
+
+	require.NoError(t, pruneStaleLoopbackControlState(statePath))
+	_, err = os.Stat(statePath)
+	require.NoError(t, err)
 }

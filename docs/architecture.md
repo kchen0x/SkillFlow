@@ -123,6 +123,10 @@ By default, SkillFlow stores app data under `config.AppDataDir()`:
   cache/
     <repo-cache>/         cloned starred repositories
     viewstate/            local-only derived UI snapshots
+  runtime/
+    helper-control.json   helper loopback control endpoint
+    ui-control.json       UI loopback control endpoint
+    helper.lock           local single-instance lock / coordination state
   logs/
     skillflow.log
     skillflow.log.1
@@ -139,6 +143,7 @@ Important storage rules:
 - If `SkillsStorageDir` is moved outside the default app data directory, the synchronized root becomes the shared parent of `skills/` and `meta/`.
 - Logs are bounded to **two files** (`skillflow.log`, `skillflow.log.1`) at **1MB each**.
 - `cache/viewstate/*.json` stores only rebuildable derived state such as installed-skill snapshots and tool-presence indexes. These files are local-only and must never be treated as synced truth.
+- `runtime/*` stores helper/UI loopback endpoints, tokens, PIDs, and single-instance coordination state. These files are local-only, must never be synced, and are recreated automatically when needed.
 
 ---
 
