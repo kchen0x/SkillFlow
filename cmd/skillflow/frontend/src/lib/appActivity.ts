@@ -47,6 +47,11 @@ export function reduceAppActivityState(state: AppActivityState, event: AppActivi
   switch (event.type) {
     case 'window_visibility_changed':
       windowVisible = event.visible
+      if (event.visible) {
+        // Desktop window restore events are more reliable than WebView focus/document visibility.
+        documentVisible = true
+        focused = true
+      }
       break
     case 'document_visibility_changed':
       documentVisible = event.visible

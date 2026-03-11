@@ -4,8 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-
-	"github.com/emersion/go-autostart"
+	"path/filepath"
 )
 
 type launchAtLoginController interface {
@@ -18,20 +17,14 @@ func (a *App) autostartController() (launchAtLoginController, error) {
 	if a.autostartFactory != nil {
 		return a.autostartFactory()
 	}
-	return a.autostartApp()
-}
-
-func (a *App) autostartApp() (*autostart.App, error) {
 	exePath, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("resolve executable path failed: %w", err)
 	}
-	return &autostart.App{
-		Name:        "SkillFlow",
-		DisplayName: "SkillFlow",
-		Exec:        []string{exePath},
-	}, nil
+	return newLaunchAtLoginController(filepath.Clean(exePath))
 }
+
+const launchAtLoginAppName = "SkillFlow"
 
 func (a *App) syncLaunchAtLogin(enabled bool) error {
 	a.logInfof("launch-at-login update started: desired=%t", enabled)

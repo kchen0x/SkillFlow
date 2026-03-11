@@ -58,3 +58,32 @@ test('returning to the foreground clears trimmed state and bumps the resume toke
   assert.equal(resumed.trimScheduled, false)
   assert.equal(resumed.resumeToken, 1)
 })
+
+test('window visibility restore clears trimmed state even when focus events do not fire', () => {
+  const trimmed = reduceAppActivityState(
+    reduceAppActivityState(
+      reduceAppActivityState(createAppActivityState(), {
+        type: 'window_visibility_changed',
+        visible: false,
+      }),
+      {
+        type: 'focus_changed',
+        focused: false,
+      },
+    ),
+    { type: 'trim_timeout_elapsed' },
+  )
+
+  const resumed = reduceAppActivityState(trimmed, {
+    type: 'window_visibility_changed',
+    visible: true,
+  })
+
+  assert.equal(resumed.windowVisible, true)
+  assert.equal(resumed.documentVisible, true)
+  assert.equal(resumed.focused, true)
+  assert.equal(resumed.foreground, true)
+  assert.equal(resumed.trimmed, false)
+  assert.equal(resumed.trimScheduled, false)
+  assert.equal(resumed.resumeToken, 1)
+})
