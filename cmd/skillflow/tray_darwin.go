@@ -52,6 +52,23 @@ static void skillflow_run_on_main_thread_async(dispatch_block_t block) {
 	dispatch_async(dispatch_get_main_queue(), block);
 }
 
+void skillflow_prepare_application(void) {
+	skillflow_run_on_main_thread_sync(^{
+		[NSApplication sharedApplication];
+		[NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+	});
+}
+
+void skillflow_run_application(void) {
+	[NSApp run];
+}
+
+void skillflow_stop_application(void) {
+	skillflow_run_on_main_thread_async(^{
+		[NSApp terminate:nil];
+	});
+}
+
 static NSImage *skillflow_make_template_status_image(void) {
 	NSSize size = NSMakeSize(18, 18);
 	NSImage *image = [[NSImage alloc] initWithSize:size];
@@ -313,44 +330,45 @@ import "C"
 import "sync"
 
 var darwinTrayState struct {
-	mu  sync.RWMutex
-	app *App
+	mu         sync.RWMutex
+	controller trayController
 }
 
-func setupTray(app *App) error {
+func setupTray(controller trayController) error {
 	darwinTrayState.mu.Lock()
-	darwinTrayState.app = app
+	darwinTrayState.controller = controller
 	darwinTrayState.mu.Unlock()
 
-	app.logInfof("tray setup started, platform=darwin")
+	C.skillflow_prepare_application()
+	controller.logInfof("tray setup started, platform=darwin")
 	if C.skillflow_setup_tray() == 0 {
-		app.logErrorf("tray setup failed: create menu bar status item failed")
+		controller.logErrorf("tray setup failed: create menu bar status item failed")
 		return errDarwinTraySetup
 	}
-	app.logDebugf("tray setup queued, platform=darwin")
+	controller.logDebugf("tray setup queued, platform=darwin")
 	return nil
 }
 
 func teardownTray() {
 	darwinTrayState.mu.Lock()
-	app := darwinTrayState.app
-	darwinTrayState.app = nil
+	controller := darwinTrayState.controller
+	darwinTrayState.controller = nil
 	darwinTrayState.mu.Unlock()
-	if app != nil {
-		app.logDebugf("tray teardown started, platform=darwin")
+	if controller != nil {
+		controller.logDebugf("tray teardown started, platform=darwin")
 	}
 	C.skillflow_teardown_tray()
-	if app != nil {
-		app.logDebugf("tray teardown completed, platform=darwin")
+	if controller != nil {
+		controller.logDebugf("tray teardown completed, platform=darwin")
 	}
 }
 
-func withDarwinTrayApp(fn func(*App)) {
+func withDarwinTrayController(fn func(trayController)) {
 	darwinTrayState.mu.RLock()
-	app := darwinTrayState.app
+	controller := darwinTrayState.controller
 	darwinTrayState.mu.RUnlock()
-	if app != nil {
-		fn(app)
+	if controller != nil {
+		fn(controller)
 	}
 }
 

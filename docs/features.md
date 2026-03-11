@@ -47,13 +47,13 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 - Top-right of sidebar: **Languages** shortcut button; toggles immediately between **Chinese** and **English**, and persists the preference to `localStorage`.
 - Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light**.
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
-- Window close button behavior: clicking the top-left close button hides the main window and keeps the app running in background.
+- Window close button behavior: clicking the top-left close button closes the current UI process instead of only hiding it. The lightweight helper remains in the tray/menu bar, so `Show SkillFlow` or launching the app again opens a fresh window.
 - Primary-page refresh behavior: route transitions remount the page subtree keyed by `location.pathname`, so re-entering pages such as **My Skills**, **My Tools**, **My Prompts**, and **Starred Repos** fetches fresh backend state again without requiring a manual in-page refresh.
 - Startup smoothing behavior: after the shell is ready, background startup jobs are staggered instead of launching together, so the first interactive second is less likely to compete with skill update checks, starred refresh, app update checks, and git startup pull at the same time.
-- Background memory trim behavior: if the window stays hidden or inactive for about 30 seconds, SkillFlow unmounts the current routed page tree to release page-local React state and large loaded datasets. When the window becomes active again, the current route mounts again and reloads fresh data automatically.
+- Background memory trim behavior: if the window stays hidden from tray/menu actions or inactive for about 30 seconds, SkillFlow unmounts the current routed page tree to release page-local React state and large loaded datasets. When the window becomes active again, the current route mounts again and reloads fresh data automatically.
 - Initial window sizing: on launch, SkillFlow first restores the most recently saved window size from local-only `config_local.json`; if none is saved yet, it sizes itself against the current display with a larger desktop-friendly default, clamps to the available screen, and centers the window.
-- macOS tray behavior: the app creates a monochrome status icon in the menu-bar status area on startup; after the main window is hidden, the Dock icon is removed and only the menu-bar icon remains. Use native single-click to open a menu with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`.
-- Windows tray behavior: app remains in the system notification area with the app's own icon; click the tray icon to open a menu with `Show SkillFlow` and `Exit`.
+- macOS tray behavior: a lightweight helper keeps a monochrome status icon in the menu-bar status area. Closing the main window exits the UI process, but the menu-bar item remains available with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`; `Show SkillFlow` relaunches or focuses the UI window.
+- Windows tray behavior: a lightweight helper remains in the system notification area with the app icon. Closing the main window exits the UI process; the tray menu can still `Show SkillFlow` to relaunch/focus the UI, or `Exit` to terminate both helper and UI.
 
 ---
 

@@ -29,7 +29,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **Starred Repos** | Watch Git repos, browse their skills, and import or push them without installing everything into My Skills first. |
 | **Cloud Backup** | Back up skills, prompts, and metadata to object storage providers or Git, with local-only secret storage. |
 | **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app, including any copies already pushed to tool directories. |
-| **Desktop Experience** | Bilingual UI, multiple themes, background tray behavior, launch-at-login, per-tool settings, and background route-memory trimming when the window stays hidden or inactive. |
+| **Desktop Experience** | Bilingual UI, multiple themes, helper-backed tray/menu bar reopen after window close, launch-at-login, per-tool settings, and background route-memory trimming when a hidden window stays inactive. |
 
 For the complete UI/UX reference, see **[docs/features.md](docs/features.md)**.
 

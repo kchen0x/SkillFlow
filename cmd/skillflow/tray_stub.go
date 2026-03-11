@@ -2,7 +2,7 @@
 
 package main
 
-func setupTray(_ *App) error {
+func setupTray(_ trayController) error {
 	return nil
 }
 

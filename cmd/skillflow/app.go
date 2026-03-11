@@ -56,12 +56,14 @@ type App struct {
 	gitConflictPending bool
 	stopAutoSync       chan struct{}
 
-	backupResultMu   sync.RWMutex
-	lastBackupResult []backup.RemoteFile
-	lastBackupAt     time.Time
+	backupResultMu       sync.RWMutex
+	lastBackupResult     []backup.RemoteFile
+	lastBackupAt         time.Time
 	windowVisibilityMu   sync.Mutex
 	windowVisibilityInit bool
 	windowVisible        bool
+	uiControlMu          sync.Mutex
+	uiControlServer      *loopbackControlServer
 }
 
 const defaultCategoryName = "Default"
@@ -140,9 +142,7 @@ func (a *App) proxyHTTPClient() *http.Client {
 
 func (a *App) domReady(ctx context.Context) {
 	a.fitInitialWindowToScreen(ctx)
-	if err := setupTray(a); err != nil {
-		runtime.LogWarningf(ctx, "tray init failed: %v", err)
-	}
+	a.startUIControlServer()
 	a.startBackgroundStartupTasks()
 }
 
@@ -167,8 +167,8 @@ func (a *App) beforeClose(ctx context.Context) bool {
 }
 
 func (a *App) shutdown(_ context.Context) {
+	a.stopUIControlServer()
 	a.logInfof("application shutdown completed")
-	teardownTray()
 }
 
 func (a *App) showMainWindow() {

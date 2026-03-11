@@ -65,10 +65,17 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 
 `cmd/skillflow/main.go` 负责：
 
-- 用 `//go:embed all:frontend/dist` 嵌入前端构建产物
-- 通过 `NewApp()` 创建 `App` 实例
-- 以 `HideWindowOnClose: true` 启动 Wails
-- 将 `App` 直接绑定给前端
+- 在真正启动外壳前先判断内部进程角色（`helper` 或 `ui`）
+- 让 helper 持有单实例、托盘/菜单栏控制，以及 UI 拉起/聚焦能力
+- 在 UI 子进程里用 `//go:embed all:frontend/dist` 启动 Wails，并把 `HideWindowOnClose` 设为 `false`
+- 仅在 UI 进程中创建并绑定 `App` 给前端
+
+### Helper / UI 双进程
+
+- **helper** 进程是轻量壳层，负责托盘/菜单栏、单实例和本地控制端点（位于 `<AppDataDir>/runtime/` 下），并按需重新拉起或聚焦 UI 进程。
+- **UI** 进程承载 Wails、React 以及前端可调用的 `App` 绑定。关闭窗口时会直接退出该进程，并随之释放嵌入的 WebKit/WebView 运行时。
+- 再次启动应用时，不再直接尝试聚焦旧的 Wails 窗口，而是向 helper 转发 `show-ui` 指令后退出当前启动实例。
+- 当前阶段里，后端 `App` 方法仍运行在 UI 进程中；helper 目前只接管壳层生命周期。
 
 ### 应用启动流程
 
@@ -85,7 +92,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 `App.domReady()` 负责外壳/UI 相关初始化：
 
 1. 恢复或计算窗口初始尺寸
-2. 初始化系统托盘
+2. 启动 UI 侧本地控制服务（供 helper 发送 `show`、`hide`、`quit`）
 3. 延迟调度启动后的后台任务
 4. 将这些任务错峰展开，避免首个可交互阶段同时发起所有远端检查
 5. 在前端维护一个活动状态机，用于在长时间后台或不活跃后卸载路由页面树
@@ -97,7 +104,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 - 收藏仓库刷新
 - 应用版本更新检测
 
-`App.beforeClose()` 会持久化当前窗口尺寸，`App.shutdown()` 会清理托盘资源。
+`App.beforeClose()` 会持久化当前窗口尺寸，`App.shutdown()` 会停止 UI 控制服务。
 
 ---
 

@@ -78,13 +78,13 @@ var (
 	windowsTrayStartOnce    sync.Once
 	windowsTrayStartErr     error
 	windowsTrayState        struct {
-		mu   sync.RWMutex
-		app  *App
-		hwnd uintptr
-		menu uintptr
-		nid  notifyIconData
-		icon uintptr
-		own  bool
+		mu         sync.RWMutex
+		controller trayController
+		hwnd       uintptr
+		menu       uintptr
+		nid        notifyIconData
+		icon       uintptr
+		own        bool
 	}
 )
 
@@ -143,9 +143,9 @@ type notifyIconData struct {
 	HBalloonIcon     uintptr
 }
 
-func setupTray(app *App) error {
+func setupTray(controller trayController) error {
 	windowsTrayState.mu.Lock()
-	windowsTrayState.app = app
+	windowsTrayState.controller = controller
 	windowsTrayState.mu.Unlock()
 
 	windowsTrayStartOnce.Do(func() {
@@ -158,7 +158,7 @@ func setupTray(app *App) error {
 
 func teardownTray() {
 	windowsTrayState.mu.Lock()
-	windowsTrayState.app = nil
+	windowsTrayState.controller = nil
 	hwnd := windowsTrayState.hwnd
 	windowsTrayState.mu.Unlock()
 	if hwnd != 0 {
@@ -374,12 +374,12 @@ func showTrayMenu(hwnd uintptr) {
 	procPostMessageW.Call(hwnd, wmNull, 0, 0)
 }
 
-func withWindowsTrayApp(fn func(*App)) {
+func withWindowsTrayController(fn func(trayController)) {
 	windowsTrayState.mu.RLock()
-	app := windowsTrayState.app
+	controller := windowsTrayState.controller
 	windowsTrayState.mu.RUnlock()
-	if app != nil {
-		fn(app)
+	if controller != nil {
+		fn(controller)
 	}
 }
 
@@ -390,26 +390,26 @@ func trayWndProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 		case wmRButton, wmLButton:
 			showTrayMenu(hwnd)
 		case wmLDouble:
-			withWindowsTrayApp(func(app *App) {
-				go app.showMainWindow()
+			withWindowsTrayController(func(controller trayController) {
+				go controller.showMainWindow()
 			})
 		}
 		return 0
 	case wmCommand:
 		switch uint16(wParam & 0xFFFF) {
 		case trayMenuCmdShow:
-			withWindowsTrayApp(func(app *App) {
-				go app.showMainWindow()
+			withWindowsTrayController(func(controller trayController) {
+				go controller.showMainWindow()
 			})
 		case trayMenuCmdExit:
-			withWindowsTrayApp(func(app *App) {
-				go app.quitApp()
+			withWindowsTrayController(func(controller trayController) {
+				go controller.quitApp()
 			})
 		}
 		return 0
 	case trayShowWindowMsg:
-		withWindowsTrayApp(func(app *App) {
-			go app.showMainWindow()
+		withWindowsTrayController(func(controller trayController) {
+			go controller.showMainWindow()
 		})
 		return 0
 	case wmClose:
