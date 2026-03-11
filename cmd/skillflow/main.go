@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -12,19 +13,51 @@ import (
 var assets embed.FS
 
 func main() {
-	ensureSingleInstance()
+	os.Exit(runEntry(os.Args))
+}
 
-	// Create an instance of the app structure
+func runEntry(args []string) int {
+	if !helperBootstrapEnabled() {
+		if err := runUIProcess(); err != nil {
+			println("Error:", err.Error())
+			return 1
+		}
+		return 0
+	}
+
+	role, filteredArgs := determineProcessRole(args)
+	activeProcessRole = role
+	if len(filteredArgs) > 0 {
+		os.Args = filteredArgs
+	}
+	if role == processRoleUI {
+		if err := runUIProcess(); err != nil {
+			println("Error:", err.Error())
+			return 1
+		}
+		return 0
+	}
+	uiArgs := []string(nil)
+	if len(filteredArgs) > 1 {
+		uiArgs = filteredArgs[1:]
+	}
+	if err := bootstrapHelperProcess(uiArgs); err != nil {
+		println("Error:", err.Error())
+		return 1
+	}
+	return 0
+}
+
+func runUIProcess() error {
 	app := NewApp()
 
-	// Create application with options
-	err := wails.Run(&options.App{
+	return wails.Run(&options.App{
 		Title:             "SkillFlow",
 		Width:             1360,
 		Height:            860,
 		MinWidth:          960,
 		MinHeight:         680,
-		HideWindowOnClose: true,
+		HideWindowOnClose: false,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
@@ -37,8 +70,4 @@ func main() {
 			app,
 		},
 	})
-
-	if err != nil {
-		println("Error:", err.Error())
-	}
 }

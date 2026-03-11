@@ -10,15 +10,15 @@ import "strings"
 
 //export skillflowTrayLog
 func skillflowTrayLog(level *C.char, message *C.char) {
-	withDarwinTrayApp(func(app *App) {
+	withDarwinTrayController(func(controller trayController) {
 		msg := C.GoString(message)
 		switch strings.ToLower(C.GoString(level)) {
 		case "debug":
-			app.logDebugf("%s", msg)
+			controller.logDebugf("%s", msg)
 		case "error":
-			app.logErrorf("%s", msg)
+			controller.logErrorf("%s", msg)
 		default:
-			app.logInfof("%s", msg)
+			controller.logInfof("%s", msg)
 		}
 	})
 }

@@ -8,37 +8,39 @@ import "C"
 
 //export skillflowTrayOnShow
 func skillflowTrayOnShow() {
-	go withDarwinTrayApp(func(app *App) {
-		app.showMainWindow()
+	go withDarwinTrayController(func(controller trayController) {
+		controller.showMainWindow()
 	})
 }
 
 //export skillflowTrayOnHide
 func skillflowTrayOnHide() {
-	go withDarwinTrayApp(func(app *App) {
-		app.hideMainWindow()
+	go withDarwinTrayController(func(controller trayController) {
+		controller.hideMainWindow()
 	})
 }
 
 //export skillflowTrayOnQuit
 func skillflowTrayOnQuit() {
-	go withDarwinTrayApp(func(app *App) {
-		app.quitApp()
+	go withDarwinTrayController(func(controller trayController) {
+		controller.quitApp()
 	})
 }
 
 //export skillflowTrayOnApplicationWillHide
 func skillflowTrayOnApplicationWillHide() {
-	go withDarwinTrayApp(func(app *App) {
-		app.logInfof("main window hide started, mode=menu_bar")
+	go withDarwinTrayController(func(controller trayController) {
+		controller.logInfof("main window hide started, mode=menu_bar")
 	})
 }
 
 //export skillflowTrayOnApplicationDidHide
 func skillflowTrayOnApplicationDidHide() {
-	go withDarwinTrayApp(func(app *App) {
+	go withDarwinTrayController(func(controller trayController) {
 		applyDarwinAccessoryPolicy()
-		app.publishWindowVisibilityChanged(false)
-		app.logInfof("main window hide completed, mode=menu_bar")
+		if publisher, ok := controller.(trayVisibilityPublisher); ok {
+			publisher.publishWindowVisibilityChanged(false)
+		}
+		controller.logInfof("main window hide completed, mode=menu_bar")
 	})
 }

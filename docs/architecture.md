@@ -65,10 +65,17 @@ Key repository rules:
 
 `cmd/skillflow/main.go`:
 
-- embeds `frontend/dist` with `//go:embed all:frontend/dist`
-- creates the `App` instance with `NewApp()`
-- starts Wails with `HideWindowOnClose: true`
-- binds the `App` instance directly to the frontend
+- determines an internal process role (`helper` or `ui`) before starting the shell
+- keeps the helper as the single-instance owner for tray/menu-bar control and UI relaunch/focus
+- starts the Wails UI child with `//go:embed all:frontend/dist` and `HideWindowOnClose: false`
+- binds the `App` instance directly to the frontend only inside the UI process
+
+### Helper/UI split
+
+- The **helper** process is a lightweight shell owner. It keeps the tray or menu-bar item alive, exposes a local control endpoint under `<AppDataDir>/runtime/`, and relaunches or focuses the UI process on demand.
+- The **UI** process hosts Wails, React, and the frontend-callable `App` bindings. Closing the window exits this process, which also releases the embedded WebKit/WebView runtime.
+- A repeated app launch no longer tries to focus an existing Wails window directly. Instead it forwards `show-ui` to the helper and exits.
+- At this stage, backend `App` methods still execute in the UI process; the helper currently manages shell lifecycle only.
 
 ### App startup flow
 
@@ -85,7 +92,7 @@ Key repository rules:
 `App.domReady()` handles shell/UI setup:
 
 1. Restore or compute the initial window size
-2. Initialize the system tray
+2. Start the UI-side local control server used by the helper (`show`, `hide`, `quit`)
 3. Schedule background startup tasks after a short delay
 4. Stagger those tasks so the first interactive second does not fan out all remote checks at once
 5. Maintain a frontend activity state machine that can trim the routed page tree after prolonged background or inactive time
@@ -97,7 +104,7 @@ Deferred background tasks currently include:
 - starred repo refresh
 - app release update check
 
-`App.beforeClose()` persists the current window size. `App.shutdown()` tears down tray resources.
+`App.beforeClose()` persists the current window size. `App.shutdown()` stops the UI control server.
 
 ---
 

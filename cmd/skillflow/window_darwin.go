@@ -9,8 +9,6 @@ import (
 )
 
 func showMainWindowNative(ctx context.Context) error {
-	ensureDarwinStatusItem()
-	applyDarwinRegularPolicy()
 	runtime.Show(ctx)
 	runtime.WindowShow(ctx)
 	runtime.WindowUnminimise(ctx)
@@ -18,7 +16,6 @@ func showMainWindowNative(ctx context.Context) error {
 }
 
 func hideMainWindowNative(ctx context.Context) error {
-	ensureDarwinStatusItem()
 	runtime.Hide(ctx)
 	return nil
 }
