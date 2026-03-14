@@ -2097,7 +2097,6 @@ func (a *App) UpdateStarredRepo(repoURL string) error {
 				SyncError: repos[i].SyncError,
 			},
 		})
-		a.hub.Publish(notify.Event{Type: notify.EventStarSyncDone})
 		return nil
 	}
 	a.logErrorf("update starred repo failed: repo=%s err=starred repo not found", repoURL)
