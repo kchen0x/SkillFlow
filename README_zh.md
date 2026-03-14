@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shinerio/SkillFlow)
+
 # SkillFlow
 
 > 🌐 **中文** | [English](README.md)
