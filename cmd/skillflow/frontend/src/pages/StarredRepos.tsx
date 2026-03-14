@@ -37,6 +37,7 @@ export default function StarredRepos() {
   const [repoSkillsLoading, setRepoSkillsLoading] = useState(() => !!currentRepo)
   const [view, setView] = useState<'folder' | 'flat'>('folder')
   const [syncing, setSyncing] = useState(false)
+  const [updatingRepoURLs, setUpdatingRepoURLs] = useState<Set<string>>(new Set())
   const [addUrl, setAddUrl] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -160,8 +161,21 @@ export default function StarredRepos() {
   }
 
   const handleUpdateOne = async (url: string) => {
-    await UpdateStarredRepo(url)
-    await Promise.all([loadRepos(), loadAllSkills()])
+    setUpdatingRepoURLs(prev => {
+      const next = new Set(prev)
+      next.add(url)
+      return next
+    })
+    try {
+      await UpdateStarredRepo(url)
+      await Promise.all([loadRepos(), loadAllSkills()])
+    } finally {
+      setUpdatingRepoURLs(prev => {
+        const next = new Set(prev)
+        next.delete(url)
+        return next
+      })
+    }
   }
 
   const handleRemove = async (url: string) => {
@@ -485,6 +499,7 @@ export default function StarredRepos() {
             repos={repos}
             loading={reposLoading || allSkillsLoading}
             repoSkillCounts={repoSkillCounts}
+            updatingRepoURLs={updatingRepoURLs}
             onEnter={url => navigate(`/starred/${encodeURIComponent(url)}`)}
             onUpdate={handleUpdateOne}
             onRemove={handleRemove}
@@ -714,10 +729,11 @@ export default function StarredRepos() {
   )
 }
 
-function RepoGrid({ repos, loading, repoSkillCounts, onEnter, onUpdate, onRemove }: {
+function RepoGrid({ repos, loading, repoSkillCounts, updatingRepoURLs, onEnter, onUpdate, onRemove }: {
   repos: any[]
   loading: boolean
   repoSkillCounts: Map<string, number>
+  updatingRepoURLs: Set<string>
   onEnter: (url: string) => void
   onUpdate: (url: string) => void
   onRemove: (url: string) => void
@@ -756,6 +772,7 @@ function RepoGrid({ repos, loading, repoSkillCounts, onEnter, onUpdate, onRemove
       {repos.map((r: any) => {
         const { host, displayName } = parseRepoMeta(r)
         const skillCount = repoSkillCounts.get(r.url) ?? 0
+        const isUpdating = updatingRepoURLs.has(r.url)
         return (
         <div
           key={r.url}
@@ -789,13 +806,14 @@ function RepoGrid({ repos, loading, repoSkillCounts, onEnter, onUpdate, onRemove
               </button>
               <button
                 onClick={() => onUpdate(r.url)}
+                disabled={isUpdating}
                 className="p-1 rounded transition-colors"
                 style={{ color: 'var(--text-muted)' }}
                 onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)' }}
                 onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
                 title={t('starred.updateBtn')}
               >
-                <RefreshCw size={12} />
+                <RefreshCw size={12} className={isUpdating ? 'animate-spin' : ''} />
               </button>
               <button
                 onClick={() => onRemove(r.url)}
