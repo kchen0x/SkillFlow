@@ -914,7 +914,11 @@ func (a *App) autoPushTargets(cfg config.AppConfig) []config.ToolConfig {
 }
 
 func (a *App) autoPushImportedSkills(source string, imported []*skill.Skill) {
-	if len(imported) == 0 {
+	a.autoPushSkillsToConfiguredTools(source, imported, false)
+}
+
+func (a *App) autoPushSkillsToConfiguredTools(source string, skills []*skill.Skill, overwriteExisting bool) {
+	if len(skills) == 0 {
 		return
 	}
 	cfg, err := a.config.Load()
@@ -928,7 +932,7 @@ func (a *App) autoPushImportedSkills(source string, imported []*skill.Skill) {
 		return
 	}
 
-	a.logInfof("auto push imported skills started: source=%s skillCount=%d toolCount=%d", source, len(imported), len(targets))
+	a.logInfof("auto push imported skills started: source=%s skillCount=%d toolCount=%d overwriteExisting=%t", source, len(skills), len(targets), overwriteExisting)
 	totalPushed := 0
 	failures := 0
 
@@ -940,11 +944,20 @@ func (a *App) autoPushImportedSkills(source string, imported []*skill.Skill) {
 			continue
 		}
 
-		toPush := make([]*skill.Skill, 0, len(imported))
+		toPush := make([]*skill.Skill, 0, len(skills))
 		skippedExisting := 0
-		for _, sk := range imported {
+		for _, sk := range skills {
 			targetPath := filepath.Join(tool.PushDir, sk.Name)
 			if _, statErr := os.Stat(targetPath); statErr == nil {
+				if overwriteExisting {
+					if err := os.RemoveAll(targetPath); err != nil {
+						failures++
+						a.logErrorf("auto push tool failed: source=%s tool=%s skill=%s target=%s err=%v", source, tool.Name, sk.Name, targetPath, err)
+						continue
+					}
+					toPush = append(toPush, sk)
+					continue
+				}
 				skippedExisting++
 				a.logDebugf("auto push tool skipped existing target: source=%s tool=%s skill=%s target=%s", source, tool.Name, sk.Name, targetPath)
 				continue
@@ -971,7 +984,7 @@ func (a *App) autoPushImportedSkills(source string, imported []*skill.Skill) {
 		a.logInfof("auto push tool completed: source=%s tool=%s pushed=%d skippedExisting=%d", source, tool.Name, len(toPush), skippedExisting)
 	}
 
-	a.logInfof("auto push imported skills completed: source=%s skillCount=%d toolCount=%d pushed=%d failures=%d", source, len(imported), len(targets), totalPushed, failures)
+	a.logInfof("auto push imported skills completed: source=%s skillCount=%d toolCount=%d pushed=%d failures=%d overwriteExisting=%t", source, len(skills), len(targets), totalPushed, failures, overwriteExisting)
 }
 
 // --- Sync ---
@@ -1653,6 +1666,7 @@ func (a *App) UpdateSkill(skillID string) error {
 		a.scheduleAutoBackup()
 		return err
 	}
+	a.autoPushSkillsToConfiguredTools("skill.update", []*skill.Skill{sk}, true)
 	a.scheduleAutoBackup()
 	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
 	return nil

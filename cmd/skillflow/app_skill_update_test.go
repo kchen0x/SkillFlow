@@ -68,6 +68,43 @@ func TestUpdateSkillRefreshesExistingPushedCopiesFromLocalCache(t *testing.T) {
 	assert.Empty(t, updated.LatestSHA)
 }
 
+func TestUpdateSkillAutoPushesToSelectedToolsWhenMissing(t *testing.T) {
+	app, codexPushDir, claudePushDir, dataDir := newUpdateSkillTestApp(t)
+	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
+	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
+
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
+	require.NoError(t, err)
+	sk.SourceSHA = oldSHA
+	sk.LatestSHA = newSHA
+	require.NoError(t, app.storage.UpdateMeta(sk))
+
+	require.NoError(t, app.UpdateSkill(sk.ID))
+
+	assertFileContentEquals(t, filepath.Join(codexPushDir, "demo-skill", "skill.md"), "# Demo\nNew\n")
+	_, err = os.Stat(filepath.Join(claudePushDir, "demo-skill"))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestUpdateSkillAutoPushOverwritesSelectedToolSkill(t *testing.T) {
+	app, codexPushDir, _, dataDir := newUpdateSkillTestApp(t)
+	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
+	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
+
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
+	require.NoError(t, err)
+	sk.SourceSHA = oldSHA
+	sk.LatestSHA = newSHA
+	require.NoError(t, app.storage.UpdateMeta(sk))
+
+	toolSkillDir := filepath.Join(codexPushDir, "demo-skill")
+	require.NoError(t, os.MkdirAll(toolSkillDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(toolSkillDir, "skill.md"), []byte("# Demo\nOld Tool Copy\n"), 0644))
+
+	require.NoError(t, app.UpdateSkill(sk.ID))
+	assertFileContentEquals(t, filepath.Join(toolSkillDir, "skill.md"), "# Demo\nNew\n")
+}
+
 func TestUpdateSkillFailsWhenLocalCacheMissing(t *testing.T) {
 	app, _, _, _ := newUpdateSkillTestApp(t)
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
