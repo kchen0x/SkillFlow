@@ -78,8 +78,8 @@ Central library for managing your skill collection.
 - The selection is persisted locally on the current device and reused for future imports into **My Skills**.
 - Turning a tool on here immediately backfills the current library to that tool, so existing My Skills entries are pushed right away instead of waiting for the next import.
 - Any newly added skill in **My Skills** is automatically copied to the selected tools after the library import succeeds. This applies to local folder import, GitHub install, Pull from Tools, and Starred Repo import.
-- If a cloud restore brings new library skills onto the current device, SkillFlow immediately auto-pushes only those newly restored skills to the selected tools on this device.
-- Auto-push is non-destructive: if a selected tool already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
+- If a cloud restore brings skills onto the current device, SkillFlow auto-pushes any newly restored or newly updated library skills to the selected tools on this device.
+- Import/install auto-push remains non-destructive: if a selected tool already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
 - Turning a tool off in this strip does not delete anything that was already pushed earlier; removing tool copies still requires manual deletion from **My Tools** or the tool directory.
 
 ### Select Mode (activated by "Batch Delete")
@@ -116,7 +116,7 @@ Central library for managing your skill collection.
 ### Skill Update Flow
 
 - Toolbar **Update** compares installed Git-backed skills against their locally cached repo clones and only marks cards as updatable.
-- Card-level **Update** is the action that copies the latest files from the local repo cache, overwrites the installed copy in **My Skills**, and refreshes any same-skill copies that already exist in tool `PushDir`s.
+- Card-level **Update** is the action that copies the latest files from the local repo cache, overwrites the installed copy in **My Skills**, refreshes any same-skill copies that already exist in tool `PushDir`s, and force-updates all tools currently selected in **Auto Push Targets** (creating missing copies and overwriting existing copies there).
 - While a card update is running, that card keeps the Update action visible, disables repeat clicks, and spins the Refresh icon until the request finishes.
 - The Dashboard also shows a temporary top-of-page status banner for skill update progress, success, or failure so users can tell whether the click really triggered work.
 - Cache-based checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
@@ -851,4 +851,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-11*
+*Last updated: 2026-03-14*

@@ -31,6 +31,25 @@ func TestHandleRestoredCloudStateAutoPushesNewlyRestoredSkills(t *testing.T) {
 	assert.Equal(t, "# Demo\nRestored\n", string(pushedContent))
 }
 
+func TestHandleRestoredCloudStateAutoPushesUpdatedExistingSkills(t *testing.T) {
+	app, pushDir, _, _ := newRestoreTestApp(t, []string{"codex"})
+	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nVersion 1\n")
+
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceManual, "", "")
+	require.NoError(t, err)
+
+	app.autoPushImportedSkills("test.setup", []*skill.Skill{sk})
+	pushPath := filepath.Join(pushDir, "demo-skill", "skill.md")
+	assertFileContentEquals(t, pushPath, "# Demo\nVersion 1\n")
+
+	before := app.captureCloudRestoreState()
+	require.NoError(t, os.WriteFile(filepath.Join(sk.Path, "skill.md"), []byte("# Demo\nVersion 2\n"), 0644))
+	require.NoError(t, app.storage.UpdateMeta(sk))
+
+	require.NoError(t, app.handleRestoredCloudState(before, "test.restore"))
+	assertFileContentEquals(t, pushPath, "# Demo\nVersion 2\n")
+}
+
 func TestHandleRestoredCloudStateClonesNewlyRestoredStarredRepos(t *testing.T) {
 	if err := coregit.CheckGitInstalled(); err != nil {
 		t.Skip("git not installed")

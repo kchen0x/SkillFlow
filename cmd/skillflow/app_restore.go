@@ -12,21 +12,29 @@ import (
 )
 
 type cloudRestoreState struct {
-	installedSkillKeys map[string]struct{}
-	starredRepoURLs    map[string]struct{}
+	installedSkills map[string]cloudRestoreSkillSnapshot
+	starredRepoURLs map[string]struct{}
+}
+
+type cloudRestoreSkillSnapshot struct {
+	SourceSHA string
+	UpdatedAt time.Time
 }
 
 func (a *App) captureCloudRestoreState() cloudRestoreState {
 	state := cloudRestoreState{
-		installedSkillKeys: map[string]struct{}{},
-		starredRepoURLs:    map[string]struct{}{},
+		installedSkills: map[string]cloudRestoreSkillSnapshot{},
+		starredRepoURLs: map[string]struct{}{},
 	}
 
 	if a.storage != nil {
 		if skills, err := a.storage.ListAll(); err == nil {
 			for _, sk := range skills {
 				if key := cloudRestoreSkillKey(sk); key != "" {
-					state.installedSkillKeys[key] = struct{}{}
+					state.installedSkills[key] = cloudRestoreSkillSnapshot{
+						SourceSHA: strings.TrimSpace(sk.SourceSHA),
+						UpdatedAt: sk.UpdatedAt,
+					}
 				}
 			}
 		}
@@ -49,13 +57,13 @@ func (a *App) handleRestoredCloudState(before cloudRestoreState, source string) 
 	a.logInfof("restore compensation started: source=%s", source)
 	a.reloadStateFromDisk()
 
-	newlyRestoredSkills, err := a.restoredSkillsSince(before)
+	restoredSkills, err := a.restoredOrUpdatedSkillsSince(before)
 	if err != nil {
 		a.logErrorf("restore compensation failed: source=%s load restored skills failed: %v", source, err)
 		return err
 	}
-	if len(newlyRestoredSkills) > 0 {
-		a.autoPushImportedSkills(source, newlyRestoredSkills)
+	if len(restoredSkills) > 0 {
+		a.autoPushSkillsToConfiguredTools(source, restoredSkills, true)
 	}
 
 	clonedRepos, failedRepos, err := a.cloneNewlyRestoredStarredRepos(before, source)
@@ -64,11 +72,11 @@ func (a *App) handleRestoredCloudState(before cloudRestoreState, source string) 
 		return err
 	}
 
-	a.logInfof("restore compensation completed: source=%s restoredSkills=%d clonedRepos=%d failedRepos=%d", source, len(newlyRestoredSkills), clonedRepos, failedRepos)
+	a.logInfof("restore compensation completed: source=%s restoredSkills=%d clonedRepos=%d failedRepos=%d", source, len(restoredSkills), clonedRepos, failedRepos)
 	return nil
 }
 
-func (a *App) restoredSkillsSince(before cloudRestoreState) ([]*skill.Skill, error) {
+func (a *App) restoredOrUpdatedSkillsSince(before cloudRestoreState) ([]*skill.Skill, error) {
 	if a.storage == nil {
 		return nil, nil
 	}
@@ -83,7 +91,8 @@ func (a *App) restoredSkillsSince(before cloudRestoreState) ([]*skill.Skill, err
 		if key == "" {
 			continue
 		}
-		if _, existed := before.installedSkillKeys[key]; existed {
+		snapshot, existed := before.installedSkills[key]
+		if existed && snapshot.SourceSHA == strings.TrimSpace(sk.SourceSHA) && snapshot.UpdatedAt.Equal(sk.UpdatedAt) {
 			continue
 		}
 		restored = append(restored, sk)
