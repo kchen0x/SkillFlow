@@ -2,45 +2,45 @@ package viewstate
 
 import "sort"
 
-type ToolPresenceInput struct {
+type AgentPresenceInput struct {
 	Name        string
 	Fingerprint string
 }
 
-type ToolPresenceSnapshot struct {
-	ToolFingerprints map[string]string   `json:"toolFingerprints"`
-	KeysByTool       map[string][]string `json:"keysByTool"`
-	ToolsByKey       map[string][]string `json:"toolsByKey"`
+type AgentPresenceSnapshot struct {
+	AgentFingerprints map[string]string   `json:"agentFingerprints"`
+	KeysByAgent       map[string][]string `json:"keysByAgent"`
+	AgentsByKey       map[string][]string `json:"agentsByKey"`
 }
 
-func RebuildToolPresence(previous ToolPresenceSnapshot, inputs []ToolPresenceInput, scan func(toolName string) ([]string, error)) (ToolPresenceSnapshot, error) {
-	next := ToolPresenceSnapshot{
-		ToolFingerprints: map[string]string{},
-		KeysByTool:       map[string][]string{},
-		ToolsByKey:       map[string][]string{},
+func RebuildAgentPresence(previous AgentPresenceSnapshot, inputs []AgentPresenceInput, scan func(agentName string) ([]string, error)) (AgentPresenceSnapshot, error) {
+	next := AgentPresenceSnapshot{
+		AgentFingerprints: map[string]string{},
+		KeysByAgent:       map[string][]string{},
+		AgentsByKey:       map[string][]string{},
 	}
 
 	for _, input := range inputs {
-		next.ToolFingerprints[input.Name] = input.Fingerprint
+		next.AgentFingerprints[input.Name] = input.Fingerprint
 
-		keys := previous.KeysByTool[input.Name]
-		if previous.ToolFingerprints[input.Name] != input.Fingerprint {
+		keys := previous.KeysByAgent[input.Name]
+		if previous.AgentFingerprints[input.Name] != input.Fingerprint {
 			scannedKeys, err := scan(input.Name)
 			if err != nil {
-				return ToolPresenceSnapshot{}, err
+				return AgentPresenceSnapshot{}, err
 			}
 			keys = scannedKeys
 		}
 
 		normalizedKeys := uniqueSorted(keys)
-		next.KeysByTool[input.Name] = normalizedKeys
+		next.KeysByAgent[input.Name] = normalizedKeys
 		for _, key := range normalizedKeys {
-			next.ToolsByKey[key] = append(next.ToolsByKey[key], input.Name)
+			next.AgentsByKey[key] = append(next.AgentsByKey[key], input.Name)
 		}
 	}
 
-	for key := range next.ToolsByKey {
-		next.ToolsByKey[key] = uniqueSorted(next.ToolsByKey[key])
+	for key := range next.AgentsByKey {
+		next.AgentsByKey[key] = uniqueSorted(next.AgentsByKey[key])
 	}
 
 	return next, nil

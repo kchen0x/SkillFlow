@@ -23,7 +23,8 @@ import (
 	"github.com/shinerio/skillflow/core/registry"
 	"github.com/shinerio/skillflow/core/skill"
 	"github.com/shinerio/skillflow/core/skillkey"
-	toolsync "github.com/shinerio/skillflow/core/sync"
+	agentsync "github.com/shinerio/skillflow/core/sync"
+	"github.com/shinerio/skillflow/core/upgrade"
 	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -73,6 +74,16 @@ var builtinStarredRepoURLs = []string{
 	"https://github.com/affaan-m/everything-claude-code.git",
 }
 
+var appDataDirFunc = config.AppDataDir
+
+var runStartupUpgrade = upgrade.Run
+
+var loadStartupConfig = func(dataDir string) (*config.Service, config.AppConfig, error) {
+	svc := config.NewService(dataDir)
+	cfg, err := svc.Load()
+	return svc, cfg, err
+}
+
 func normalizeCategoryName(name string) string {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" || strings.EqualFold(trimmed, defaultCategoryName) {
@@ -92,9 +103,23 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	dataDir := config.AppDataDir()
-	a.config = config.NewService(dataDir)
-	cfg, err := a.config.Load()
+	dataDir := appDataDirFunc()
+	if ctx != nil {
+		runtime.LogInfof(ctx, "config upgrade started: dataDir=%s", dataDir)
+	}
+	if err := runStartupUpgrade(dataDir); err != nil {
+		if ctx != nil {
+			runtime.LogErrorf(ctx, "config upgrade failed: dataDir=%s err=%v", dataDir, err)
+		}
+		return
+	}
+	if ctx != nil {
+		runtime.LogInfof(ctx, "config upgrade completed: dataDir=%s", dataDir)
+	}
+
+	var cfg config.AppConfig
+	var err error
+	a.config, cfg, err = loadStartupConfig(dataDir)
 	if err != nil {
 		runtime.LogErrorf(ctx, "load config failed: %v", err)
 		cfg = config.DefaultConfig(dataDir)
@@ -110,7 +135,9 @@ func (a *App) startup(ctx context.Context) {
 	a.starStorage = coregit.NewStarStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
 	registerAdapters()
 	registerProviders()
-	go forwardEvents(ctx, a.hub)
+	if ctx != nil {
+		go forwardEvents(ctx, a.hub)
+	}
 	a.logDebugf("startup background tasks deferred until ui ready")
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 }
@@ -725,83 +752,83 @@ func (a *App) OpenURL(rawURL string) error {
 	return nil
 }
 
-// PushStarSkillsToTools copies starred skill directories directly to the push directory of each
-// specified tool, skipping skills that already exist. Returns structured conflicts.
-func (a *App) PushStarSkillsToTools(skillPaths []string, toolNames []string) ([]PushConflict, error) {
-	a.logInfof("push starred skills started: skillCount=%d toolCount=%d", len(skillPaths), len(toolNames))
+// PushStarSkillsToAgents copies starred skill directories directly to the push directory of each
+// specified agent, skipping skills that already exist. Returns structured conflicts.
+func (a *App) PushStarSkillsToAgents(skillPaths []string, agentNames []string) ([]PushConflict, error) {
+	a.logInfof("push starred skills to agents started: skillCount=%d agentCount=%d", len(skillPaths), len(agentNames))
 	cfg, _ := a.config.Load()
 	var conflicts []PushConflict
-	for _, toolName := range toolNames {
-		for _, t := range cfg.Tools {
-			if t.Name != toolName {
+	for _, agentName := range agentNames {
+		for _, agent := range cfg.Agents {
+			if agent.Name != agentName {
 				continue
 			}
-			if t.PushDir == "" {
-				err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
-				a.logErrorf("push starred skills failed: tool=%s err=%v", toolName, err)
+			if agent.PushDir == "" {
+				err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
+				a.logErrorf("push starred skills to agents failed: agent=%s err=%v", agentName, err)
 				return nil, err
 			}
-			if err := os.MkdirAll(t.PushDir, 0755); err != nil {
-				a.logErrorf("push starred skills failed: tool=%s pushDir=%s err=%v", toolName, t.PushDir, err)
+			if err := os.MkdirAll(agent.PushDir, 0755); err != nil {
+				a.logErrorf("push starred skills to agents failed: agent=%s pushDir=%s err=%v", agentName, agent.PushDir, err)
 				return nil, err
 			}
-			adapter := getAdapter(t)
+			adapter := getAdapter(agent)
 			for _, skillPath := range skillPaths {
 				name := filepath.Base(skillPath)
-				dst := filepath.Join(t.PushDir, name)
+				dst := filepath.Join(agent.PushDir, name)
 				if _, err := os.Stat(dst); err == nil {
 					conflicts = append(conflicts, PushConflict{
 						SkillName:  name,
 						SkillPath:  skillPath,
-						ToolName:   toolName,
+						AgentName:  agentName,
 						TargetPath: dst,
 					})
 					continue
 				}
 				sk := []*skill.Skill{{Name: name, Path: skillPath}}
-				if err := adapter.Push(a.ctx, sk, t.PushDir); err != nil {
-					a.logErrorf("push starred skills failed: tool=%s skill=%s err=%v", toolName, name, err)
+				if err := adapter.Push(a.ctx, sk, agent.PushDir); err != nil {
+					a.logErrorf("push starred skills to agents failed: agent=%s skill=%s err=%v", agentName, name, err)
 					return nil, err
 				}
 			}
 		}
 	}
-	a.logInfof("push starred skills completed: conflicts=%d", len(conflicts))
+	a.logInfof("push starred skills to agents completed: conflicts=%d", len(conflicts))
 	return conflicts, nil
 }
 
-// PushStarSkillsToToolsForce copies starred skill directories to tool push directories,
+// PushStarSkillsToAgentsForce copies starred skill directories to agent push directories,
 // overwriting any existing skills.
-func (a *App) PushStarSkillsToToolsForce(skillPaths []string, toolNames []string) error {
-	a.logInfof("force push starred skills started: skillCount=%d toolCount=%d", len(skillPaths), len(toolNames))
+func (a *App) PushStarSkillsToAgentsForce(skillPaths []string, agentNames []string) error {
+	a.logInfof("force push starred skills to agents started: skillCount=%d agentCount=%d", len(skillPaths), len(agentNames))
 	cfg, _ := a.config.Load()
-	for _, toolName := range toolNames {
-		for _, t := range cfg.Tools {
-			if t.Name != toolName {
+	for _, agentName := range agentNames {
+		for _, agent := range cfg.Agents {
+			if agent.Name != agentName {
 				continue
 			}
-			if t.PushDir == "" {
-				err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
-				a.logErrorf("force push starred skills failed: tool=%s err=%v", toolName, err)
+			if agent.PushDir == "" {
+				err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
+				a.logErrorf("force push starred skills to agents failed: agent=%s err=%v", agentName, err)
 				return err
 			}
 			var tempSkills []*skill.Skill
 			for _, skillPath := range skillPaths {
 				name := filepath.Base(skillPath)
-				targetPath := filepath.Join(t.PushDir, name)
+				targetPath := filepath.Join(agent.PushDir, name)
 				if err := os.RemoveAll(targetPath); err != nil {
-					a.logErrorf("force push starred skills failed: tool=%s target=%s err=%v", toolName, targetPath, err)
+					a.logErrorf("force push starred skills to agents failed: agent=%s target=%s err=%v", agentName, targetPath, err)
 					return err
 				}
 				tempSkills = append(tempSkills, &skill.Skill{Name: name, Path: skillPath})
 			}
-			if err := getAdapter(t).Push(a.ctx, tempSkills, t.PushDir); err != nil {
-				a.logErrorf("force push starred skills failed: tool=%s err=%v", toolName, err)
+			if err := getAdapter(agent).Push(a.ctx, tempSkills, agent.PushDir); err != nil {
+				a.logErrorf("force push starred skills to agents failed: agent=%s err=%v", agentName, err)
 				return err
 			}
 		}
 	}
-	a.logInfof("force push starred skills completed")
+	a.logInfof("force push starred skills to agents completed")
 	return nil
 }
 
@@ -830,7 +857,7 @@ func (a *App) ScanGitHub(repoURL string) ([]install.SkillCandidate, error) {
 	if err != nil {
 		return nil, err
 	}
-	presence := a.buildToolPresenceIndex(installedIndex)
+	presence := a.buildAgentPresenceIndex(installedIndex)
 	var candidates []install.SkillCandidate
 	for _, ss := range starSkills {
 		candidates = append(candidates, install.SkillCandidate{
@@ -877,7 +904,7 @@ func (a *App) InstallFromGitHub(repoURL string, candidates []install.SkillCandid
 		_ = a.storage.UpdateMeta(sk)
 		imported = append(imported, sk)
 	}
-	a.autoPushImportedSkills("github.install", imported)
+	a.autoPushImportedSkillsToAgents("github.install", imported)
 	a.scheduleAutoBackup()
 	return nil
 }
@@ -888,36 +915,36 @@ func (a *App) ImportLocal(dir, category string) (*skill.Skill, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.autoPushImportedSkills("local.import", []*skill.Skill{sk})
+	a.autoPushImportedSkillsToAgents("local.import", []*skill.Skill{sk})
 	a.scheduleAutoBackup()
 	return sk, nil
 }
 
-func (a *App) autoPushTargets(cfg config.AppConfig) []config.ToolConfig {
-	if len(cfg.AutoPushTools) == 0 {
+func (a *App) autoPushAgentTargets(cfg config.AppConfig) []config.AgentConfig {
+	if len(cfg.AutoPushAgents) == 0 {
 		return nil
 	}
-	selected := make(map[string]struct{}, len(cfg.AutoPushTools))
-	for _, name := range cfg.AutoPushTools {
+	selected := make(map[string]struct{}, len(cfg.AutoPushAgents))
+	for _, name := range cfg.AutoPushAgents {
 		selected[name] = struct{}{}
 	}
-	targets := make([]config.ToolConfig, 0, len(selected))
-	for _, tool := range cfg.Tools {
-		if !tool.Enabled {
+	targets := make([]config.AgentConfig, 0, len(selected))
+	for _, agent := range cfg.Agents {
+		if !agent.Enabled {
 			continue
 		}
-		if _, ok := selected[tool.Name]; ok {
-			targets = append(targets, tool)
+		if _, ok := selected[agent.Name]; ok {
+			targets = append(targets, agent)
 		}
 	}
 	return targets
 }
 
-func (a *App) autoPushImportedSkills(source string, imported []*skill.Skill) {
-	a.autoPushSkillsToConfiguredTools(source, imported, false)
+func (a *App) autoPushImportedSkillsToAgents(source string, imported []*skill.Skill) {
+	a.autoPushSkillsToConfiguredAgents(source, imported, false)
 }
 
-func (a *App) autoPushSkillsToConfiguredTools(source string, skills []*skill.Skill, overwriteExisting bool) {
+func (a *App) autoPushSkillsToConfiguredAgents(source string, skills []*skill.Skill, overwriteExisting bool) {
 	if len(skills) == 0 {
 		return
 	}
@@ -926,76 +953,76 @@ func (a *App) autoPushSkillsToConfiguredTools(source string, skills []*skill.Ski
 		a.logErrorf("auto push imported skills failed: source=%s load config failed: %v", source, err)
 		return
 	}
-	targets := a.autoPushTargets(cfg)
+	targets := a.autoPushAgentTargets(cfg)
 	if len(targets) == 0 {
-		a.logDebugf("auto push imported skills skipped: source=%s reason=no-target-tools", source)
+		a.logDebugf("auto push imported skills skipped: source=%s reason=no-target-agents", source)
 		return
 	}
 
-	a.logInfof("auto push imported skills started: source=%s skillCount=%d toolCount=%d overwriteExisting=%t", source, len(skills), len(targets), overwriteExisting)
+	a.logInfof("auto push imported skills started: source=%s skillCount=%d agentCount=%d overwriteExisting=%t", source, len(skills), len(targets), overwriteExisting)
 	totalPushed := 0
 	failures := 0
 
-	for _, tool := range targets {
-		if strings.TrimSpace(tool.PushDir) == "" {
+	for _, agent := range targets {
+		if strings.TrimSpace(agent.PushDir) == "" {
 			failures++
 			err := fmt.Errorf("push dir not configured")
-			a.logErrorf("auto push tool failed: source=%s tool=%s err=%v", source, tool.Name, err)
+			a.logErrorf("auto push agent failed: source=%s agent=%s err=%v", source, agent.Name, err)
 			continue
 		}
 
 		toPush := make([]*skill.Skill, 0, len(skills))
 		skippedExisting := 0
 		for _, sk := range skills {
-			targetPath := filepath.Join(tool.PushDir, sk.Name)
+			targetPath := filepath.Join(agent.PushDir, sk.Name)
 			if _, statErr := os.Stat(targetPath); statErr == nil {
 				if overwriteExisting {
 					if err := os.RemoveAll(targetPath); err != nil {
 						failures++
-						a.logErrorf("auto push tool failed: source=%s tool=%s skill=%s target=%s err=%v", source, tool.Name, sk.Name, targetPath, err)
+						a.logErrorf("auto push agent failed: source=%s agent=%s skill=%s target=%s err=%v", source, agent.Name, sk.Name, targetPath, err)
 						continue
 					}
 					toPush = append(toPush, sk)
 					continue
 				}
 				skippedExisting++
-				a.logDebugf("auto push tool skipped existing target: source=%s tool=%s skill=%s target=%s", source, tool.Name, sk.Name, targetPath)
+				a.logDebugf("auto push agent skipped existing target: source=%s agent=%s skill=%s target=%s", source, agent.Name, sk.Name, targetPath)
 				continue
 			} else if !os.IsNotExist(statErr) {
 				skippedExisting++
 				failures++
-				a.logErrorf("auto push tool failed: source=%s tool=%s skill=%s target=%s err=%v", source, tool.Name, sk.Name, targetPath, statErr)
+				a.logErrorf("auto push agent failed: source=%s agent=%s skill=%s target=%s err=%v", source, agent.Name, sk.Name, targetPath, statErr)
 				continue
 			}
 			toPush = append(toPush, sk)
 		}
 
-		a.logInfof("auto push tool started: source=%s tool=%s skillCount=%d", source, tool.Name, len(toPush))
+		a.logInfof("auto push agent started: source=%s agent=%s skillCount=%d", source, agent.Name, len(toPush))
 		if len(toPush) == 0 {
-			a.logInfof("auto push tool completed: source=%s tool=%s pushed=%d skippedExisting=%d", source, tool.Name, 0, skippedExisting)
+			a.logInfof("auto push agent completed: source=%s agent=%s pushed=%d skippedExisting=%d", source, agent.Name, 0, skippedExisting)
 			continue
 		}
-		if err := getAdapter(tool).Push(a.ctx, toPush, tool.PushDir); err != nil {
+		if err := getAdapter(agent).Push(a.ctx, toPush, agent.PushDir); err != nil {
 			failures++
-			a.logErrorf("auto push tool failed: source=%s tool=%s pushDir=%s err=%v", source, tool.Name, tool.PushDir, err)
+			a.logErrorf("auto push agent failed: source=%s agent=%s pushDir=%s err=%v", source, agent.Name, agent.PushDir, err)
 			continue
 		}
 		totalPushed += len(toPush)
-		a.logInfof("auto push tool completed: source=%s tool=%s pushed=%d skippedExisting=%d", source, tool.Name, len(toPush), skippedExisting)
+		a.logInfof("auto push agent completed: source=%s agent=%s pushed=%d skippedExisting=%d", source, agent.Name, len(toPush), skippedExisting)
 	}
 
-	a.logInfof("auto push imported skills completed: source=%s skillCount=%d toolCount=%d pushed=%d failures=%d overwriteExisting=%t", source, len(skills), len(targets), totalPushed, failures, overwriteExisting)
+	a.logInfof("auto push imported skills completed: source=%s skillCount=%d agentCount=%d pushed=%d failures=%d overwriteExisting=%t", source, len(skills), len(targets), totalPushed, failures, overwriteExisting)
 }
 
 // --- Sync ---
 
-func (a *App) GetEnabledTools() ([]config.ToolConfig, error) {
+func (a *App) GetEnabledAgents() ([]config.AgentConfig, error) {
 	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, err
 	}
-	var enabled []config.ToolConfig
-	for _, t := range cfg.Tools {
+	var enabled []config.AgentConfig
+	for _, t := range cfg.Agents {
 		if t.Enabled {
 			enabled = append(enabled, t)
 		}
@@ -1003,12 +1030,12 @@ func (a *App) GetEnabledTools() ([]config.ToolConfig, error) {
 	return enabled, nil
 }
 
-// ScanToolSkills lists all skills in a tool's configured scan directories for the pull page.
-func (a *App) ScanToolSkills(toolName string) ([]ToolSkillCandidate, error) {
+// ScanAgentSkills lists all skills in an agent's configured scan directories for the pull page.
+func (a *App) ScanAgentSkills(agentName string) ([]AgentSkillCandidate, error) {
 	cfg, _ := a.config.Load()
-	for _, t := range cfg.Tools {
-		if t.Name == toolName {
-			scanned, err := scanToolSkillsRaw(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
+	for _, agent := range cfg.Agents {
+		if agent.Name == agentName {
+			scanned, err := scanAgentSkillsRaw(a.ctx, getAdapter(agent), agent.ScanDirs, a.repoScanMaxDepth())
 			if err != nil {
 				return nil, err
 			}
@@ -1016,111 +1043,111 @@ func (a *App) ScanToolSkills(toolName string) ([]ToolSkillCandidate, error) {
 			if err != nil {
 				return nil, err
 			}
-			return resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), nil
+			return resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), nil
 		}
 	}
 	return nil, nil
 }
 
-// ListToolSkills returns all skills for a tool, annotated with whether each
+// ListAgentSkills returns all skills for an agent, annotated with whether each
 // skill lives in the push directory and/or the scan directories.
-func (a *App) ListToolSkills(toolName string) ([]ToolSkillEntry, error) {
+func (a *App) ListAgentSkills(agentName string) ([]AgentSkillEntry, error) {
 	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, err
 	}
-	var tc *config.ToolConfig
-	for i := range cfg.Tools {
-		if cfg.Tools[i].Name == toolName {
-			tc = &cfg.Tools[i]
+	var agentCfg *config.AgentConfig
+	for i := range cfg.Agents {
+		if cfg.Agents[i].Name == agentName {
+			agentCfg = &cfg.Agents[i]
 			break
 		}
 	}
-	if tc == nil {
-		return nil, fmt.Errorf("tool %s not found", toolName)
+	if agentCfg == nil {
+		return nil, fmt.Errorf("agent %s not found", agentName)
 	}
-	adapter := getAdapter(*tc)
+	adapter := getAdapter(*agentCfg)
 	_, installedIndex, err := a.installedIndex()
 	if err != nil {
 		return nil, err
 	}
-	presence := a.buildToolPresenceIndex(installedIndex)
+	presence := a.buildAgentPresenceIndex(installedIndex)
 	var pushSkills []*skill.Skill
 
-	if tc.PushDir != "" {
-		if _, statErr := os.Stat(tc.PushDir); statErr == nil {
-			if pulled, pullErr := pullToolSkills(a.ctx, adapter, tc.PushDir, a.repoScanMaxDepth()); pullErr == nil {
+	if agentCfg.PushDir != "" {
+		if _, statErr := os.Stat(agentCfg.PushDir); statErr == nil {
+			if pulled, pullErr := pullAgentSkills(a.ctx, adapter, agentCfg.PushDir, a.repoScanMaxDepth()); pullErr == nil {
 				pushSkills = pulled
 			}
 		}
 	}
 
-	scanSkills, err := scanToolSkillsRaw(a.ctx, adapter, tc.ScanDirs, a.repoScanMaxDepth())
+	scanSkills, err := scanAgentSkillsRaw(a.ctx, adapter, agentCfg.ScanDirs, a.repoScanMaxDepth())
 	if err != nil {
 		return nil, err
 	}
-	return aggregateToolSkillEntries(pushSkills, scanSkills, installedIndex, presence), nil
+	return aggregateAgentSkillEntries(pushSkills, scanSkills, installedIndex, presence), nil
 }
 
-// DeleteToolSkill removes a skill directory from a tool's push directory.
-// Returns an error if skillPath is not within the tool's configured push directory.
-func (a *App) DeleteToolSkill(toolName string, skillPath string) error {
+// DeleteAgentSkill removes a skill directory from an agent's push directory.
+// Returns an error if skillPath is not within the agent's configured push directory.
+func (a *App) DeleteAgentSkill(agentName string, skillPath string) error {
 	cfg, err := a.config.Load()
 	if err != nil {
 		return err
 	}
-	var tc *config.ToolConfig
-	for i := range cfg.Tools {
-		if cfg.Tools[i].Name == toolName {
-			tc = &cfg.Tools[i]
+	var agentCfg *config.AgentConfig
+	for i := range cfg.Agents {
+		if cfg.Agents[i].Name == agentName {
+			agentCfg = &cfg.Agents[i]
 			break
 		}
 	}
-	if tc == nil {
-		return fmt.Errorf("tool %s not found", toolName)
+	if agentCfg == nil {
+		return fmt.Errorf("agent %s not found", agentName)
 	}
-	if tc.PushDir == "" {
-		return fmt.Errorf("工具 %s 未配置推送路径", toolName)
+	if agentCfg.PushDir == "" {
+		return fmt.Errorf("智能体 %s 未配置推送路径", agentName)
 	}
-	rel, relErr := filepath.Rel(tc.PushDir, skillPath)
+	rel, relErr := filepath.Rel(agentCfg.PushDir, skillPath)
 	if relErr != nil || strings.HasPrefix(rel, "..") {
 		return fmt.Errorf("无法删除不在推送路径下的 Skill")
 	}
-	a.logInfof("DeleteToolSkill: deleting %s from tool %s push dir started", filepath.Base(skillPath), toolName)
+	a.logInfof("DeleteAgentSkill: deleting %s from agent %s push dir started", filepath.Base(skillPath), agentName)
 	if err := os.RemoveAll(skillPath); err != nil {
-		a.logErrorf("DeleteToolSkill: delete %s failed: %v", skillPath, err)
+		a.logErrorf("DeleteAgentSkill: delete %s failed: %v", skillPath, err)
 		return fmt.Errorf("删除失败: %w", err)
 	}
-	a.logInfof("DeleteToolSkill: deleted %s from tool %s push dir completed", filepath.Base(skillPath), toolName)
+	a.logInfof("DeleteAgentSkill: deleted %s from agent %s push dir completed", filepath.Base(skillPath), agentName)
 	return nil
 }
 
-// CheckMissingPushDirs returns tool names and paths whose push directory does not yet exist.
-// Each element is map{"name": toolName, "dir": pushDir}.
-func (a *App) CheckMissingPushDirs(toolNames []string) ([]map[string]string, error) {
+// CheckMissingAgentPushDirs returns agent names and paths whose push directory does not yet exist.
+// Each element is map{"name": agentName, "dir": pushDir}.
+func (a *App) CheckMissingAgentPushDirs(agentNames []string) ([]map[string]string, error) {
 	cfg, _ := a.config.Load()
 	var missing []map[string]string
-	for _, toolName := range toolNames {
-		for _, t := range cfg.Tools {
-			if t.Name != toolName || t.PushDir == "" {
+	for _, agentName := range agentNames {
+		for _, agent := range cfg.Agents {
+			if agent.Name != agentName || agent.PushDir == "" {
 				continue
 			}
-			if _, err := os.Stat(t.PushDir); os.IsNotExist(err) {
-				missing = append(missing, map[string]string{"name": t.Name, "dir": t.PushDir})
+			if _, err := os.Stat(agent.PushDir); os.IsNotExist(err) {
+				missing = append(missing, map[string]string{"name": agent.Name, "dir": agent.PushDir})
 			}
 		}
 	}
 	return missing, nil
 }
 
-// PushToTools pushes selected skills to target tools.
+// PushToAgents pushes selected skills to target agents.
 // Returns structured conflicts that were skipped.
-func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]PushConflict, error) {
-	a.logInfof("push skills to tools started: skillCount=%d toolCount=%d", len(skillIDs), len(toolNames))
+func (a *App) PushToAgents(skillIDs []string, agentNames []string) ([]PushConflict, error) {
+	a.logInfof("push skills to agents started: skillCount=%d agentCount=%d", len(skillIDs), len(agentNames))
 	cfg, _ := a.config.Load()
 	skills, err := a.storage.ListAll()
 	if err != nil {
-		a.logErrorf("push skills to tools failed: %v", err)
+		a.logErrorf("push skills to agents failed: %v", err)
 		return nil, err
 	}
 	idSet := map[string]bool{}
@@ -1135,26 +1162,26 @@ func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]PushConflict
 	}
 
 	var conflicts []PushConflict
-	for _, toolName := range toolNames {
-		for _, t := range cfg.Tools {
-			if t.Name != toolName {
+	for _, agentName := range agentNames {
+		for _, agent := range cfg.Agents {
+			if agent.Name != agentName {
 				continue
 			}
-			if t.PushDir == "" {
-				err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
-				a.logErrorf("push skills to tools failed: tool=%s err=%v", toolName, err)
+			if agent.PushDir == "" {
+				err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
+				a.logErrorf("push skills to agents failed: agent=%s err=%v", agentName, err)
 				return nil, err
 			}
-			adapter := getAdapter(t)
+			adapter := getAdapter(agent)
 			var toPush []*skill.Skill
 			for _, sk := range selected {
-				dst := filepath.Join(t.PushDir, sk.Name)
+				dst := filepath.Join(agent.PushDir, sk.Name)
 				if _, err := os.Stat(dst); err == nil {
 					conflicts = append(conflicts, PushConflict{
 						SkillID:    sk.ID,
 						SkillName:  sk.Name,
 						SkillPath:  sk.Path,
-						ToolName:   toolName,
+						AgentName:  agentName,
 						TargetPath: dst,
 					})
 					continue
@@ -1164,19 +1191,19 @@ func (a *App) PushToTools(skillIDs []string, toolNames []string) ([]PushConflict
 			if len(toPush) == 0 {
 				continue
 			}
-			if err := adapter.Push(a.ctx, toPush, t.PushDir); err != nil {
-				a.logErrorf("push skills to tools failed: tool=%s err=%v", toolName, err)
+			if err := adapter.Push(a.ctx, toPush, agent.PushDir); err != nil {
+				a.logErrorf("push skills to agents failed: agent=%s err=%v", agentName, err)
 				return nil, err
 			}
 		}
 	}
-	a.logInfof("push skills to tools completed: conflicts=%d", len(conflicts))
+	a.logInfof("push skills to agents completed: conflicts=%d", len(conflicts))
 	return conflicts, nil
 }
 
-// PushToToolsForce pushes and overwrites conflicts.
-func (a *App) PushToToolsForce(skillIDs []string, toolNames []string) error {
-	a.logInfof("force push skills to tools started: skillCount=%d toolCount=%d", len(skillIDs), len(toolNames))
+// PushToAgentsForce pushes and overwrites conflicts.
+func (a *App) PushToAgentsForce(skillIDs []string, agentNames []string) error {
+	a.logInfof("force push skills to agents started: skillCount=%d agentCount=%d", len(skillIDs), len(agentNames))
 	cfg, _ := a.config.Load()
 	skills, _ := a.storage.ListAll()
 	idSet := map[string]bool{}
@@ -1189,41 +1216,41 @@ func (a *App) PushToToolsForce(skillIDs []string, toolNames []string) error {
 			selected = append(selected, sk)
 		}
 	}
-	for _, toolName := range toolNames {
-		for _, t := range cfg.Tools {
-			if t.Name == toolName {
-				if t.PushDir == "" {
-					err := fmt.Errorf("工具 %s 未配置推送路径", toolName)
-					a.logErrorf("force push skills to tools failed: tool=%s err=%v", toolName, err)
+	for _, agentName := range agentNames {
+		for _, agent := range cfg.Agents {
+			if agent.Name == agentName {
+				if agent.PushDir == "" {
+					err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
+					a.logErrorf("force push skills to agents failed: agent=%s err=%v", agentName, err)
 					return err
 				}
 				for _, sk := range selected {
-					targetPath := filepath.Join(t.PushDir, sk.Name)
+					targetPath := filepath.Join(agent.PushDir, sk.Name)
 					if err := os.RemoveAll(targetPath); err != nil {
-						a.logErrorf("force push skills to tools failed: tool=%s target=%s err=%v", toolName, targetPath, err)
+						a.logErrorf("force push skills to agents failed: agent=%s target=%s err=%v", agentName, targetPath, err)
 						return err
 					}
 				}
-				if err := getAdapter(t).Push(a.ctx, selected, t.PushDir); err != nil {
-					a.logErrorf("force push skills to tools failed: tool=%s err=%v", toolName, err)
+				if err := getAdapter(agent).Push(a.ctx, selected, agent.PushDir); err != nil {
+					a.logErrorf("force push skills to agents failed: agent=%s err=%v", agentName, err)
 					return err
 				}
 			}
 		}
 	}
-	a.logInfof("force push skills to tools completed")
+	a.logInfof("force push skills to agents completed")
 	return nil
 }
 
-// PullFromTool imports selected skills from a tool into SkillFlow storage.
-func (a *App) PullFromTool(toolName string, skillPaths []string, category string) ([]string, error) {
+// PullFromAgent imports selected skills from an agent into SkillFlow storage.
+func (a *App) PullFromAgent(agentName string, skillPaths []string, category string) ([]string, error) {
 	category = normalizeCategoryName(category)
 	cfg, _ := a.config.Load()
-	for _, t := range cfg.Tools {
-		if t.Name != toolName {
+	for _, agent := range cfg.Agents {
+		if agent.Name != agentName {
 			continue
 		}
-		scanned, err := scanToolSkillsRaw(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
+		scanned, err := scanAgentSkillsRaw(a.ctx, getAdapter(agent), agent.ScanDirs, a.repoScanMaxDepth())
 		if err != nil {
 			return nil, err
 		}
@@ -1231,7 +1258,7 @@ func (a *App) PullFromTool(toolName string, skillPaths []string, category string
 		if err != nil {
 			return nil, err
 		}
-		candidates := resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), skillPaths)
+		candidates := resolveAgentSkillSelection(resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), skillPaths)
 		var conflicts []string
 		imported := make([]*skill.Skill, 0, len(candidates))
 		for _, candidate := range candidates {
@@ -1249,22 +1276,22 @@ func (a *App) PullFromTool(toolName string, skillPaths []string, category string
 			}
 			imported = append(imported, sk)
 		}
-		a.autoPushImportedSkills("tool.pull", imported)
+		a.autoPushImportedSkillsToAgents("agent.pull", imported)
 		a.scheduleAutoBackup()
 		return conflicts, nil
 	}
 	return nil, nil
 }
 
-// PullFromToolForce imports selected skills, overwriting existing ones.
-func (a *App) PullFromToolForce(toolName string, skillPaths []string, category string) error {
+// PullFromAgentForce imports selected skills, overwriting existing ones.
+func (a *App) PullFromAgentForce(agentName string, skillPaths []string, category string) error {
 	category = normalizeCategoryName(category)
 	cfg, _ := a.config.Load()
-	for _, t := range cfg.Tools {
-		if t.Name != toolName {
+	for _, agent := range cfg.Agents {
+		if agent.Name != agentName {
 			continue
 		}
-		scanned, err := scanToolSkillsRaw(a.ctx, getAdapter(t), t.ScanDirs, a.repoScanMaxDepth())
+		scanned, err := scanAgentSkillsRaw(a.ctx, getAdapter(agent), agent.ScanDirs, a.repoScanMaxDepth())
 		if err != nil {
 			return err
 		}
@@ -1273,7 +1300,7 @@ func (a *App) PullFromToolForce(toolName string, skillPaths []string, category s
 			return err
 		}
 		imported := make([]*skill.Skill, 0, len(skillPaths))
-		for _, candidate := range resolveToolSkillSelection(resolveToolSkillCandidates(scanned, installedIndex, a.buildToolPresenceIndex(installedIndex)), skillPaths) {
+		for _, candidate := range resolveAgentSkillSelection(resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), skillPaths) {
 			existing, _ := a.storage.ListAll()
 			for _, e := range existing {
 				logicalKey, logicalErr := skill.LogicalKey(e)
@@ -1287,24 +1314,24 @@ func (a *App) PullFromToolForce(toolName string, skillPaths []string, category s
 			}
 			imported = append(imported, sk)
 		}
-		a.autoPushImportedSkills("tool.pull.force", imported)
+		a.autoPushImportedSkillsToAgents("agent.pull.force", imported)
 		a.scheduleAutoBackup()
 	}
 	return nil
 }
 
-func pullToolSkills(ctx context.Context, adapter toolsync.ToolAdapter, dir string, maxDepth int) ([]*skill.Skill, error) {
+func pullAgentSkills(ctx context.Context, adapter agentsync.AgentAdapter, dir string, maxDepth int) ([]*skill.Skill, error) {
 	if depthAware, ok := adapter.(maxDepthPuller); ok {
 		return depthAware.PullWithMaxDepth(ctx, dir, maxDepth)
 	}
 	return adapter.Pull(ctx, dir)
 }
 
-func getAdapter(t config.ToolConfig) toolsync.ToolAdapter {
+func getAdapter(t config.AgentConfig) agentsync.AgentAdapter {
 	if a, ok := registry.GetAdapter(t.Name); ok {
 		return a
 	}
-	return toolsync.NewFilesystemAdapter(t.Name, t.PushDir)
+	return agentsync.NewFilesystemAdapter(t.Name, t.PushDir)
 }
 
 func (a *App) repoScanMaxDepth() int {
@@ -1342,7 +1369,7 @@ func (a *App) SaveConfig(cfg config.AppConfig) error {
 		a.logErrorf("save config failed: %v", err)
 		return err
 	}
-	a.syncExistingSkillsForNewAutoPushTools(prevCfg, cfg)
+	a.syncExistingSkillsForNewAutoPushAgents(prevCfg, cfg)
 	if prevCfg.LaunchAtLogin != cfg.LaunchAtLogin {
 		if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
 			persistedCfg := cfg
@@ -1368,14 +1395,14 @@ func (a *App) SaveConfig(cfg config.AppConfig) error {
 	return nil
 }
 
-func (a *App) syncExistingSkillsForNewAutoPushTools(prevCfg, nextCfg config.AppConfig) {
-	prevTargets := make(map[string]struct{}, len(prevCfg.AutoPushTools))
-	for _, name := range prevCfg.AutoPushTools {
+func (a *App) syncExistingSkillsForNewAutoPushAgents(prevCfg, nextCfg config.AppConfig) {
+	prevTargets := make(map[string]struct{}, len(prevCfg.AutoPushAgents))
+	for _, name := range prevCfg.AutoPushAgents {
 		prevTargets[name] = struct{}{}
 	}
 
-	newTargets := make([]string, 0, len(nextCfg.AutoPushTools))
-	for _, name := range nextCfg.AutoPushTools {
+	newTargets := make([]string, 0, len(nextCfg.AutoPushAgents))
+	for _, name := range nextCfg.AutoPushAgents {
 		if _, existed := prevTargets[name]; existed {
 			continue
 		}
@@ -1387,11 +1414,11 @@ func (a *App) syncExistingSkillsForNewAutoPushTools(prevCfg, nextCfg config.AppC
 
 	skills, err := a.storage.ListAll()
 	if err != nil {
-		a.logErrorf("sync existing skills to new auto push tools failed: load skills failed: %v", err)
+		a.logErrorf("sync existing skills to new auto push agents failed: load skills failed: %v", err)
 		return
 	}
 	if len(skills) == 0 {
-		a.logInfof("sync existing skills to new auto push tools skipped: reason=no-skills toolCount=%d", len(newTargets))
+		a.logInfof("sync existing skills to new auto push agents skipped: reason=no-skills agentCount=%d", len(newTargets))
 		return
 	}
 
@@ -1400,23 +1427,23 @@ func (a *App) syncExistingSkillsForNewAutoPushTools(prevCfg, nextCfg config.AppC
 		skillIDs = append(skillIDs, sk.ID)
 	}
 
-	a.logInfof("sync existing skills to new auto push tools started: skillCount=%d toolCount=%d", len(skillIDs), len(newTargets))
-	conflicts, err := a.PushToTools(skillIDs, newTargets)
+	a.logInfof("sync existing skills to new auto push agents started: skillCount=%d agentCount=%d", len(skillIDs), len(newTargets))
+	conflicts, err := a.PushToAgents(skillIDs, newTargets)
 	if err != nil {
-		a.logErrorf("sync existing skills to new auto push tools failed: %v", err)
+		a.logErrorf("sync existing skills to new auto push agents failed: %v", err)
 		return
 	}
-	a.logInfof("sync existing skills to new auto push tools completed: skillCount=%d toolCount=%d conflicts=%d", len(skillIDs), len(newTargets), len(conflicts))
+	a.logInfof("sync existing skills to new auto push agents completed: skillCount=%d agentCount=%d conflicts=%d", len(skillIDs), len(newTargets), len(conflicts))
 }
 
-func (a *App) AddCustomTool(name, pushDir string) error {
-	a.logInfof("add custom tool requested: name=%s", name)
+func (a *App) AddCustomAgent(name, pushDir string) error {
+	a.logInfof("add custom agent requested: name=%s", name)
 	cfg, err := a.config.Load()
 	if err != nil {
-		a.logErrorf("add custom tool failed: %v", err)
+		a.logErrorf("add custom agent failed: %v", err)
 		return err
 	}
-	cfg.Tools = append(cfg.Tools, config.ToolConfig{
+	cfg.Agents = append(cfg.Agents, config.AgentConfig{
 		Name:     name,
 		ScanDirs: []string{pushDir},
 		PushDir:  pushDir,
@@ -1424,32 +1451,32 @@ func (a *App) AddCustomTool(name, pushDir string) error {
 		Custom:   true,
 	})
 	if err := a.config.Save(cfg); err != nil {
-		a.logErrorf("add custom tool failed: %v", err)
+		a.logErrorf("add custom agent failed: %v", err)
 		return err
 	}
-	a.logInfof("add custom tool done: name=%s", name)
+	a.logInfof("add custom agent done: name=%s", name)
 	return nil
 }
 
-func (a *App) RemoveCustomTool(name string) error {
-	a.logInfof("remove custom tool requested: name=%s", name)
+func (a *App) RemoveCustomAgent(name string) error {
+	a.logInfof("remove custom agent requested: name=%s", name)
 	cfg, err := a.config.Load()
 	if err != nil {
-		a.logErrorf("remove custom tool failed: %v", err)
+		a.logErrorf("remove custom agent failed: %v", err)
 		return err
 	}
-	var filtered []config.ToolConfig
-	for _, t := range cfg.Tools {
+	var filtered []config.AgentConfig
+	for _, t := range cfg.Agents {
 		if !(t.Custom && t.Name == name) {
 			filtered = append(filtered, t)
 		}
 	}
-	cfg.Tools = filtered
+	cfg.Agents = filtered
 	if err := a.config.Save(cfg); err != nil {
-		a.logErrorf("remove custom tool failed: %v", err)
+		a.logErrorf("remove custom agent failed: %v", err)
 		return err
 	}
-	a.logInfof("remove custom tool done: name=%s", name)
+	a.logInfof("remove custom agent done: name=%s", name)
 	return nil
 }
 
@@ -1666,7 +1693,7 @@ func (a *App) UpdateSkill(skillID string) error {
 		a.scheduleAutoBackup()
 		return err
 	}
-	a.autoPushSkillsToConfiguredTools("skill.update", []*skill.Skill{sk}, true)
+	a.autoPushSkillsToConfiguredAgents("skill.update", []*skill.Skill{sk}, true)
 	a.scheduleAutoBackup()
 	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
 	return nil
@@ -1739,36 +1766,36 @@ func (a *App) refreshUpdatedPushedSkillCopies(sk *skill.Skill) error {
 	}
 
 	a.logInfof("refresh updated pushed skill copies started: skill=%s", sk.Name)
-	updatedTools := 0
+	updatedAgents := 0
 
-	for _, tool := range cfg.Tools {
-		if strings.TrimSpace(tool.PushDir) == "" {
+	for _, agent := range cfg.Agents {
+		if strings.TrimSpace(agent.PushDir) == "" {
 			continue
 		}
 
-		targetPath := filepath.Join(tool.PushDir, sk.Name)
+		targetPath := filepath.Join(agent.PushDir, sk.Name)
 		if _, err := os.Stat(targetPath); err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			a.logErrorf("refresh updated pushed skill copy failed: skill=%s tool=%s target=%s err=%v", sk.Name, tool.Name, targetPath, err)
+			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
 			return err
 		}
 
-		a.logInfof("refresh updated pushed skill copy started: skill=%s tool=%s target=%s", sk.Name, tool.Name, targetPath)
+		a.logInfof("refresh updated pushed skill copy started: skill=%s agent=%s target=%s", sk.Name, agent.Name, targetPath)
 		if err := os.RemoveAll(targetPath); err != nil {
-			a.logErrorf("refresh updated pushed skill copy failed: skill=%s tool=%s target=%s err=%v", sk.Name, tool.Name, targetPath, err)
+			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
 			return err
 		}
-		if err := getAdapter(tool).Push(a.ctx, []*skill.Skill{sk}, tool.PushDir); err != nil {
-			a.logErrorf("refresh updated pushed skill copy failed: skill=%s tool=%s target=%s err=%v", sk.Name, tool.Name, targetPath, err)
+		if err := getAdapter(agent).Push(a.ctx, []*skill.Skill{sk}, agent.PushDir); err != nil {
+			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
 			return err
 		}
-		updatedTools++
-		a.logInfof("refresh updated pushed skill copy completed: skill=%s tool=%s target=%s", sk.Name, tool.Name, targetPath)
+		updatedAgents++
+		a.logInfof("refresh updated pushed skill copy completed: skill=%s agent=%s target=%s", sk.Name, agent.Name, targetPath)
 	}
 
-	a.logInfof("refresh updated pushed skill copies completed: skill=%s updatedTools=%d", sk.Name, updatedTools)
+	a.logInfof("refresh updated pushed skill copies completed: skill=%s updatedAgents=%d", sk.Name, updatedAgents)
 	return nil
 }
 
@@ -2016,7 +2043,7 @@ func (a *App) listAllStarSkillsUncached() ([]coregit.StarSkill, error) {
 	if err != nil {
 		return nil, err
 	}
-	presence := a.buildToolPresenceIndex(installedIndex)
+	presence := a.buildAgentPresenceIndex(installedIndex)
 	var all []coregit.StarSkill
 	for _, r := range repos {
 		source := r.Source
@@ -2042,7 +2069,7 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 	if err != nil {
 		return nil, err
 	}
-	presence := a.buildToolPresenceIndex(installedIndex)
+	presence := a.buildAgentPresenceIndex(installedIndex)
 	for _, r := range repos {
 		if !coregit.SameRepo(r.URL, repoURL) {
 			continue
@@ -2196,7 +2223,7 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 		_ = a.storage.UpdateMeta(sk)
 		imported = append(imported, sk)
 	}
-	a.autoPushImportedSkills("starred.import", imported)
+	a.autoPushImportedSkillsToAgents("starred.import", imported)
 	a.scheduleAutoBackup()
 	return nil
 }

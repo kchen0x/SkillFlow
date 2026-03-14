@@ -10,7 +10,7 @@ import (
 )
 
 func (a *App) logDir() string {
-	return filepath.Join(config.AppDataDir(), "logs")
+	return filepath.Join(appDataDirFunc(), "logs")
 }
 
 func (a *App) initLogger(logLevel string) {

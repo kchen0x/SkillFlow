@@ -2,7 +2,7 @@ package config
 
 import "strings"
 
-type ToolConfig struct {
+type AgentConfig struct {
 	Name     string   `json:"name"`
 	ScanDirs []string `json:"scanDirs"`
 	PushDir  string   `json:"pushDir"`
@@ -49,13 +49,13 @@ type WindowState struct {
 
 type AppConfig struct {
 	SkillsStorageDir      string                         `json:"skillsStorageDir"`
-	AutoPushTools         []string                       `json:"autoPushTools"`
+	AutoPushAgents        []string                       `json:"autoPushAgents"`
 	LaunchAtLogin         bool                           `json:"launchAtLogin"`
 	DefaultCategory       string                         `json:"defaultCategory"`
 	LogLevel              string                         `json:"logLevel"` // "debug" | "info" | "error"
 	RepoScanMaxDepth      int                            `json:"repoScanMaxDepth"`
 	SkillStatusVisibility SkillStatusVisibilityConfig    `json:"skillStatusVisibility"`
-	Tools                 []ToolConfig                   `json:"tools"`
+	Agents                []AgentConfig                  `json:"agents"`
 	Cloud                 CloudConfig                    `json:"cloud"`
 	CloudProfiles         map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
 	Proxy                 ProxyConfig                    `json:"proxy"`
@@ -85,7 +85,7 @@ func NormalizeLogLevel(level string) string {
 	}
 }
 
-func NormalizeToolNameList(names []string) []string {
+func NormalizeAgentNameList(names []string) []string {
 	if len(names) == 0 {
 		return nil
 	}

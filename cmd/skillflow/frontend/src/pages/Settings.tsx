@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { GetConfig, SaveConfig, ListCloudProviders, AddCustomTool, RemoveCustomTool, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir } from '../../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, ListCloudProviders, AddCustomAgent, RemoveCustomAgent, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir } from '../../wailsjs/go/main/App'
 import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star, Github } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
@@ -15,7 +15,7 @@ import {
   type SkillStatusPageKey,
 } from '../lib/skillStatusVisibility'
 
-type Tab = 'tools' | 'cloud' | 'general' | 'network'
+type Tab = 'agents' | 'cloud' | 'general' | 'network'
 type ProxyMode = 'none' | 'system' | 'manual'
 
 type ThemePreviewPalette = {
@@ -110,16 +110,16 @@ const maxRepoScanMaxDepth = 20
 const CLOUD_REMOTE_ROOT_DIR = 'skillflow'
 const STATUS_PAGE_OPTIONS: StatusPageOption[] = [
   { key: 'mySkills', label: 'settings.statusPageMySkills', description: 'settings.statusPageMySkillsDesc', icon: <Package size={14} /> },
-  { key: 'myTools', label: 'settings.statusPageMyTools', description: 'settings.statusPageMyToolsDesc', icon: <Wrench size={14} /> },
-  { key: 'pushToTool', label: 'settings.statusPagePushToTool', description: 'settings.statusPagePushToToolDesc', icon: <ArrowUpFromLine size={14} /> },
-  { key: 'pullFromTool', label: 'settings.statusPagePullFromTool', description: 'settings.statusPagePullFromToolDesc', icon: <ArrowDownToLine size={14} /> },
+  { key: 'myAgents', label: 'settings.statusPageMyTools', description: 'settings.statusPageMyToolsDesc', icon: <Wrench size={14} /> },
+  { key: 'pushToAgent', label: 'settings.statusPagePushToTool', description: 'settings.statusPagePushToToolDesc', icon: <ArrowUpFromLine size={14} /> },
+  { key: 'pullFromAgent', label: 'settings.statusPagePullFromTool', description: 'settings.statusPagePullFromToolDesc', icon: <ArrowDownToLine size={14} /> },
   { key: 'starredRepos', label: 'settings.statusPageStarredRepos', description: 'settings.statusPageStarredReposDesc', icon: <Star size={14} /> },
   { key: 'githubInstall', label: 'settings.statusPageGitHubInstall', description: 'settings.statusPageGitHubInstallDesc', icon: <Github size={14} /> },
 ]
 const STATUS_OPTIONS: StatusOption[] = [
   { key: 'imported', label: 'settings.statusImported' },
   { key: 'updatable', label: 'settings.statusUpdatable' },
-  { key: 'pushedTools', label: 'settings.statusPushedTools' },
+  { key: 'pushedAgents', label: 'settings.statusPushedTools' },
 ]
 
 function clampRepoScanMaxDepth(value: number) {
@@ -405,11 +405,11 @@ export default function SettingsPage() {
   const { theme, setTheme } = useThemeContext()
   const { t, lang, setLang } = useLanguage()
   const { syncFromConfig } = useSkillStatusVisibilityContext()
-  const [tab, setTab] = useState<Tab>('tools')
+  const [tab, setTab] = useState<Tab>('agents')
   const [cfg, setCfg] = useState<any>(null)
   const [providers, setProviders] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
-  const [newTool, setNewTool] = useState({ name: '', pushDir: '' })
+  const [newAgent, setNewAgent] = useState({ name: '', pushDir: '' })
   const [newScanDirs, setNewScanDirs] = useState<Record<string, string>>({})
   const [appVersion, setAppVersion] = useState('')
   const [logDir, setLogDir] = useState('')
@@ -560,10 +560,10 @@ export default function SettingsPage() {
     }))
   }
 
-  const updateTool = (name: string, field: string, value: any) => {
+  const updateAgent = (name: string, field: string, value: any) => {
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((tool: any) => tool.name === name ? { ...tool, [field]: value } : tool)
+      agents: prev.agents.map((agent: any) => agent.name === name ? { ...agent, [field]: value } : agent)
     }))
   }
 
@@ -572,11 +572,11 @@ export default function SettingsPage() {
     if (!path) return
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((tool: any) => {
-        if (tool.name !== name) return tool
-        const current = tool.scanDirs ?? []
-        if (current.includes(path)) return tool
-        return { ...tool, scanDirs: [...current, path] }
+      agents: prev.agents.map((agent: any) => {
+        if (agent.name !== name) return agent
+        const current = agent.scanDirs ?? []
+        if (current.includes(path)) return agent
+        return { ...agent, scanDirs: [...current, path] }
       })
     }))
     setNewScanDirs((prev) => ({ ...prev, [name]: '' }))
@@ -585,11 +585,11 @@ export default function SettingsPage() {
   const updateScanDir = (name: string, index: number, value: string) => {
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((tool: any) => {
-        if (tool.name !== name) return tool
-        const next = [...(tool.scanDirs ?? [])]
+      agents: prev.agents.map((agent: any) => {
+        if (agent.name !== name) return agent
+        const next = [...(agent.scanDirs ?? [])]
         next[index] = value
-        return { ...tool, scanDirs: next }
+        return { ...agent, scanDirs: next }
       })
     }))
   }
@@ -597,9 +597,9 @@ export default function SettingsPage() {
   const removeScanDir = (name: string, index: number) => {
     setCfg((prev: any) => ({
       ...prev,
-      tools: prev.tools.map((tool: any) => {
-        if (tool.name !== name) return tool
-        return { ...tool, scanDirs: (tool.scanDirs ?? []).filter((_: string, i: number) => i !== index) }
+      agents: prev.agents.map((agent: any) => {
+        if (agent.name !== name) return agent
+        return { ...agent, scanDirs: (agent.scanDirs ?? []).filter((_: string, i: number) => i !== index) }
       })
     }))
   }
@@ -657,9 +657,9 @@ export default function SettingsPage() {
         className="mb-6 flex w-fit max-w-full flex-wrap gap-1 rounded-xl p-1"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-base)' }}
       >
-        {(['tools', 'cloud', 'network', 'general'] as Tab[]).map(tabKey => {
+        {(['agents', 'cloud', 'network', 'general'] as Tab[]).map(tabKey => {
           const labels: Record<Tab, string> = {
-            tools: t('settings.tabTools'),
+            agents: t('settings.tabTools'),
             cloud: t('settings.tabCloud'),
             general: t('settings.tabGeneral'),
             network: t('settings.tabNetwork'),
@@ -683,23 +683,23 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* Tools tab */}
-      {tab === 'tools' && (
+      {/* Agents tab */}
+      {tab === 'agents' && (
         <div className="space-y-4">
-          {(cfg.tools ?? []).map((tool: any) => (
+          {(cfg.agents ?? []).map((agent: any) => (
             <div
-              key={tool.name}
+              key={agent.name}
               className="rounded-xl p-4"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-base)' }}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
-                  <ToolIcon name={tool.name} size={28} />
-                  <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{tool.name}</span>
+                  <ToolIcon name={agent.name} size={28} />
+                  <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{agent.name}</span>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.toolEnabled')}</span>
-                  <Toggle enabled={tool.enabled} onToggle={() => updateTool(tool.name, 'enabled', !tool.enabled)} />
+                  <Toggle enabled={agent.enabled} onToggle={() => updateAgent(agent.name, 'enabled', !agent.enabled)} />
                 </label>
               </div>
 
@@ -707,12 +707,12 @@ export default function SettingsPage() {
                 <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.pushPath')}</p>
                 <div className="flex gap-2">
                   <input
-                    value={tool.pushDir ?? ''}
-                    onChange={e => updateTool(tool.name, 'pushDir', e.target.value)}
+                    value={agent.pushDir ?? ''}
+                    onChange={e => updateAgent(agent.name, 'pushDir', e.target.value)}
                     className="input-base flex-1 font-mono"
                   />
                   <button
-                    onClick={() => pickDir(dir => updateTool(tool.name, 'pushDir', dir), tool.pushDir ?? '')}
+                    onClick={() => pickDir(dir => updateAgent(agent.name, 'pushDir', dir), agent.pushDir ?? '')}
                     className="btn-secondary px-2.5 rounded-lg"
                     title={t('settings.selectDir')}
                   >
@@ -724,22 +724,22 @@ export default function SettingsPage() {
               <div>
                 <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.scanPaths')}</p>
                 <div className="space-y-2">
-                  {(tool.scanDirs ?? []).map((dir: string, idx: number) => (
-                    <div key={`${tool.name}-scan-${idx}`} className="flex gap-2">
+                  {(agent.scanDirs ?? []).map((dir: string, idx: number) => (
+                    <div key={`${agent.name}-scan-${idx}`} className="flex gap-2">
                       <input
                         value={dir}
-                        onChange={e => updateScanDir(tool.name, idx, e.target.value)}
+                        onChange={e => updateScanDir(agent.name, idx, e.target.value)}
                         className="input-base flex-1 font-mono"
                       />
                       <button
-                        onClick={() => pickDir(d => updateScanDir(tool.name, idx, d), dir ?? '')}
+                        onClick={() => pickDir(d => updateScanDir(agent.name, idx, d), dir ?? '')}
                         className="btn-secondary px-2.5 rounded-lg"
                         title={t('settings.selectDir')}
                       >
                         <FolderOpen size={14} />
                       </button>
                       <button
-                        onClick={() => removeScanDir(tool.name, idx)}
+                        onClick={() => removeScanDir(agent.name, idx)}
                         className="btn-secondary px-2.5 rounded-lg"
                         title={t('settings.deleteScanPath')}
                       >
@@ -750,20 +750,20 @@ export default function SettingsPage() {
                 </div>
                 <div className="mt-2 flex gap-2">
                   <input
-                    value={newScanDirs[tool.name] ?? ''}
-                    onChange={e => setNewScanDirs(prev => ({ ...prev, [tool.name]: e.target.value }))}
+                    value={newScanDirs[agent.name] ?? ''}
+                    onChange={e => setNewScanDirs(prev => ({ ...prev, [agent.name]: e.target.value }))}
                     placeholder="/path/to/scan"
                     className="input-base flex-1 font-mono"
                   />
                   <button
-                    onClick={() => pickDir(d => setNewScanDirs(prev => ({ ...prev, [tool.name]: d })), newScanDirs[tool.name] ?? '')}
+                    onClick={() => pickDir(d => setNewScanDirs(prev => ({ ...prev, [agent.name]: d })), newScanDirs[agent.name] ?? '')}
                     className="btn-secondary px-2.5 rounded-lg"
                     title={t('settings.selectDir')}
                   >
                     <FolderOpen size={14} />
                   </button>
                   <button
-                    onClick={() => addScanDir(tool.name)}
+                    onClick={() => addScanDir(agent.name)}
                     className="btn-secondary px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"
                   >
                     <Plus size={14} /> {t('settings.addPath')}
@@ -771,9 +771,9 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {tool.custom && (
+              {agent.custom && (
                 <button
-                  onClick={async () => { await RemoveCustomTool(tool.name); const c = await GetConfig(); setCfg(syncActiveCloudProfile(c)) }}
+                  onClick={async () => { await RemoveCustomAgent(agent.name); const c = await GetConfig(); setCfg(syncActiveCloudProfile(c)) }}
                   className="mt-2 text-xs flex items-center gap-1 transition-colors"
                   style={{ color: 'var(--color-error)' }}
                 >
@@ -783,7 +783,7 @@ export default function SettingsPage() {
             </div>
           ))}
 
-          {/* Add custom tool */}
+          {/* Add custom agent */}
           <div
             className="rounded-xl p-4"
             style={{ border: '1px dashed var(--border-surface)', background: 'var(--bg-surface)' }}
@@ -791,21 +791,21 @@ export default function SettingsPage() {
             <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('settings.addCustomTool')}</p>
             <div className="flex gap-2 mb-2">
               <input
-                value={newTool.name}
-                onChange={e => setNewTool(p => ({ ...p, name: e.target.value }))}
+                value={newAgent.name}
+                onChange={e => setNewAgent(p => ({ ...p, name: e.target.value }))}
                 placeholder={t('settings.toolName')}
                 className="input-base flex-1"
               />
             </div>
             <div className="flex gap-2">
               <input
-                value={newTool.pushDir}
-                onChange={e => setNewTool(p => ({ ...p, pushDir: e.target.value }))}
+                value={newAgent.pushDir}
+                onChange={e => setNewAgent(p => ({ ...p, pushDir: e.target.value }))}
                 placeholder="/path/to/push"
                 className="input-base flex-1 font-mono"
               />
               <button
-                onClick={() => pickDir(d => setNewTool(p => ({ ...p, pushDir: d })), newTool.pushDir)}
+                onClick={() => pickDir(d => setNewAgent(p => ({ ...p, pushDir: d })), newAgent.pushDir)}
                 className="btn-secondary px-2.5 rounded-lg"
                 title={t('settings.selectDir')}
               >
@@ -813,10 +813,10 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (newTool.name && newTool.pushDir) {
-                    await AddCustomTool(newTool.name, newTool.pushDir)
+                  if (newAgent.name && newAgent.pushDir) {
+                    await AddCustomAgent(newAgent.name, newAgent.pushDir)
                     const c = await GetConfig(); setCfg(syncActiveCloudProfile(c))
-                    setNewTool({ name: '', pushDir: '' })
+                    setNewAgent({ name: '', pushDir: '' })
                   }
                 }}
                 className="btn-primary px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"

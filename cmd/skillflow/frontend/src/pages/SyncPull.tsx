@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { GetEnabledTools, ScanToolSkills, PullFromTool, PullFromToolForce, ListCategories } from '../../wailsjs/go/main/App'
+import { GetEnabledAgents, ScanAgentSkills, PullFromAgent, PullFromAgentForce, ListCategories } from '../../wailsjs/go/main/App'
 import ConflictDialog from '../components/ConflictDialog'
 import SyncSkillCard from '../components/SyncSkillCard'
 import { ArrowDownToLine, AlertCircle, X, CheckSquare, Square } from 'lucide-react'
@@ -11,10 +11,10 @@ import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 
 export default function SyncPull() {
   const { t } = useLanguage()
-  const visibility = useSkillStatusVisibility('pullFromTool')
+  const visibility = useSkillStatusVisibility('pullFromAgent')
   const defaultCategory = 'Default'
-  const [tools, setTools] = useState<any[]>([])
-  const [selectedTool, setSelectedTool] = useState('')
+  const [agents, setAgents] = useState<any[]>([])
+  const [selectedAgent, setSelectedAgent] = useState('')
   const [scanned, setScanned] = useState<any[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [categories, setCategories] = useState<string[]>([])
@@ -29,19 +29,19 @@ export default function SyncPull() {
   const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
 
   useEffect(() => {
-    Promise.all([GetEnabledTools(), ListCategories()]).then(([t, c]) => {
-      setTools(t ?? [])
+    Promise.all([GetEnabledAgents(), ListCategories()]).then(([a, c]) => {
+      setAgents(a ?? [])
       setCategories(c ?? [])
     })
   }, [])
 
-  const scan = async (toolName: string) => {
+  const scan = async (agentName: string) => {
     setScanning(true)
     setScanned([])
     setScanError('')
     setDone(false)
     try {
-      const skills = await ScanToolSkills(toolName)
+      const skills = await ScanAgentSkills(agentName)
       setScanned(skills ?? [])
       setSelected(new Set())
       setScannedOnce(true)
@@ -55,7 +55,7 @@ export default function SyncPull() {
   const pull = async () => {
     setPulling(true)
     const paths = [...selected]
-    const result = await PullFromTool(selectedTool, paths, targetCategory)
+    const result = await PullFromAgent(selectedAgent, paths, targetCategory)
     if (result && result.length > 0) {
       setConflicts(result)
     } else {
@@ -159,18 +159,18 @@ export default function SyncPull() {
           <section>
             <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('syncPull.sourceTool')}</p>
             <div className="flex flex-wrap gap-2">
-              {tools.map(t => {
-                const active = selectedTool === t.name
+              {agents.map(agent => {
+                const active = selectedAgent === agent.name
                 return (
                   <button
-                    key={t.name}
+                    key={agent.name}
                     onClick={() => {
-                      setSelectedTool(t.name)
+                      setSelectedAgent(agent.name)
                       setScanned([])
                       setDone(false)
                       setScanError('')
                       setScannedOnce(false)
-                      scan(t.name)
+                      scan(agent.name)
                     }}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${active ? 'font-semibold -translate-y-px' : ''}`}
                     style={active ? {
@@ -184,8 +184,8 @@ export default function SyncPull() {
                       border: '1px solid var(--border-base)',
                     }}
                   >
-                    <ToolIcon name={t.name} size={20} />
-                    <span>{t.name}</span>
+                    <ToolIcon name={agent.name} size={20} />
+                    <span>{agent.name}</span>
                   </button>
                 )
               })}
@@ -311,7 +311,7 @@ export default function SyncPull() {
           conflicts={conflicts}
           labelForConflict={(path) => scanned.find((item: any) => item.path === path)?.name ?? path}
           onOverwrite={async (path) => {
-            await PullFromToolForce(selectedTool, [path], targetCategory)
+            await PullFromAgentForce(selectedAgent, [path], targetCategory)
             setConflicts(prev => prev.filter(c => c !== path))
           }}
           onSkip={(path) => setConflicts(prev => prev.filter(c => c !== path))}

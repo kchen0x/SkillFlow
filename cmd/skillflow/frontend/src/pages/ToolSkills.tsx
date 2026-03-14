@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { GetEnabledTools, ListToolSkills, DeleteToolSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
+import { GetEnabledAgents, ListAgentSkills, DeleteAgentSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
 import { ToolIcon } from '../config/toolIcons'
 import SkillTooltip from '../components/SkillTooltip'
 import SkillStatusStrip from '../components/SkillStatusStrip'
@@ -12,9 +12,9 @@ import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityConte
 
 export default function ToolSkills() {
   const { t } = useLanguage()
-  const visibility = useSkillStatusVisibility('myTools')
-  const [tools, setTools] = useState<any[]>([])
-  const [selectedTool, setSelectedTool] = useState<string>('')
+  const visibility = useSkillStatusVisibility('myAgents')
+  const [agents, setAgents] = useState<any[]>([])
+  const [selectedAgent, setSelectedAgent] = useState<string>('')
   const [skills, setSkills] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectMode, setSelectMode] = useState(false)
@@ -29,21 +29,21 @@ export default function ToolSkills() {
     const initialize = async () => {
       setLoading(true)
       try {
-        const enabledTools = await GetEnabledTools()
+        const enabledAgents = await GetEnabledAgents()
         if (!active) return
 
-        const nextTools = enabledTools ?? []
-        setTools(nextTools)
+        const nextAgents = enabledAgents ?? []
+        setAgents(nextAgents)
 
-        if (nextTools.length === 0) {
+        if (nextAgents.length === 0) {
           setSkills([])
           return
         }
 
-        const initialTool = nextTools[0].name
-        setSelectedTool(initialTool)
+        const initialAgent = nextAgents[0].name
+        setSelectedAgent(initialAgent)
 
-        const listedSkills = await ListToolSkills(initialTool)
+        const listedSkills = await ListAgentSkills(initialAgent)
         if (!active) return
         setSkills(listedSkills ?? [])
       } finally {
@@ -58,26 +58,26 @@ export default function ToolSkills() {
     }
   }, [])
 
-  const loadSkills = async (toolName: string) => {
+  const loadSkills = async (agentName: string) => {
     setLoading(true)
     try {
-      const s = await ListToolSkills(toolName)
+      const s = await ListAgentSkills(agentName)
       setSkills(s ?? [])
     } finally {
       setLoading(false)
     }
   }
 
-  const selectTool = (toolName: string) => {
-    setSelectedTool(toolName)
+  const selectAgent = (agentName: string) => {
+    setSelectedAgent(agentName)
     setSelectMode(false)
     setSelectedPaths(new Set())
-    loadSkills(toolName)
+    loadSkills(agentName)
   }
 
   const handleDelete = async (skillPath: string) => {
-    await DeleteToolSkill(selectedTool, skillPath)
-    loadSkills(selectedTool)
+    await DeleteAgentSkill(selectedAgent, skillPath)
+    loadSkills(selectedAgent)
   }
 
   const handleBatchDelete = async () => {
@@ -85,11 +85,11 @@ export default function ToolSkills() {
     setDeleting(true)
     try {
       for (const path of selectedPaths) {
-        await DeleteToolSkill(selectedTool, path)
+        await DeleteAgentSkill(selectedAgent, path)
       }
       setSelectedPaths(new Set())
       setSelectMode(false)
-      loadSkills(selectedTool)
+      loadSkills(selectedAgent)
     } finally {
       setDeleting(false)
     }
@@ -104,7 +104,7 @@ export default function ToolSkills() {
   }
 
   const pushSkills = skills.filter(s => s.pushed)
-  const scanOnlySkills = skills.filter(s => s.seenInToolScan && !s.pushed)
+  const scanOnlySkills = skills.filter(s => s.seenInAgentScan && !s.pushed)
 
   const filteredPushSkills = useMemo(
     () => filterAndSortSkills(pushSkills, search, sortOrder, skill => skill.name ?? ''),
@@ -138,7 +138,7 @@ export default function ToolSkills() {
     })
   }, [filteredPushSkills, selectMode])
 
-  const tool = tools.find(t => t.name === selectedTool)
+  const agent = agents.find(t => t.name === selectedAgent)
   const allSelected = filteredPushSkills.length > 0 && filteredPushSkills.every((skill: any) => selectedPaths.has(skill.path))
 
   const getNavStyle = (isActive: boolean) => isActive ? {
@@ -158,18 +158,18 @@ export default function ToolSkills() {
         <div className="px-3 py-1.5 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
           {t('toolSkills.toolList')}
         </div>
-        {tools.map(t => (
+        {agents.map(t => (
           <button
             key={t.name}
-            onClick={() => selectTool(t.name)}
+            onClick={() => selectAgent(t.name)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-all duration-150"
-            style={getNavStyle(selectedTool === t.name)}
+            style={getNavStyle(selectedAgent === t.name)}
           >
             <ToolIcon name={t.name} size={20} />
             <span className="truncate">{t.name}</span>
           </button>
         ))}
-        {!loading && tools.length === 0 && (
+        {!loading && agents.length === 0 && (
           <p className="px-3 text-xs mt-2" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noTools')}</p>
         )}
       </div>
@@ -179,10 +179,10 @@ export default function ToolSkills() {
         {/* Toolbar */}
         <div className="px-6 py-4 flex flex-col gap-4" style={{ borderBottom: '1px solid var(--border-base)' }}>
           <div className="flex items-center gap-3 flex-wrap">
-            {tool ? (
+            {agent ? (
               <div className="flex items-center gap-2">
-                <ToolIcon name={tool.name} size={22} />
-                <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{tool.name}</span>
+                <ToolIcon name={agent.name} size={22} />
+                <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{agent.name}</span>
               </div>
             ) : (
               <h2 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -248,7 +248,7 @@ export default function ToolSkills() {
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           {loading ? (
             <div className="flex items-center justify-center h-32 text-sm" style={{ color: 'var(--text-muted)' }}>{t('common.loading')}</div>
-          ) : !tool ? (
+          ) : !agent ? (
             <div className="flex flex-col items-center justify-center h-48" style={{ color: 'var(--text-muted)' }}>
               <Wrench size={32} className="mb-2 opacity-30" />
               <p className="text-sm">{t('toolSkills.selectToolFirst')}</p>
@@ -260,12 +260,12 @@ export default function ToolSkills() {
                 <div className="flex items-center gap-2 mb-4">
                   <ArrowUpToLine size={14} style={{ color: 'var(--color-success)' }} className="shrink-0" />
                   <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.pushPath')}</span>
-                  {tool.pushDir
-                    ? <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={tool.pushDir}>{tool.pushDir}</span>
+                  {agent.pushDir
+                    ? <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={agent.pushDir}>{agent.pushDir}</span>
                     : <span className="text-xs" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noPushDir')}</span>
                   }
                 </div>
-                {!tool.pushDir ? (
+                {!agent.pushDir ? (
                   <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noPushDirDesc')}</p>
                 ) : pushSkills.length === 0 ? (
                   <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noPushSkills')}</p>
@@ -281,10 +281,10 @@ export default function ToolSkills() {
                         source={sk.source}
                         imported={sk.imported}
                         updatable={sk.updatable}
-                        pushedTools={(sk.pushedTools ?? []).filter((toolName: string) => toolName !== selectedTool)}
+                        pushedAgents={(sk.pushedAgents ?? []).filter((agentName: string) => agentName !== selectedAgent)}
                         showImported={visibility.includes('imported')}
                         showUpdatable={visibility.includes('updatable')}
-                        showPushedTools={visibility.includes('pushedTools')}
+                        showPushedAgents={visibility.includes('pushedAgents')}
                         canDelete
                         selectMode={selectMode}
                         selected={selectedPaths.has(sk.path)}
@@ -301,9 +301,9 @@ export default function ToolSkills() {
                 <div className="flex items-center gap-2 mb-4">
                   <ScanLine size={14} style={{ color: 'var(--accent-primary)' }} className="shrink-0" />
                   <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.scanPath')}</span>
-                  {tool.scanDirs?.length > 0 && (
-                    <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={tool.scanDirs.join(', ')}>
-                      {t('toolSkills.nDirs', { count: tool.scanDirs.length })}
+                  {agent.scanDirs?.length > 0 && (
+                    <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={agent.scanDirs.join(', ')}>
+                      {t('toolSkills.nDirs', { count: agent.scanDirs.length })}
                     </span>
                   )}
                 </div>
@@ -322,10 +322,10 @@ export default function ToolSkills() {
                         source={sk.source}
                         imported={sk.imported}
                         updatable={sk.updatable}
-                        pushedTools={(sk.pushedTools ?? []).filter((toolName: string) => toolName !== selectedTool)}
+                        pushedAgents={(sk.pushedAgents ?? []).filter((agentName: string) => agentName !== selectedAgent)}
                         showImported={visibility.includes('imported')}
                         showUpdatable={visibility.includes('updatable')}
-                        showPushedTools={visibility.includes('pushedTools')}
+                        showPushedAgents={visibility.includes('pushedAgents')}
                         canDelete={false}
                         selectMode={false}
                         selected={false}
@@ -350,10 +350,10 @@ interface ToolSkillCardProps {
   source?: string
   imported?: boolean
   updatable?: boolean
-  pushedTools?: string[]
+  pushedAgents?: string[]
   showImported: boolean
   showUpdatable: boolean
-  showPushedTools: boolean
+  showPushedAgents: boolean
   canDelete: boolean
   selectMode: boolean
   selected: boolean
@@ -367,10 +367,10 @@ function ToolSkillCard({
   source,
   imported,
   updatable,
-  pushedTools = [],
+  pushedAgents = [],
   showImported,
   showUpdatable,
-  showPushedTools,
+  showPushedAgents,
   canDelete,
   selectMode,
   selected,
@@ -513,7 +513,7 @@ function ToolSkillCard({
               tone: 'warning' as const,
             }] : []),
           ]}
-          pushedTools={showPushedTools ? pushedTools : []}
+          pushedAgents={showPushedAgents ? pushedAgents : []}
         />
 
         <p

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestImportLocalAutoPushesToSelectedTools(t *testing.T) {
+func TestImportLocalAutoPushesToSelectedAgents(t *testing.T) {
 	app, pushDir, skillsDir := newAutoPushTestApp(t, []string{"codex"})
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nImported\n")
 
@@ -28,7 +28,7 @@ func TestImportLocalAutoPushesToSelectedTools(t *testing.T) {
 	assert.Equal(t, "# Demo\nImported\n", string(pushedContent))
 }
 
-func TestImportLocalAutoPushSkipsExistingToolSkill(t *testing.T) {
+func TestImportLocalAutoPushSkipsExistingAgentSkill(t *testing.T) {
 	app, pushDir, skillsDir := newAutoPushTestApp(t, []string{"codex"})
 	existingDir := writeTestSkillDir(t, pushDir, "demo-skill", "# Demo\nExisting\n")
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nImported\n")
@@ -45,7 +45,7 @@ func TestImportLocalAutoPushSkipsExistingToolSkill(t *testing.T) {
 	assert.Equal(t, "# Demo\nExisting\n", string(existingContent))
 }
 
-func TestSaveConfigAutoPushesExistingSkillsToNewTool(t *testing.T) {
+func TestSaveConfigAutoPushesExistingSkillsToNewAgent(t *testing.T) {
 	app, pushDir, _ := newAutoPushTestApp(t, nil)
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nImported\n")
 
@@ -54,7 +54,7 @@ func TestSaveConfigAutoPushesExistingSkillsToNewTool(t *testing.T) {
 
 	cfg, err := app.GetConfig()
 	require.NoError(t, err)
-	cfg.AutoPushTools = []string{"codex"}
+	cfg.AutoPushAgents = []string{"codex"}
 
 	require.NoError(t, app.SaveConfig(cfg))
 
@@ -66,18 +66,18 @@ func TestSaveConfigAutoPushesExistingSkillsToNewTool(t *testing.T) {
 	assert.Equal(t, "# Demo\nImported\n", string(pushedContent))
 }
 
-func newAutoPushTestApp(t *testing.T, autoPushTools []string) (*App, string, string) {
+func newAutoPushTestApp(t *testing.T, autoPushAgents []string) (*App, string, string) {
 	t.Helper()
 
 	dataDir := t.TempDir()
-	pushDir := filepath.Join(dataDir, "tool-skills")
+	pushDir := filepath.Join(dataDir, "agent-skills")
 	skillsDir := filepath.Join(dataDir, "library", "skills")
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
 	cfg.SkillsStorageDir = skillsDir
-	cfg.AutoPushTools = autoPushTools
-	cfg.Tools = []config.ToolConfig{
+	cfg.AutoPushAgents = autoPushAgents
+	cfg.Agents = []config.AgentConfig{
 		{
 			Name:     "codex",
 			ScanDirs: []string{pushDir},

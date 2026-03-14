@@ -8,7 +8,7 @@ import {backup} from '../models';
 import {skill} from '../models';
 import {install} from '../models';
 
-export function AddCustomTool(arg1:string,arg2:string):Promise<void>;
+export function AddCustomAgent(arg1:string,arg2:string):Promise<void>;
 
 export function AddStarredRepo(arg1:string):Promise<git.StarredRepo>;
 
@@ -22,7 +22,7 @@ export function CheckAppUpdate():Promise<main.AppUpdateInfo>;
 
 export function CheckAppUpdateAndNotify():Promise<main.AppUpdateInfo>;
 
-export function CheckMissingPushDirs(arg1:Array<string>):Promise<Array<Record<string, string>>>;
+export function CheckMissingAgentPushDirs(arg1:Array<string>):Promise<Array<Record<string, string>>>;
 
 export function CheckUpdates():Promise<void>;
 
@@ -31,6 +31,8 @@ export function CreateCategory(arg1:string):Promise<void>;
 export function CreatePrompt(arg1:string,arg2:string,arg3:string,arg4:string):Promise<prompt.Prompt>;
 
 export function CreatePromptCategory(arg1:string):Promise<void>;
+
+export function DeleteAgentSkill(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteCategory(arg1:string):Promise<void>;
 
@@ -42,8 +44,6 @@ export function DeleteSkill(arg1:string):Promise<void>;
 
 export function DeleteSkills(arg1:Array<string>):Promise<void>;
 
-export function DeleteToolSkill(arg1:string,arg2:string):Promise<void>;
-
 export function DownloadAppUpdate(arg1:string):Promise<void>;
 
 export function ExportPrompts():Promise<string>;
@@ -52,7 +52,7 @@ export function GetAppVersion():Promise<string>;
 
 export function GetConfig():Promise<config.AppConfig>;
 
-export function GetEnabledTools():Promise<Array<config.ToolConfig>>;
+export function GetEnabledAgents():Promise<Array<config.AgentConfig>>;
 
 export function GetGitConflictPending():Promise<boolean>;
 
@@ -78,6 +78,8 @@ export function ImportStarSkills(arg1:Array<string>,arg2:string,arg3:string):Pro
 
 export function InstallFromGitHub(arg1:string,arg2:Array<install.SkillCandidate>,arg3:string):Promise<void>;
 
+export function ListAgentSkills(arg1:string):Promise<Array<main.AgentSkillEntry>>;
+
 export function ListAllStarSkills():Promise<Array<git.StarSkill>>;
 
 export function ListCategories():Promise<Array<string>>;
@@ -96,8 +98,6 @@ export function ListSkills():Promise<Array<main.InstalledSkillEntry>>;
 
 export function ListStarredRepos():Promise<Array<git.StarredRepo>>;
 
-export function ListToolSkills(arg1:string):Promise<Array<main.ToolSkillEntry>>;
-
 export function MovePromptCategory(arg1:string,arg2:string):Promise<void>;
 
 export function MoveSkillCategory(arg1:string,arg2:string):Promise<void>;
@@ -114,21 +114,21 @@ export function OpenURL(arg1:string):Promise<void>;
 
 export function PromptRootDir():Promise<string>;
 
-export function PullFromTool(arg1:string,arg2:Array<string>,arg3:string):Promise<Array<string>>;
+export function PullFromAgent(arg1:string,arg2:Array<string>,arg3:string):Promise<Array<string>>;
 
-export function PullFromToolForce(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
+export function PullFromAgentForce(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
 
-export function PushStarSkillsToTools(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
+export function PushStarSkillsToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
 
-export function PushStarSkillsToToolsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
+export function PushStarSkillsToAgentsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
-export function PushToTools(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
+export function PushToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
 
-export function PushToToolsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
+export function PushToAgentsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
 export function ReadSkillFileContent(arg1:string):Promise<string>;
 
-export function RemoveCustomTool(arg1:string):Promise<void>;
+export function RemoveCustomAgent(arg1:string):Promise<void>;
 
 export function RemoveStarredRepo(arg1:string):Promise<void>;
 
@@ -142,9 +142,9 @@ export function RestoreFromCloud():Promise<void>;
 
 export function SaveConfig(arg1:config.AppConfig):Promise<void>;
 
-export function ScanGitHub(arg1:string):Promise<Array<install.SkillCandidate>>;
+export function ScanAgentSkills(arg1:string):Promise<Array<main.AgentSkillCandidate>>;
 
-export function ScanToolSkills(arg1:string):Promise<Array<main.ToolSkillCandidate>>;
+export function ScanGitHub(arg1:string):Promise<Array<install.SkillCandidate>>;
 
 export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 

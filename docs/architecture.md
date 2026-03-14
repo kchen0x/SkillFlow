@@ -82,12 +82,13 @@ Key repository rules:
 `App.startup()` performs the core backend initialization:
 
 1. Resolve `config.AppDataDir()`
-2. Load config via `core/config.Service`
-3. Initialize the rotating file logger
-4. Create skill storage, starred-repo storage, and the local derived view-state cache manager
-5. Register tool adapters and cloud providers
-6. Start backend event forwarding
-7. Start the auto-sync timer for cloud backup
+2. Run the one-time startup cutover in `core/upgrade`
+3. Load config via `core/config.Service`
+4. Initialize the rotating file logger
+5. Create skill storage, starred-repo storage, and the local derived view-state cache manager
+6. Register agent adapters and cloud providers
+7. Start backend event forwarding
+8. Start the auto-sync timer for cloud backup
 
 `App.domReady()` handles shell/UI setup:
 
@@ -138,11 +139,11 @@ By default, SkillFlow stores app data under `config.AppDataDir()`:
 Important storage rules:
 
 - `config.json` contains only settings that are safe to sync across devices.
-- `config_local.json` stores machine-specific paths, auto-push targets, launch-at-login state, proxy settings, window state, custom-tool path config, and sensitive cloud credentials.
+- `config_local.json` stores machine-specific paths, auto-push targets, launch-at-login state, proxy settings, window state, custom-agent path config, and sensitive cloud credentials.
 - Synced files such as `meta/*.json` and `star_repos.json` persist local paths as **forward-slash relative paths** whenever the target is inside the synchronized root.
 - If `SkillsStorageDir` is moved outside the default app data directory, the synchronized root becomes the shared parent of `skills/` and `meta/`.
 - Logs are bounded to **two files** (`skillflow.log`, `skillflow.log.1`) at **1MB each**.
-- `cache/viewstate/*.json` stores only rebuildable derived state such as installed-skill snapshots and tool-presence indexes. These files are local-only and must never be treated as synced truth.
+- `cache/viewstate/*.json` stores only rebuildable derived state such as installed-skill snapshots and agent-presence indexes. These files are local-only and must never be treated as synced truth.
 - `runtime/*` stores helper/UI loopback endpoints, tokens, PIDs, and single-instance coordination state. These files are local-only, must never be synced, and are recreated automatically when needed.
 
 ---
@@ -160,12 +161,13 @@ Important storage rules:
 | `core/notify` | Buffered backend event hub and typed payloads |
 | `core/pathutil` | Cross-platform path normalization and relative-path persistence helpers |
 | `core/prompt` | Prompt library storage and import/export |
-| `core/registry` | Global tool-adapter and cloud-provider registries |
+| `core/registry` | Global agent-adapter and cloud-provider registries |
 | `core/skill` | Skill model, storage, validation, installed-skill indexing |
 | `core/skillkey` | Stable logical-key derivation for git and content-based skills |
-| `core/sync` | `ToolAdapter` interface and filesystem-based adapter implementation |
+| `core/sync` | `AgentAdapter` interface and filesystem-based adapter implementation |
+| `core/upgrade` | Startup terminology/schema cutover for persisted config files |
 | `core/update` | Direct GitHub commit-check helper kept for tests and fallback-style utilities; installed skill update state now comes from local repo-cache SHA comparison |
-| `core/viewstate` | Local-only derived snapshot cache, fingerprinting, and incremental tool-presence helpers |
+| `core/viewstate` | Local-only derived snapshot cache, fingerprinting, and incremental agent-presence helpers |
 
 ---
 
@@ -194,8 +196,8 @@ The Wails app package must remain flat, so responsibilities are grouped by file 
 To keep navigation and large-list rendering responsive, the backend now maintains a local-only derived cache under `cache/viewstate/`.
 
 - `ListSkills()` is snapshot-first: when the installed-skill fingerprint matches, it returns the cached `InstalledSkillEntry[]` directly instead of rebuilding push presence immediately.
-- The installed-skill fingerprint is based on sync-relevant skill metadata plus tool push-directory summaries, so switching away from a page and coming back will reload current truth when those dependencies changed.
-- Tool push presence is rebuilt incrementally per tool using per-tool fingerprints rather than rescanning every configured `PushDir` on every request.
+- The installed-skill fingerprint is based on sync-relevant skill metadata plus agent push-directory summaries, so switching away from a page and coming back will reload current truth when those dependencies changed.
+- Agent push presence is rebuilt incrementally per agent using per-agent fingerprints rather than rescanning every configured `PushDir` on every request.
 
 These caches are optimization artifacts only:
 
@@ -237,13 +239,13 @@ Notes:
 ```go
 type AppConfig struct {
     SkillsStorageDir      string
-    AutoPushTools         []string
+    AutoPushAgents        []string
     LaunchAtLogin         bool
     DefaultCategory       string
     LogLevel              string
     RepoScanMaxDepth      int
     SkillStatusVisibility SkillStatusVisibilityConfig
-    Tools                 []ToolConfig
+    Agents                []AgentConfig
     Cloud                 CloudConfig
     CloudProfiles         map[string]CloudProviderConfig
     Proxy                 ProxyConfig
@@ -253,13 +255,13 @@ type AppConfig struct {
 
 Config split:
 
-- **Shared / synced**: `DefaultCategory`, `LogLevel`, `RepoScanMaxDepth`, status visibility, built-in tool enabled state, active cloud provider state, non-sensitive cloud profile fields, skipped app version.
-- **Local-only**: `SkillsStorageDir`, `AutoPushTools`, `LaunchAtLogin`, tool paths, custom-tool definitions, proxy settings, window size, sensitive cloud credentials.
+- **Shared / synced**: `DefaultCategory`, `LogLevel`, `RepoScanMaxDepth`, status visibility, built-in agent enabled state, active cloud provider state, non-sensitive cloud profile fields, skipped app version.
+- **Local-only**: `SkillsStorageDir`, `AutoPushAgents`, `LaunchAtLogin`, agent paths, custom-agent definitions, proxy settings, window size, sensitive cloud credentials.
 
 Relevant nested models:
 
 ```go
-type ToolConfig struct {
+type AgentConfig struct {
     Name     string
     ScanDirs []string
     PushDir  string
@@ -309,14 +311,14 @@ type StarSkill struct {
 
 ## Unified Skill Identity & State Model
 
-This section is normative for any work touching skill cards, import/install/push/pull flows, starred repos, tool scans, or update badges.
+This section is normative for any work touching skill cards, import/install/push/pull flows, starred repos, agent scans, or update badges.
 
 ### Identity layers
 
 SkillFlow distinguishes two identities:
 
 - **Instance identity** — `Skill.ID` identifies one installed copy in **My Skills**. Use it for delete, move, and installed-instance update operations.
-- **Logical identity** — a stable cross-module identity used to answer whether Dashboard, Starred Repos, Tool Skills, Pull, and Push are referring to the same skill.
+- **Logical identity** — a stable cross-module identity used to answer whether Dashboard, Starred Repos, My Agents, Pull, and Push are referring to the same skill.
 
 `Name` and absolute `Path` are display/location metadata only. They are **not** the primary cross-module key.
 
@@ -336,21 +338,21 @@ SkillFlow distinguishes two identities:
 | Sync Push | installed `Skill` | `Skill.ID` for selection; logical key for pushed-state resolution |
 | GitHub scan/install | remote candidate | logical key from repo source + subpath |
 | Starred Repos | `StarSkill` | logical key from repo source + subpath |
-| Tool Skills | tool-local candidate / aggregate | logical key for dedupe and status; path only for tool-local open/delete |
-| Sync Pull | tool-local candidate | logical key for import and conflict detection |
+| Agent Skills | agent-local candidate / aggregate | logical key for dedupe and status; path only for agent-local open/delete |
+| Sync Pull | agent-local candidate | logical key for import and conflict detection |
 
 ### Unified status semantics
 
 - **installed** — at least one installed My Skills entry exists for the logical key
 - **imported** — wording alias for `installed` on external-source pages
-- **pushed** — the logical skill exists in a tool's configured `PushDir`
-- **seenInToolScan** — the logical skill exists in a tool's configured `ScanDirs`; this does **not** imply SkillFlow pushed it
+- **pushed** — the logical skill exists in an agent's configured `PushDir`
+- **seenInAgentScan** — the logical skill exists in an agent's configured `ScanDirs`; this does **not** imply SkillFlow pushed it
 - **updatable** — at least one installed git-backed instance has a newer cached-repo SHA than its installed `SourceSHA`
 
 ### Status and dedupe rules
 
-- `pushed` is narrower than "exists somewhere in the tool"; it specifically means present in the configured push target.
-- `seenInToolScan` is observational state. It must not be mislabeled as "already pushed".
+- `pushed` is narrower than "exists somewhere in the agent"; it specifically means present in the configured push target.
+- `seenInAgentScan` is observational state. It must not be mislabeled as "already pushed".
 - Cross-module dedupe prefers logical-key equality.
 - Same-name items from different repos remain distinct when their logical keys differ.
 - Name-only matching is a last-resort compatibility fallback and must never override a stronger logical-key match.
@@ -360,7 +362,7 @@ SkillFlow distinguishes two identities:
 - Installed skill update checks apply only to git-backed skills with a stable repo source and subpath whose corresponding repo clone already exists under the local `cache/` tree.
 - Cache lookup and installed-instance correlation must use the same logical git key.
 - `CheckUpdates()` compares installed `SourceSHA` against the latest commit SHA for that same `SourceSubPath` inside the local cached repo clone; it does not call the GitHub Commits API directly.
-- `UpdateSkill()` copies files from that cached repo subdirectory into the installed library directory, then refreshes any existing pushed tool copies from the updated installed instance.
+- `UpdateSkill()` copies files from that cached repo subdirectory into the installed library directory, then refreshes any existing pushed agent copies from the updated installed instance.
 - `LatestSHA` is cleared when a fresh check confirms the installed copy is already current.
 - `LastCheckedAt` is updated on every completed check attempt and persisted in local-only `meta_local/<skill-id>.local.json` (not synced).
 
@@ -369,7 +371,7 @@ SkillFlow distinguishes two identities:
 - Backend code owns cross-module correlation and should return normalized status data to the frontend.
 - Frontend pages should not infer "same skill", "already imported", or "already pushed" from `Name` or `Path` alone.
 - `core/skillkey` derives logical keys.
-- `core/skill.BuildInstalledIndex` correlates installed state across GitHub scan results, starred repo entries, and tool-scan entries.
+- `core/skill.BuildInstalledIndex` correlates installed state across GitHub scan results, starred repo entries, and agent-scan entries.
 
 ---
 
@@ -424,7 +426,7 @@ cmd/skillflow/frontend/
 
 Key frontend areas:
 
-- `src/pages/` — route-level screens such as Dashboard, Sync Push/Pull, Starred Repos, Backup, Settings, My Tools, and My Prompts
+- `src/pages/` — route-level screens such as Dashboard, Sync Push/Pull, Starred Repos, Backup, Settings, My Agents, and My Prompts
 - `src/components/` — shared cards, dialogs, category panels, and list controls
 - `src/contexts/` — language, theme, and status-visibility state
 - `src/i18n/` — translation dictionaries
@@ -486,11 +488,11 @@ import { ListSkills } from '../../wailsjs/go/main/App'
 2. Register it in `cmd/skillflow/providers.go`
 3. Expose its credential fields through `RequiredCredentials()`
 
-### Add a new tool adapter
+### Add a new agent adapter
 
-1. For standard filesystem-based tools, register it in `cmd/skillflow/adapters.go`
-2. For custom behavior, implement `toolsync.ToolAdapter`
-3. Always import `core/sync` as `toolsync` to avoid the stdlib `sync` name conflict
+1. For standard filesystem-based agents, register it in `cmd/skillflow/adapters.go`
+2. For custom behavior, implement `agentsync.AgentAdapter`
+3. Always import `core/sync` as `agentsync` to avoid the stdlib `sync` name conflict
 
 ### Add a new reusable backend module
 
@@ -500,4 +502,4 @@ import { ListSkills } from '../../wailsjs/go/main/App'
 
 ---
 
-*Last updated: 2026-03-11*
+*Last updated: 2026-03-14*

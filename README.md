@@ -27,15 +27,15 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **Skill Library** | Manage a local library of skills with categories, search, sorting, drag-and-drop organization, batch delete, smoother startup/page re-entry through local derived snapshots, and adaptive large-list motion. |
 | **My Prompts** | Store reusable prompts as synced `prompts/<category>/<name>/system.md` cards with import/export and one-click copy. |
 | **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones into your library. |
-| **Cross-tool Sync** | Push or pull skills across Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, and custom tools. |
+| **Cross-agent Sync** | Push or pull skills across Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, and custom agents. |
 | **Starred Repos** | Watch Git repos, browse their skills, and import or push them without installing everything into My Skills first. |
 | **Cloud Backup** | Back up skills, prompts, and sync-safe metadata to object storage providers or Git, while keeping secrets and high-churn local runtime metadata on-device only. |
-| **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app, with per-skill spinner feedback and a top-of-page status banner for success or failure, including push-dir refresh and auto-push target overwrite to keep selected tools current. |
-| **Desktop Experience** | Bilingual UI, multiple themes, helper-backed tray/menu bar reopen after window close, launch-at-login, per-tool settings, and background route-memory trimming when a hidden window stays inactive. |
+| **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app, with per-skill spinner feedback and a top-of-page status banner for success or failure, including push-dir refresh and auto-push target overwrite to keep selected agents current. |
+| **Desktop Experience** | Bilingual UI, multiple themes, helper-backed tray/menu bar reopen after window close, launch-at-login, per-agent settings, and background route-memory trimming when a hidden window stays inactive. |
 
 For the complete UI/UX reference, see **[docs/features.md](docs/features.md)**.
 
-## Supported Tools
+## Supported Agents
 
 Built-in adapters:
 
@@ -45,7 +45,7 @@ Built-in adapters:
 - **Gemini CLI**
 - **OpenClaw**
 
-You can also add **custom tools** in Settings by pointing SkillFlow at local scan and push directories.
+You can also add **custom agents** in Settings by pointing SkillFlow at local scan and push directories.
 
 ## Skill Format
 

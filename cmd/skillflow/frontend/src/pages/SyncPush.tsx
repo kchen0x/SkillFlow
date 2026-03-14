@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  CheckMissingPushDirs,
-  GetEnabledTools,
+  CheckMissingAgentPushDirs,
+  GetEnabledAgents,
   ListCategories,
   ListSkills,
-  PushToTools,
-  PushToToolsForce,
+  PushToAgents,
+  PushToAgentsForce,
 } from '../../wailsjs/go/main/App'
 import ConflictDialog from '../components/ConflictDialog'
 import SyncSkillCard from '../components/SyncSkillCard'
@@ -22,9 +22,9 @@ type Scope = 'auto' | 'manual'
 
 export default function SyncPush() {
   const { t } = useLanguage()
-  const visibility = useSkillStatusVisibility('pushToTool')
-  const [tools, setTools] = useState<any[]>([])
-  const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
+  const visibility = useSkillStatusVisibility('pushToAgent')
+  const [agents, setAgents] = useState<any[]>([])
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set())
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [skills, setSkills] = useState<any[]>([])
@@ -45,9 +45,9 @@ export default function SyncPush() {
     const initialize = async () => {
       setLoading(true)
       try {
-        const [enabledTools, listedSkills, listedCategories] = await Promise.all([GetEnabledTools(), ListSkills(), ListCategories()])
+        const [enabledAgents, listedSkills, listedCategories] = await Promise.all([GetEnabledAgents(), ListSkills(), ListCategories()])
         if (!active) return
-        setTools(enabledTools ?? [])
+        setAgents(enabledAgents ?? [])
         setSkills(listedSkills ?? [])
         setCategories(listedCategories ?? [])
       } finally {
@@ -90,8 +90,8 @@ export default function SyncPush() {
   const doPush = async () => {
     setPushing(true)
     setDone(false)
-    const toolNames = Array.from(selectedTools)
-    const result = await PushToTools(pushIDs, toolNames)
+    const agentNames = Array.from(selectedAgents)
+    const result = await PushToAgents(pushIDs, agentNames)
     if (result && result.length > 0) {
       setConflicts(result)
     } else {
@@ -101,8 +101,8 @@ export default function SyncPush() {
   }
 
   const push = async () => {
-    const toolNames = Array.from(selectedTools)
-    const missing = await CheckMissingPushDirs(toolNames)
+    const agentNames = Array.from(selectedAgents)
+    const missing = await CheckMissingAgentPushDirs(agentNames)
     if (missing && missing.length > 0) {
       setMissingDirs(missing as { name: string; dir: string }[])
       setPendingPush(true)
@@ -117,8 +117,8 @@ export default function SyncPush() {
     await doPush()
   }
 
-  const toggleTool = (name: string) => {
-    setSelectedTools(prev => {
+  const toggleAgent = (name: string) => {
+    setSelectedAgents(prev => {
       const next = new Set(prev)
       next.has(name) ? next.delete(name) : next.add(name)
       return next
@@ -224,12 +224,12 @@ export default function SyncPush() {
           <section>
             <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('syncPush.targetTool')}</p>
             <div className="flex flex-wrap gap-2">
-              {tools.map(tool => {
-                const active = selectedTools.has(tool.name)
+              {agents.map(agent => {
+                const active = selectedAgents.has(agent.name)
                 return (
                   <button
-                    key={tool.name}
-                    onClick={() => toggleTool(tool.name)}
+                    key={agent.name}
+                    onClick={() => toggleAgent(agent.name)}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${active ? 'font-semibold -translate-y-px' : ''}`}
                     style={active ? {
                       background: 'var(--active-surface)',
@@ -242,8 +242,8 @@ export default function SyncPush() {
                       border: '1px solid var(--border-base)',
                     }}
                   >
-                    <ToolIcon name={tool.name} size={20} />
-                    <span>{tool.name}</span>
+                    <ToolIcon name={agent.name} size={20} />
+                    <span>{agent.name}</span>
                   </button>
                 )
               })}
@@ -318,8 +318,8 @@ export default function SyncPush() {
                   subtitle={skill.category || undefined}
                   source={skill.source}
                   path={skill.path}
-                  pushedTools={skill.pushedTools}
-                  showPushedTools={visibility.includes('pushedTools')}
+                  pushedAgents={skill.pushedAgents}
+                  showPushedAgents={visibility.includes('pushedAgents')}
                   selected={scope === 'manual' && selectedSkills.has(skill.id)}
                   showSelection={scope === 'manual'}
                   onToggle={() => toggleSkill(skill.id)}
@@ -332,7 +332,7 @@ export default function SyncPush() {
         <div className="px-5 py-3 shrink-0 flex items-center gap-4" style={{ borderTop: '1px solid var(--border-base)' }}>
           <button
             onClick={push}
-            disabled={pushing || selectedTools.size === 0 || pushCount === 0}
+            disabled={pushing || selectedAgents.size === 0 || pushCount === 0}
             className="btn-primary px-6 py-2 rounded-lg text-sm"
           >
             {pushing ? t('syncPush.pushing') : t('syncPush.startPush', { count: pushCount })}
@@ -344,14 +344,14 @@ export default function SyncPush() {
       {conflicts.length > 0 && (
         <ConflictDialog
           conflicts={conflicts}
-          labelForConflict={(conflict) => `${conflict.skillName} → ${conflict.toolName}`}
+          labelForConflict={(conflict) => `${conflict.skillName} → ${conflict.agentName}`}
           onOverwrite={async (conflict) => {
             if (conflict.skillId) {
-              await PushToToolsForce([conflict.skillId], [conflict.toolName])
+              await PushToAgentsForce([conflict.skillId], [conflict.agentName])
             }
-            setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.toolName === conflict.toolName)))
+            setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))
           }}
-          onSkip={(conflict) => setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.toolName === conflict.toolName)))}
+          onSkip={(conflict) => setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))}
           onDone={() => setDone(true)}
         />
       )}

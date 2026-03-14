@@ -28,12 +28,12 @@
 
 路径：`<AppDataDir>/cache/viewstate/*.json`
 
-这些文件保存只属于当前设备的派生状态，用于加快页面进入速度并减少重复目录扫描。典型内容包括已安装 Skill 卡片快照和工具 presence 索引。
+这些文件保存只属于当前设备的派生状态，用于加快页面进入速度并减少重复目录扫描。典型内容包括已安装 Skill 卡片快照和智能体 presence 索引。
 
 规则：
 
 - 它们只是性能优化产物，不是权威真值。
-- 必须从 `skills/`、`meta/`、工具目录等现有真值层文件重建。
+- 必须从 `skills/`、`meta/`、智能体目录等现有真值层文件重建。
 - 不能被云备份上传，也不能反向写回任何可同步元数据文件。
 - 不同设备上的缓存内容不同是正常且无害的。
 
@@ -56,6 +56,8 @@
 
 `config.json` 只保存可跨设备移动的安全配置，不应包含机器相关绝对路径或敏感凭据。
 
+在真正加载配置之前，SkillFlow 会先执行 `core/upgrade` 里的单次术语割接。旧版基于 `tools` 的键会被原地改写为新版基于 `agents` 的 schema，运行时代码只读取新 schema。
+
 ### 示例
 
 ```json
@@ -64,14 +66,14 @@
   "logLevel": "info",
   "repoScanMaxDepth": 5,
   "skillStatusVisibility": {
-    "mySkills": ["updatable", "pushedTools"],
-    "myTools": ["imported", "updatable", "pushedTools"],
-    "pushToTool": ["pushedTools"],
-    "pullFromTool": ["imported"],
-    "starredRepos": ["imported", "pushedTools"],
-    "githubInstall": ["imported", "updatable", "pushedTools"]
+    "mySkills": ["updatable", "pushedAgents"],
+    "myAgents": ["imported", "updatable", "pushedAgents"],
+    "pushToAgent": ["pushedAgents"],
+    "pullFromAgent": ["imported"],
+    "starredRepos": ["imported", "pushedAgents"],
+    "githubInstall": ["imported", "updatable", "pushedAgents"]
   },
-  "tools": [
+  "agents": [
     { "name": "claude-code", "enabled": true },
     { "name": "codex", "enabled": true },
     { "name": "gemini-cli", "enabled": false }
@@ -109,17 +111,17 @@
 |----|------|------|
 | `defaultCategory` | string | 导入或创建 Skill 时默认使用的分类。 |
 | `logLevel` | string | 后端日志级别。可选值为 `debug`、`info`、`error`；非法值会被归一化为 `error`。 |
-| `repoScanMaxDepth` | number | 扫描工具目录与仓库时允许的最大递归深度。会被归一化到 `1-20` 范围内，默认值是 `5`。 |
+| `repoScanMaxDepth` | number | 扫描智能体目录与仓库时允许的最大递归深度。会被归一化到 `1-20` 范围内，默认值是 `5`。 |
 | `skillStatusVisibility` | object | 不同页面上 Skill 状态徽标的显示策略。 |
-| `skillStatusVisibility.mySkills` | string[] | “我的 Skills” 页面显示哪些状态徽标。该页允许的值是 `updatable`、`pushedTools`。 |
-| `skillStatusVisibility.myTools` | string[] | “我的工具” 页面显示哪些状态徽标。该页允许的值是 `imported`、`updatable`、`pushedTools`。 |
-| `skillStatusVisibility.pushToTool` | string[] | “推送到工具” 页面显示哪些状态徽标。该页允许的值是 `pushedTools`。 |
-| `skillStatusVisibility.pullFromTool` | string[] | “从工具拉取” 页面显示哪些状态徽标。该页允许的值是 `imported`。 |
-| `skillStatusVisibility.starredRepos` | string[] | 收藏仓库页面显示哪些状态徽标。该页允许的值是 `imported`、`pushedTools`。 |
-| `skillStatusVisibility.githubInstall` | string[] | GitHub 安装流程显示哪些状态徽标。该页允许的值是 `imported`、`updatable`、`pushedTools`。 |
-| `tools` | object[] | 只保存内置工具的启用/停用状态。路径相关设置保存在 `config_local.json`。 |
-| `tools[].name` | string | 内置工具名，例如 `claude-code`、`codex`、`gemini-cli`、`opencode`、`openclaw`。 |
-| `tools[].enabled` | boolean | 该内置工具是否在界面与扫描/推送流程中启用。 |
+| `skillStatusVisibility.mySkills` | string[] | “我的 Skills” 页面显示哪些状态徽标。该页允许的值是 `updatable`、`pushedAgents`。 |
+| `skillStatusVisibility.myAgents` | string[] | “我的智能体” 页面显示哪些状态徽标。该页允许的值是 `imported`、`updatable`、`pushedAgents`。 |
+| `skillStatusVisibility.pushToAgent` | string[] | “推送到智能体” 页面显示哪些状态徽标。该页允许的值是 `pushedAgents`。 |
+| `skillStatusVisibility.pullFromAgent` | string[] | “从智能体拉取” 页面显示哪些状态徽标。该页允许的值是 `imported`。 |
+| `skillStatusVisibility.starredRepos` | string[] | 收藏仓库页面显示哪些状态徽标。该页允许的值是 `imported`、`pushedAgents`。 |
+| `skillStatusVisibility.githubInstall` | string[] | GitHub 安装流程显示哪些状态徽标。该页允许的值是 `imported`、`updatable`、`pushedAgents`。 |
+| `agents` | object[] | 只保存内置智能体的启用/停用状态。路径相关设置保存在 `config_local.json`。 |
+| `agents[].name` | string | 内置智能体名，例如 `claude-code`、`codex`、`gemini-cli`、`opencode`、`openclaw`。 |
+| `agents[].enabled` | boolean | 该内置智能体是否在界面与扫描/推送流程中启用。 |
 | `cloud` | object | 当前选中的云备份提供方及调度状态。 |
 | `cloud.provider` | string | 当前激活的 provider 名称，例如 `git`、`aws`、`aliyun`、`azure`、`google`、`huawei`、`tencent`。 |
 | `cloud.enabled` | boolean | 是否启用云备份。 |
@@ -150,14 +152,16 @@
 
 `config_local.json` 保存机器相关路径、本地运行状态与敏感凭据。它会被明确排除在云备份和 Git 同步之外。
 
+同一套启动割接逻辑也会在读取 `config_local.json` 之前，把旧版 `autoPushTools` / `tools` 改写成新版 `autoPushAgents` / `agents`。
+
 ### 示例
 
 ```json
 {
   "skillsStorageDir": "/Users/demo/Library/Application Support/SkillFlow/skills",
-  "autoPushTools": ["codex", "gemini-cli"],
+  "autoPushAgents": ["codex", "gemini-cli"],
   "launchAtLogin": true,
-  "tools": [
+  "agents": [
     {
       "name": "claude-code",
       "scanDirs": [
@@ -169,9 +173,9 @@
       "enabled": true
     },
     {
-      "name": "my-custom-tool",
-      "scanDirs": ["/Users/demo/work/my-tool/skills"],
-      "pushDir": "/Users/demo/work/my-tool/skills",
+      "name": "my-custom-agent",
+      "scanDirs": ["/Users/demo/work/my-agent/skills"],
+      "pushDir": "/Users/demo/work/my-agent/skills",
       "custom": true,
       "enabled": true
     }
@@ -204,14 +208,14 @@
 | 键 | 类型 | 作用 |
 |----|------|------|
 | `skillsStorageDir` | string | 已安装 `skills/` 目录的本机绝对路径。 |
-| `autoPushTools` | string[] | 在导入/更新后自动推送到哪些工具。保存前会去空格并去重。 |
+| `autoPushAgents` | string[] | 在导入/更新后自动推送到哪些智能体。保存前会去空格并去重。 |
 | `launchAtLogin` | boolean | 当前设备上是否把 SkillFlow 注册为开机/登录自启动项。 |
-| `tools` | object[] | 工具路径配置，既包含内置工具，也包含自定义工具。 |
-| `tools[].name` | string | 工具标识名。 |
-| `tools[].scanDirs` | string[] | 扫描该工具外部 Skill 的本地目录列表。 |
-| `tools[].pushDir` | string | 将 Skill 推送到该工具时使用的目标目录。 |
-| `tools[].custom` | boolean | `true` 表示用户创建的自定义工具，`false` 表示内置工具。 |
-| `tools[].enabled` | boolean | 每个工具都会带上这个字段，但在 `config_local.json` 中它只对自定义工具有实际意义；内置工具的启用状态以 `config.json` 为准。 |
+| `agents` | object[] | 智能体路径配置，既包含内置智能体，也包含自定义智能体。 |
+| `agents[].name` | string | 智能体标识名。 |
+| `agents[].scanDirs` | string[] | 扫描该智能体外部 Skill 的本地目录列表。 |
+| `agents[].pushDir` | string | 将 Skill 推送到该智能体时使用的目标目录。 |
+| `agents[].custom` | boolean | `true` 表示用户创建的自定义智能体，`false` 表示内置智能体。 |
+| `agents[].enabled` | boolean | 每个智能体都会带上这个字段，但在 `config_local.json` 中它只对自定义智能体有实际意义；内置智能体的启用状态以 `config.json` 为准。 |
 | `cloudCredentialsByProvider` | object | 以 provider 名称为键的敏感凭据集合。 |
 | `cloudCredentialsByProvider.<provider>` | object | 某个 provider 的本地专属凭据键值表。 |
 | `proxy` | object | 出站 HTTP 请求使用的本地代理设置。 |
@@ -332,7 +336,7 @@
 
 ### 重要说明
 
-`meta/<skill-id>.json` 保存的是安装状态，不是 `SKILL.md` 里的 YAML frontmatter。像 `name`、`description`、`allowed-tools` 这类 frontmatter 字段仍然保存在 Skill 内容本身。
+`meta/<skill-id>.json` 保存的是安装状态，不是 `SKILL.md` 里的 YAML frontmatter。像 `name`、`description`、`allowed-agents` 这类 frontmatter 字段仍然保存在 Skill 内容本身。
 
 ## `meta_local/<skill-id>.local.json`
 

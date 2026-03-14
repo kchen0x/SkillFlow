@@ -63,7 +63,7 @@ func (a *App) handleRestoredCloudState(before cloudRestoreState, source string) 
 		return err
 	}
 	if len(restoredSkills) > 0 {
-		a.autoPushSkillsToConfiguredTools(source, restoredSkills, true)
+		a.autoPushSkillsToConfiguredAgents(source, restoredSkills, true)
 	}
 
 	clonedRepos, failedRepos, err := a.cloneNewlyRestoredStarredRepos(before, source)

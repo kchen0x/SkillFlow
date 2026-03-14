@@ -11,59 +11,59 @@ import (
 	"github.com/shinerio/skillflow/core/install"
 	"github.com/shinerio/skillflow/core/skill"
 	"github.com/shinerio/skillflow/core/skillkey"
-	toolsync "github.com/shinerio/skillflow/core/sync"
+	agentsync "github.com/shinerio/skillflow/core/sync"
 )
 
 type InstalledSkillEntry struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Path        string   `json:"path"`
-	Category    string   `json:"category"`
-	Source      string   `json:"source"`
-	SourceSHA   string   `json:"sourceSha"`
-	LatestSHA   string   `json:"latestSha"`
-	Updatable   bool     `json:"updatable"`
-	Pushed      bool     `json:"pushed"`
-	PushedTools []string `json:"pushedTools"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Path         string   `json:"path"`
+	Category     string   `json:"category"`
+	Source       string   `json:"source"`
+	SourceSHA    string   `json:"sourceSha"`
+	LatestSHA    string   `json:"latestSha"`
+	Updatable    bool     `json:"updatable"`
+	Pushed       bool     `json:"pushed"`
+	PushedAgents []string `json:"pushedAgents"`
 }
 
-type ToolSkillCandidate struct {
-	Name        string   `json:"name"`
-	Path        string   `json:"path"`
-	Source      string   `json:"source"`
-	LogicalKey  string   `json:"logicalKey"`
-	Installed   bool     `json:"installed"`
-	Imported    bool     `json:"imported"`
-	Updatable   bool     `json:"updatable"`
-	Pushed      bool     `json:"pushed"`
-	PushedTools []string `json:"pushedTools"`
+type AgentSkillCandidate struct {
+	Name         string   `json:"name"`
+	Path         string   `json:"path"`
+	Source       string   `json:"source"`
+	LogicalKey   string   `json:"logicalKey"`
+	Installed    bool     `json:"installed"`
+	Imported     bool     `json:"imported"`
+	Updatable    bool     `json:"updatable"`
+	Pushed       bool     `json:"pushed"`
+	PushedAgents []string `json:"pushedAgents"`
 }
 
-type ToolSkillEntry struct {
-	Name           string   `json:"name"`
-	Path           string   `json:"path"`
-	Source         string   `json:"source"`
-	LogicalKey     string   `json:"logicalKey"`
-	Installed      bool     `json:"installed"`
-	Imported       bool     `json:"imported"`
-	Updatable      bool     `json:"updatable"`
-	Pushed         bool     `json:"pushed"`
-	PushedTools    []string `json:"pushedTools"`
-	SeenInToolScan bool     `json:"seenInToolScan"`
+type AgentSkillEntry struct {
+	Name            string   `json:"name"`
+	Path            string   `json:"path"`
+	Source          string   `json:"source"`
+	LogicalKey      string   `json:"logicalKey"`
+	Installed       bool     `json:"installed"`
+	Imported        bool     `json:"imported"`
+	Updatable       bool     `json:"updatable"`
+	Pushed          bool     `json:"pushed"`
+	PushedAgents    []string `json:"pushedAgents"`
+	SeenInAgentScan bool     `json:"seenInAgentScan"`
 }
 
 type resolvedSkillState struct {
-	LogicalKey  string
-	Source      string
-	Installed   bool
-	Imported    bool
-	Updatable   bool
-	Pushed      bool
-	PushedTools []string
+	LogicalKey   string
+	Source       string
+	Installed    bool
+	Imported     bool
+	Updatable    bool
+	Pushed       bool
+	PushedAgents []string
 }
 
-type toolPresenceIndex struct {
-	toolsByKey map[string][]string
+type agentPresenceIndex struct {
+	agentsByKey map[string][]string
 }
 
 func (a *App) installedIndex() ([]*skill.Skill, *skill.InstalledIndex, error) {
@@ -74,7 +74,7 @@ func (a *App) installedIndex() ([]*skill.Skill, *skill.InstalledIndex, error) {
 	return installed, skill.BuildInstalledIndex(installed), nil
 }
 
-func (a *App) buildInstalledSkillEntries(installed []*skill.Skill, presence *toolPresenceIndex) []InstalledSkillEntry {
+func (a *App) buildInstalledSkillEntries(installed []*skill.Skill, presence *agentPresenceIndex) []InstalledSkillEntry {
 	entries := make([]InstalledSkillEntry, 0, len(installed))
 	for _, sk := range installed {
 		if sk == nil {
@@ -84,24 +84,24 @@ func (a *App) buildInstalledSkillEntries(installed []*skill.Skill, presence *too
 		if err != nil {
 			logicalKey = ""
 		}
-		pushedTools := presence.tools(logicalKey)
+		pushedAgents := presence.agents(logicalKey)
 		entries = append(entries, InstalledSkillEntry{
-			ID:          sk.ID,
-			Name:        sk.Name,
-			Path:        sk.Path,
-			Category:    sk.Category,
-			Source:      string(sk.Source),
-			SourceSHA:   sk.SourceSHA,
-			LatestSHA:   sk.LatestSHA,
-			Updatable:   sk.HasUpdate(),
-			Pushed:      len(pushedTools) > 0,
-			PushedTools: pushedTools,
+			ID:           sk.ID,
+			Name:         sk.Name,
+			Path:         sk.Path,
+			Category:     sk.Category,
+			Source:       string(sk.Source),
+			SourceSHA:    sk.SourceSHA,
+			LatestSHA:    sk.LatestSHA,
+			Updatable:    sk.HasUpdate(),
+			Pushed:       len(pushedAgents) > 0,
+			PushedAgents: pushedAgents,
 		})
 	}
 	return entries
 }
 
-func resolveGitHubCandidates(candidates []install.SkillCandidate, idx *skill.InstalledIndex, presence *toolPresenceIndex) []install.SkillCandidate {
+func resolveGitHubCandidates(candidates []install.SkillCandidate, idx *skill.InstalledIndex, presence *agentPresenceIndex) []install.SkillCandidate {
 	resolved := make([]install.SkillCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		state := resolveSkillState(candidate.Name, candidate.LogicalKey, idx, presence)
@@ -109,13 +109,13 @@ func resolveGitHubCandidates(candidates []install.SkillCandidate, idx *skill.Ins
 		candidate.Installed = state.Installed
 		candidate.Updatable = state.Updatable
 		candidate.Pushed = state.Pushed
-		candidate.PushedTools = state.PushedTools
+		candidate.PushedAgents = state.PushedAgents
 		resolved = append(resolved, candidate)
 	}
 	return resolved
 }
 
-func resolveStarSkills(skills []coregit.StarSkill, idx *skill.InstalledIndex, presence *toolPresenceIndex) []coregit.StarSkill {
+func resolveStarSkills(skills []coregit.StarSkill, idx *skill.InstalledIndex, presence *agentPresenceIndex) []coregit.StarSkill {
 	resolved := make([]coregit.StarSkill, 0, len(skills))
 	for _, candidate := range skills {
 		if strings.TrimSpace(candidate.LogicalKey) == "" {
@@ -131,14 +131,14 @@ func resolveStarSkills(skills []coregit.StarSkill, idx *skill.InstalledIndex, pr
 		candidate.Imported = state.Imported
 		candidate.Updatable = state.Updatable
 		candidate.Pushed = state.Pushed
-		candidate.PushedTools = state.PushedTools
+		candidate.PushedAgents = state.PushedAgents
 		resolved = append(resolved, candidate)
 	}
 	return resolved
 }
 
-func resolveToolSkillCandidates(candidates []*skill.Skill, idx *skill.InstalledIndex, presence *toolPresenceIndex) []ToolSkillCandidate {
-	byKey := map[string]ToolSkillCandidate{}
+func resolveAgentSkillCandidates(candidates []*skill.Skill, idx *skill.InstalledIndex, presence *agentPresenceIndex) []AgentSkillCandidate {
+	byKey := map[string]AgentSkillCandidate{}
 	for _, candidate := range candidates {
 		if candidate == nil {
 			continue
@@ -148,26 +148,26 @@ func resolveToolSkillCandidates(candidates []*skill.Skill, idx *skill.InstalledI
 			logicalKey = ""
 		}
 		state := resolveSkillState(candidate.Name, logicalKey, idx, presence)
-		resolved := ToolSkillCandidate{
-			Name:        candidate.Name,
-			Path:        candidate.Path,
-			Source:      state.Source,
-			LogicalKey:  coalesceLogicalKey(state.LogicalKey, logicalKey),
-			Installed:   state.Installed,
-			Imported:    state.Imported,
-			Updatable:   state.Updatable,
-			Pushed:      state.Pushed,
-			PushedTools: state.PushedTools,
+		resolved := AgentSkillCandidate{
+			Name:         candidate.Name,
+			Path:         candidate.Path,
+			Source:       state.Source,
+			LogicalKey:   coalesceLogicalKey(state.LogicalKey, logicalKey),
+			Installed:    state.Installed,
+			Imported:     state.Imported,
+			Updatable:    state.Updatable,
+			Pushed:       state.Pushed,
+			PushedAgents: state.PushedAgents,
 		}
-		groupKey := toolGroupKey(resolved.Name, resolved.LogicalKey, resolved.Path)
+		groupKey := agentGroupKey(resolved.Name, resolved.LogicalKey, resolved.Path)
 		if existing, ok := byKey[groupKey]; ok {
-			byKey[groupKey] = mergeToolCandidate(existing, resolved)
+			byKey[groupKey] = mergeAgentCandidate(existing, resolved)
 			continue
 		}
 		byKey[groupKey] = resolved
 	}
 
-	result := make([]ToolSkillCandidate, 0, len(byKey))
+	result := make([]AgentSkillCandidate, 0, len(byKey))
 	for _, candidate := range byKey {
 		result = append(result, candidate)
 	}
@@ -180,11 +180,11 @@ func resolveToolSkillCandidates(candidates []*skill.Skill, idx *skill.InstalledI
 	return result
 }
 
-func aggregateToolSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill.InstalledIndex, presence *toolPresenceIndex) []ToolSkillEntry {
-	entries := map[string]ToolSkillEntry{}
+func aggregateAgentSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill.InstalledIndex, presence *agentPresenceIndex) []AgentSkillEntry {
+	entries := map[string]AgentSkillEntry{}
 
-	for _, candidate := range resolveToolSkillCandidates(pushSkills, idx, presence) {
-		groupKey := toolGroupKey(candidate.Name, candidate.LogicalKey, candidate.Path)
+	for _, candidate := range resolveAgentSkillCandidates(pushSkills, idx, presence) {
+		groupKey := agentGroupKey(candidate.Name, candidate.LogicalKey, candidate.Path)
 		entry := entries[groupKey]
 		entry.Name = candidate.Name
 		entry.Path = candidate.Path
@@ -194,12 +194,12 @@ func aggregateToolSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill
 		entry.Imported = entry.Imported || candidate.Imported
 		entry.Updatable = entry.Updatable || candidate.Updatable
 		entry.Pushed = true
-		entry.PushedTools = mergeToolLists(entry.PushedTools, candidate.PushedTools)
+		entry.PushedAgents = mergeAgentLists(entry.PushedAgents, candidate.PushedAgents)
 		entries[groupKey] = entry
 	}
 
-	for _, candidate := range resolveToolSkillCandidates(scanSkills, idx, presence) {
-		groupKey := toolGroupKey(candidate.Name, candidate.LogicalKey, candidate.Path)
+	for _, candidate := range resolveAgentSkillCandidates(scanSkills, idx, presence) {
+		groupKey := agentGroupKey(candidate.Name, candidate.LogicalKey, candidate.Path)
 		entry := entries[groupKey]
 		if entry.Path == "" || !entry.Pushed {
 			entry.Path = candidate.Path
@@ -212,12 +212,12 @@ func aggregateToolSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill
 		entry.Installed = entry.Installed || candidate.Installed
 		entry.Imported = entry.Imported || candidate.Imported
 		entry.Updatable = entry.Updatable || candidate.Updatable
-		entry.PushedTools = mergeToolLists(entry.PushedTools, candidate.PushedTools)
-		entry.SeenInToolScan = true
+		entry.PushedAgents = mergeAgentLists(entry.PushedAgents, candidate.PushedAgents)
+		entry.SeenInAgentScan = true
 		entries[groupKey] = entry
 	}
 
-	result := make([]ToolSkillEntry, 0, len(entries))
+	result := make([]AgentSkillEntry, 0, len(entries))
 	for _, entry := range entries {
 		result = append(result, entry)
 	}
@@ -230,13 +230,13 @@ func aggregateToolSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill
 	return result
 }
 
-func resolveToolSkillSelection(candidates []ToolSkillCandidate, selectedPaths []string) []ToolSkillCandidate {
+func resolveAgentSkillSelection(candidates []AgentSkillCandidate, selectedPaths []string) []AgentSkillCandidate {
 	selectedSet := make(map[string]struct{}, len(selectedPaths))
 	for _, selectedPath := range selectedPaths {
 		selectedSet[selectedPath] = struct{}{}
 	}
 
-	result := make([]ToolSkillCandidate, 0, len(selectedPaths))
+	result := make([]AgentSkillCandidate, 0, len(selectedPaths))
 	for _, candidate := range candidates {
 		if _, ok := selectedSet[candidate.Path]; ok {
 			result = append(result, candidate)
@@ -245,7 +245,7 @@ func resolveToolSkillSelection(candidates []ToolSkillCandidate, selectedPaths []
 	return result
 }
 
-func scanToolSkillsRaw(ctx context.Context, adapter toolsync.ToolAdapter, scanDirs []string, maxDepth int) ([]*skill.Skill, error) {
+func scanAgentSkillsRaw(ctx context.Context, adapter agentsync.AgentAdapter, scanDirs []string, maxDepth int) ([]*skill.Skill, error) {
 	var result []*skill.Skill
 	seenPaths := map[string]struct{}{}
 	for _, dir := range scanDirs {
@@ -258,7 +258,7 @@ func scanToolSkillsRaw(ctx context.Context, adapter toolsync.ToolAdapter, scanDi
 			}
 			return nil, err
 		}
-		skills, err := pullToolSkills(ctx, adapter, dir, maxDepth)
+		skills, err := pullAgentSkills(ctx, adapter, dir, maxDepth)
 		if err != nil {
 			return nil, err
 		}
@@ -276,39 +276,39 @@ func scanToolSkillsRaw(ctx context.Context, adapter toolsync.ToolAdapter, scanDi
 	return result, nil
 }
 
-func (a *App) buildToolPresenceIndex(idx *skill.InstalledIndex) *toolPresenceIndex {
-	presence, _ := measureOperation(a, "build_tool_presence_index", func() (*toolPresenceIndex, error) {
+func (a *App) buildAgentPresenceIndex(idx *skill.InstalledIndex) *agentPresenceIndex {
+	presence, _ := measureOperation(a, "build_agent_presence_index", func() (*agentPresenceIndex, error) {
 		cfg, err := a.config.Load()
 		if err != nil {
-			a.logErrorf("build tool presence index failed: load config err=%v", err)
-			return &toolPresenceIndex{toolsByKey: map[string][]string{}}, nil
+			a.logErrorf("build agent presence index failed: load config err=%v", err)
+			return &agentPresenceIndex{agentsByKey: map[string][]string{}}, nil
 		}
 
-		snapshot, err := a.buildToolPresenceSnapshot(cfg, idx)
+		snapshot, err := a.buildAgentPresenceSnapshot(cfg, idx)
 		if err != nil {
-			a.logErrorf("build tool presence index failed: build snapshot err=%v", err)
-			return &toolPresenceIndex{toolsByKey: map[string][]string{}}, nil
+			a.logErrorf("build agent presence index failed: build snapshot err=%v", err)
+			return &agentPresenceIndex{agentsByKey: map[string][]string{}}, nil
 		}
 
-		return &toolPresenceIndex{toolsByKey: snapshot.ToolsByKey}, nil
+		return &agentPresenceIndex{agentsByKey: snapshot.AgentsByKey}, nil
 	})
 	return presence
 }
 
-func (a *App) indexToolPushPresence(presence *toolPresenceIndex, idx *skill.InstalledIndex, tool config.ToolConfig) {
-	if presence == nil || strings.TrimSpace(tool.PushDir) == "" {
+func (a *App) indexAgentPushPresence(presence *agentPresenceIndex, idx *skill.InstalledIndex, agent config.AgentConfig) {
+	if presence == nil || strings.TrimSpace(agent.PushDir) == "" {
 		return
 	}
-	if _, err := os.Stat(tool.PushDir); err != nil {
+	if _, err := os.Stat(agent.PushDir); err != nil {
 		if !os.IsNotExist(err) {
-			a.logErrorf("build tool presence index failed: tool=%s pushDir=%s err=%v", tool.Name, tool.PushDir, err)
+			a.logErrorf("build agent presence index failed: agent=%s pushDir=%s err=%v", agent.Name, agent.PushDir, err)
 		}
 		return
 	}
 
-	pushed, err := pullToolSkills(a.ctx, getAdapter(tool), tool.PushDir, a.repoScanMaxDepth())
+	pushed, err := pullAgentSkills(a.ctx, getAdapter(agent), agent.PushDir, a.repoScanMaxDepth())
 	if err != nil {
-		a.logErrorf("build tool presence index failed: tool=%s pushDir=%s err=%v", tool.Name, tool.PushDir, err)
+		a.logErrorf("build agent presence index failed: agent=%s pushDir=%s err=%v", agent.Name, agent.PushDir, err)
 		return
 	}
 
@@ -316,11 +316,11 @@ func (a *App) indexToolPushPresence(presence *toolPresenceIndex, idx *skill.Inst
 		if candidate == nil {
 			continue
 		}
-		presence.add(tool.Name, toolPresenceKeys(candidate, idx)...)
+		presence.add(agent.Name, agentPresenceKeys(candidate, idx)...)
 	}
 }
 
-func resolveSkillState(name, logicalKey string, idx *skill.InstalledIndex, presence *toolPresenceIndex, aliasKeys ...string) resolvedSkillState {
+func resolveSkillState(name, logicalKey string, idx *skill.InstalledIndex, presence *agentPresenceIndex, aliasKeys ...string) resolvedSkillState {
 	status := idx.Resolve(name, logicalKey)
 	resolvedKey := coalesceLogicalKey(status.LogicalKey, logicalKey)
 	lookupKeys := []string{resolvedKey}
@@ -329,19 +329,19 @@ func resolveSkillState(name, logicalKey string, idx *skill.InstalledIndex, prese
 			lookupKeys = append(lookupKeys, aliasKey)
 		}
 	}
-	pushedTools := presence.tools(lookupKeys...)
+	pushedAgents := presence.agents(lookupKeys...)
 	return resolvedSkillState{
-		LogicalKey:  coalesceLogicalKey(resolvedKey, logicalKey),
-		Source:      status.Source,
-		Installed:   status.Installed,
-		Imported:    status.Imported,
-		Updatable:   status.Updatable,
-		Pushed:      len(pushedTools) > 0,
-		PushedTools: pushedTools,
+		LogicalKey:   coalesceLogicalKey(resolvedKey, logicalKey),
+		Source:       status.Source,
+		Installed:    status.Installed,
+		Imported:     status.Imported,
+		Updatable:    status.Updatable,
+		Pushed:       len(pushedAgents) > 0,
+		PushedAgents: pushedAgents,
 	}
 }
 
-func toolPresenceKeys(candidate *skill.Skill, idx *skill.InstalledIndex) []string {
+func agentPresenceKeys(candidate *skill.Skill, idx *skill.InstalledIndex) []string {
 	if candidate == nil {
 		return nil
 	}
@@ -353,7 +353,7 @@ func toolPresenceKeys(candidate *skill.Skill, idx *skill.InstalledIndex) []strin
 	return compactKeys(status.LogicalKey, contentKey)
 }
 
-func mergeToolCandidate(existing, incoming ToolSkillCandidate) ToolSkillCandidate {
+func mergeAgentCandidate(existing, incoming AgentSkillCandidate) AgentSkillCandidate {
 	if existing.Path == "" {
 		existing.Path = incoming.Path
 	}
@@ -367,45 +367,45 @@ func mergeToolCandidate(existing, incoming ToolSkillCandidate) ToolSkillCandidat
 	existing.Imported = existing.Imported || incoming.Imported
 	existing.Updatable = existing.Updatable || incoming.Updatable
 	existing.Pushed = existing.Pushed || incoming.Pushed
-	existing.PushedTools = mergeToolLists(existing.PushedTools, incoming.PushedTools)
+	existing.PushedAgents = mergeAgentLists(existing.PushedAgents, incoming.PushedAgents)
 	return existing
 }
 
-func (p *toolPresenceIndex) add(toolName string, keys ...string) {
-	if p == nil || strings.TrimSpace(toolName) == "" {
+func (p *agentPresenceIndex) add(agentName string, keys ...string) {
+	if p == nil || strings.TrimSpace(agentName) == "" {
 		return
 	}
 	for _, key := range compactKeys(keys...) {
-		p.toolsByKey[key] = appendUniqueTool(p.toolsByKey[key], toolName)
+		p.agentsByKey[key] = appendUniqueAgent(p.agentsByKey[key], agentName)
 	}
 }
 
-func (p *toolPresenceIndex) tools(keys ...string) []string {
+func (p *agentPresenceIndex) agents(keys ...string) []string {
 	if p == nil {
 		return nil
 	}
 	var merged []string
 	for _, key := range compactKeys(keys...) {
-		merged = mergeToolLists(merged, p.toolsByKey[key])
+		merged = mergeAgentLists(merged, p.agentsByKey[key])
 	}
 	return merged
 }
 
-func mergeToolLists(primary, secondary []string) []string {
+func mergeAgentLists(primary, secondary []string) []string {
 	merged := append([]string{}, primary...)
-	for _, toolName := range secondary {
-		merged = appendUniqueTool(merged, toolName)
+	for _, agentName := range secondary {
+		merged = appendUniqueAgent(merged, agentName)
 	}
 	return merged
 }
 
-func appendUniqueTool(tools []string, toolName string) []string {
-	for _, existing := range tools {
-		if existing == toolName {
-			return tools
+func appendUniqueAgent(agents []string, agentName string) []string {
+	for _, existing := range agents {
+		if existing == agentName {
+			return agents
 		}
 	}
-	return append(tools, toolName)
+	return append(agents, agentName)
 }
 
 func compactKeys(keys ...string) []string {
@@ -439,7 +439,7 @@ func coalesceSource(primary, secondary string) string {
 	return secondary
 }
 
-func toolGroupKey(name, logicalKey, path string) string {
+func agentGroupKey(name, logicalKey, path string) string {
 	if strings.TrimSpace(logicalKey) != "" {
 		return "logical:" + logicalKey
 	}

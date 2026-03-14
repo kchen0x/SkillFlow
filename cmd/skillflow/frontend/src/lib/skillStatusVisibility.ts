@@ -1,35 +1,35 @@
-export type SkillStatusKey = 'imported' | 'updatable' | 'pushedTools'
+export type SkillStatusKey = 'imported' | 'updatable' | 'pushedAgents'
 export type SkillStatusPageKey =
   | 'mySkills'
-  | 'myTools'
-  | 'pushToTool'
-  | 'pullFromTool'
+  | 'myAgents'
+  | 'pushToAgent'
+  | 'pullFromAgent'
   | 'starredRepos'
   | 'githubInstall'
 
 export type SkillStatusVisibilityConfig = Record<SkillStatusPageKey, SkillStatusKey[]>
 
-export const SKILL_STATUS_ORDER: SkillStatusKey[] = ['imported', 'updatable', 'pushedTools']
+export const SKILL_STATUS_ORDER: SkillStatusKey[] = ['imported', 'updatable', 'pushedAgents']
 export const SKILL_STATUS_PAGE_ORDER: SkillStatusPageKey[] = [
   'mySkills',
-  'myTools',
-  'pushToTool',
-  'pullFromTool',
+  'myAgents',
+  'pushToAgent',
+  'pullFromAgent',
   'starredRepos',
   'githubInstall',
 ]
 
 export const DEFAULT_SKILL_STATUS_VISIBILITY: SkillStatusVisibilityConfig = {
-  mySkills: ['updatable', 'pushedTools'],
-  myTools: ['imported', 'updatable', 'pushedTools'],
-  pushToTool: ['pushedTools'],
-  pullFromTool: ['imported'],
-  starredRepos: ['imported', 'pushedTools'],
-  githubInstall: ['imported', 'updatable', 'pushedTools'],
+  mySkills: ['updatable', 'pushedAgents'],
+  myAgents: ['imported', 'updatable', 'pushedAgents'],
+  pushToAgent: ['pushedAgents'],
+  pullFromAgent: ['imported'],
+  starredRepos: ['imported', 'pushedAgents'],
+  githubInstall: ['imported', 'updatable', 'pushedAgents'],
 }
 
 function isSkillStatusKey(value: unknown): value is SkillStatusKey {
-  return value === 'imported' || value === 'updatable' || value === 'pushedTools'
+  return value === 'imported' || value === 'updatable' || value === 'pushedAgents'
 }
 
 export function normalizeSkillStatusVisibility(raw: any): SkillStatusVisibilityConfig {

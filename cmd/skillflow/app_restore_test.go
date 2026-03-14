@@ -38,7 +38,7 @@ func TestHandleRestoredCloudStateAutoPushesUpdatedExistingSkills(t *testing.T) {
 	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceManual, "", "")
 	require.NoError(t, err)
 
-	app.autoPushImportedSkills("test.setup", []*skill.Skill{sk})
+	app.autoPushImportedSkillsToAgents("test.setup", []*skill.Skill{sk})
 	pushPath := filepath.Join(pushDir, "demo-skill", "skill.md")
 	assertFileContentEquals(t, pushPath, "# Demo\nVersion 1\n")
 
@@ -79,19 +79,19 @@ func TestHandleRestoredCloudStateClonesNewlyRestoredStarredRepos(t *testing.T) {
 	assert.False(t, repos[0].LastSync.IsZero())
 }
 
-func newRestoreTestApp(t *testing.T, autoPushTools []string) (*App, string, string, string) {
+func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, string, string) {
 	t.Helper()
 
 	dataDir := t.TempDir()
-	pushDir := filepath.Join(dataDir, "tool-skills")
+	pushDir := filepath.Join(dataDir, "agent-skills")
 	skillsDir := filepath.Join(dataDir, "library", "skills")
 	starsPath := filepath.Join(dataDir, "star_repos.json")
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
 	cfg.SkillsStorageDir = skillsDir
-	cfg.AutoPushTools = autoPushTools
-	cfg.Tools = []config.ToolConfig{{
+	cfg.AutoPushAgents = autoPushAgents
+	cfg.Agents = []config.AgentConfig{{
 		Name:     "codex",
 		ScanDirs: []string{pushDir},
 		PushDir:  pushDir,

@@ -20,7 +20,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 	assert.Equal(t, config.DefaultLogLevel, cfg.LogLevel)
 	assert.Equal(t, config.DefaultRepoScanMaxDepth, cfg.RepoScanMaxDepth)
 	assert.Equal(t, config.DefaultSkillStatusVisibility(), cfg.SkillStatusVisibility)
-	assert.NotEmpty(t, cfg.Tools)
+	assert.NotEmpty(t, cfg.Agents)
 }
 
 func TestSaveAndLoadConfig(t *testing.T) {
@@ -28,7 +28,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
 	cfg.DefaultCategory = "MyCategory"
-	cfg.AutoPushTools = []string{"codex", "gemini-cli"}
+	cfg.AutoPushAgents = []string{"codex", "gemini-cli"}
 	cfg.RepoScanMaxDepth = 7
 	cfg.Proxy = config.ProxyConfig{
 		Mode: config.ProxyModeManual,
@@ -41,33 +41,33 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	loaded, err := svc.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "MyCategory", loaded.DefaultCategory)
-	assert.Equal(t, []string{"codex", "gemini-cli"}, loaded.AutoPushTools)
+	assert.Equal(t, []string{"codex", "gemini-cli"}, loaded.AutoPushAgents)
 	assert.Equal(t, 7, loaded.RepoScanMaxDepth)
 	assert.Equal(t, cfg.Proxy, loaded.Proxy)
 	assert.Equal(t, "v1.2.3", loaded.SkippedUpdateVersion)
 }
 
-func TestAutoPushToolsStoredOnlyInLocalConfig(t *testing.T) {
+func TestAutoPushAgentsStoredOnlyInLocalConfig(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
-	cfg.AutoPushTools = []string{" codex ", "gemini-cli", "codex", ""}
+	cfg.AutoPushAgents = []string{" codex ", "gemini-cli", "codex", ""}
 
 	require.NoError(t, svc.Save(cfg))
 
 	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
 	require.NoError(t, err)
-	assert.NotContains(t, string(sharedData), "autoPushTools")
+	assert.NotContains(t, string(sharedData), "autoPushAgents")
 
 	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(localData), `"autoPushTools"`)
+	assert.Contains(t, string(localData), `"autoPushAgents"`)
 	assert.Contains(t, string(localData), `"codex"`)
 	assert.Contains(t, string(localData), `"gemini-cli"`)
 
 	loaded, err := svc.Load()
 	require.NoError(t, err)
-	assert.Equal(t, []string{"codex", "gemini-cli"}, loaded.AutoPushTools)
+	assert.Equal(t, []string{"codex", "gemini-cli"}, loaded.AutoPushAgents)
 }
 
 func TestSkippedUpdateVersionPersistsInSharedConfig(t *testing.T) {
@@ -95,15 +95,15 @@ func TestSkillStatusVisibilityPersistsInSharedConfig(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
-	cfg.SkillStatusVisibility.MySkills = []string{config.SkillStatusPushedTools}
-	cfg.SkillStatusVisibility.PullFromTool = []string{}
+	cfg.SkillStatusVisibility.MySkills = []string{config.SkillStatusPushedAgents}
+	cfg.SkillStatusVisibility.PullFromAgent = []string{}
 
 	require.NoError(t, svc.Save(cfg))
 
 	loaded, err := svc.Load()
 	require.NoError(t, err)
-	assert.Equal(t, []string{config.SkillStatusPushedTools}, loaded.SkillStatusVisibility.MySkills)
-	assert.Equal(t, []string{}, loaded.SkillStatusVisibility.PullFromTool)
+	assert.Equal(t, []string{config.SkillStatusPushedAgents}, loaded.SkillStatusVisibility.MySkills)
+	assert.Equal(t, []string{}, loaded.SkillStatusVisibility.PullFromAgent)
 
 	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
 	require.NoError(t, err)
@@ -118,15 +118,15 @@ func TestSkillStatusVisibilityDropsStatusesOutsidePageDefaultPolicy(t *testing.T
 	dir := t.TempDir()
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
-	cfg.SkillStatusVisibility.PullFromTool = []string{config.SkillStatusImported, config.SkillStatusPushedTools}
-	cfg.SkillStatusVisibility.PushToTool = []string{config.SkillStatusImported, config.SkillStatusPushedTools}
+	cfg.SkillStatusVisibility.PullFromAgent = []string{config.SkillStatusImported, config.SkillStatusPushedAgents}
+	cfg.SkillStatusVisibility.PushToAgent = []string{config.SkillStatusImported, config.SkillStatusPushedAgents}
 
 	require.NoError(t, svc.Save(cfg))
 
 	loaded, err := svc.Load()
 	require.NoError(t, err)
-	assert.Equal(t, []string{config.SkillStatusImported}, loaded.SkillStatusVisibility.PullFromTool)
-	assert.Equal(t, []string{config.SkillStatusPushedTools}, loaded.SkillStatusVisibility.PushToTool)
+	assert.Equal(t, []string{config.SkillStatusImported}, loaded.SkillStatusVisibility.PullFromAgent)
+	assert.Equal(t, []string{config.SkillStatusPushedAgents}, loaded.SkillStatusVisibility.PushToAgent)
 }
 
 func TestSaveAndLoadConfigNormalizesLogLevel(t *testing.T) {
@@ -428,7 +428,7 @@ func TestLoadMigratesCloudSecretsOutOfSharedConfig(t *testing.T) {
 	  "defaultCategory": "Default",
 	  "logLevel": "info",
 	  "repoScanMaxDepth": 5,
-	  "tools": [],
+	  "agents": [],
 	  "cloud": {
 	    "provider": "git",
 	    "enabled": true,
@@ -447,7 +447,7 @@ func TestLoadMigratesCloudSecretsOutOfSharedConfig(t *testing.T) {
 	}`
 	local := `{
 	  "skillsStorageDir": "` + filepath.ToSlash(filepath.Join(dir, "skills")) + `",
-	  "tools": []
+	  "agents": []
 	}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(shared), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(local), 0644))
@@ -488,7 +488,7 @@ func TestLoadMigratesProxyOutOfSharedConfig(t *testing.T) {
 	  "defaultCategory": "Default",
 	  "logLevel": "info",
 	  "repoScanMaxDepth": 5,
-	  "tools": [],
+	  "agents": [],
 	  "proxy": {
 	    "mode": "manual",
 	    "url": "http://127.0.0.1:7890"
@@ -496,7 +496,7 @@ func TestLoadMigratesProxyOutOfSharedConfig(t *testing.T) {
 	}`
 	local := `{
 	  "skillsStorageDir": "` + filepath.ToSlash(filepath.Join(dir, "skills")) + `",
-	  "tools": []
+	  "agents": []
 	}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(shared), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(local), 0644))

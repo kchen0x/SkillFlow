@@ -3,34 +3,34 @@ package config
 import "strings"
 
 const (
-	SkillStatusImported    = "imported"
-	SkillStatusUpdatable   = "updatable"
-	SkillStatusPushedTools = "pushedTools"
+	SkillStatusImported      = "imported"
+	SkillStatusUpdatable     = "updatable"
+	SkillStatusPushedAgents  = "pushedAgents"
 )
 
 var allSkillStatusKeys = []string{
 	SkillStatusImported,
 	SkillStatusUpdatable,
-	SkillStatusPushedTools,
+	SkillStatusPushedAgents,
 }
 
 type SkillStatusVisibilityConfig struct {
 	MySkills      []string `json:"mySkills"`
-	MyTools       []string `json:"myTools"`
-	PushToTool    []string `json:"pushToTool"`
-	PullFromTool  []string `json:"pullFromTool"`
+	MyAgents      []string `json:"myAgents"`
+	PushToAgent   []string `json:"pushToAgent"`
+	PullFromAgent []string `json:"pullFromAgent"`
 	StarredRepos  []string `json:"starredRepos"`
 	GitHubInstall []string `json:"githubInstall"`
 }
 
 func DefaultSkillStatusVisibility() SkillStatusVisibilityConfig {
 	return SkillStatusVisibilityConfig{
-		MySkills:      []string{SkillStatusUpdatable, SkillStatusPushedTools},
-		MyTools:       []string{SkillStatusImported, SkillStatusUpdatable, SkillStatusPushedTools},
-		PushToTool:    []string{SkillStatusPushedTools},
-		PullFromTool:  []string{SkillStatusImported},
-		StarredRepos:  []string{SkillStatusImported, SkillStatusPushedTools},
-		GitHubInstall: []string{SkillStatusImported, SkillStatusUpdatable, SkillStatusPushedTools},
+		MySkills:      []string{SkillStatusUpdatable, SkillStatusPushedAgents},
+		MyAgents:      []string{SkillStatusImported, SkillStatusUpdatable, SkillStatusPushedAgents},
+		PushToAgent:   []string{SkillStatusPushedAgents},
+		PullFromAgent: []string{SkillStatusImported},
+		StarredRepos:  []string{SkillStatusImported, SkillStatusPushedAgents},
+		GitHubInstall: []string{SkillStatusImported, SkillStatusUpdatable, SkillStatusPushedAgents},
 	}
 }
 
@@ -38,9 +38,9 @@ func NormalizeSkillStatusVisibility(cfg SkillStatusVisibilityConfig) SkillStatus
 	defaults := DefaultSkillStatusVisibility()
 	return SkillStatusVisibilityConfig{
 		MySkills:      normalizeSkillStatusKeys(cfg.MySkills, defaults.MySkills),
-		MyTools:       normalizeSkillStatusKeys(cfg.MyTools, defaults.MyTools),
-		PushToTool:    normalizeSkillStatusKeys(cfg.PushToTool, defaults.PushToTool),
-		PullFromTool:  normalizeSkillStatusKeys(cfg.PullFromTool, defaults.PullFromTool),
+		MyAgents:      normalizeSkillStatusKeys(cfg.MyAgents, defaults.MyAgents),
+		PushToAgent:   normalizeSkillStatusKeys(cfg.PushToAgent, defaults.PushToAgent),
+		PullFromAgent: normalizeSkillStatusKeys(cfg.PullFromAgent, defaults.PullFromAgent),
 		StarredRepos:  normalizeSkillStatusKeys(cfg.StarredRepos, defaults.StarredRepos),
 		GitHubInstall: normalizeSkillStatusKeys(cfg.GitHubInstall, defaults.GitHubInstall),
 	}

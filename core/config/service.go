@@ -16,7 +16,7 @@ type sharedConfig struct {
 	LogLevel              string                         `json:"logLevel"`
 	RepoScanMaxDepth      int                            `json:"repoScanMaxDepth"`
 	SkillStatusVisibility SkillStatusVisibilityConfig    `json:"skillStatusVisibility"`
-	Tools                 []sharedToolConfig             `json:"tools"`
+	Agents                []sharedAgentConfig            `json:"agents"`
 	Cloud                 sharedCloudState               `json:"cloud"`
 	CloudProfiles         map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
 	SkippedUpdateVersion  string                         `json:"skippedUpdateVersion,omitempty"`
@@ -31,8 +31,8 @@ type sharedCloudState struct {
 	SyncIntervalMinutes int    `json:"syncIntervalMinutes"`
 }
 
-// sharedToolConfig stores only the platform-agnostic settings for a built-in tool.
-type sharedToolConfig struct {
+// sharedAgentConfig stores only the platform-agnostic settings for a built-in agent.
+type sharedAgentConfig struct {
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
 }
@@ -41,23 +41,23 @@ type sharedToolConfig struct {
 // It holds all file system paths and sensitive cloud credentials.
 type localConfig struct {
 	SkillsStorageDir           string                       `json:"skillsStorageDir"`
-	AutoPushTools              []string                     `json:"autoPushTools"`
+	AutoPushAgents             []string                     `json:"autoPushAgents"`
 	LaunchAtLogin              bool                         `json:"launchAtLogin"`
-	Tools                      []localToolConfig            `json:"tools"`
+	Agents                     []localAgentConfig           `json:"agents"`
 	CloudCredentialsByProvider map[string]map[string]string `json:"cloudCredentialsByProvider,omitempty"`
 	CloudCredentials           map[string]string            `json:"cloudCredentials,omitempty"`
 	Proxy                      ProxyConfig                  `json:"proxy"`
 	Window                     *WindowState                 `json:"window,omitempty"`
 }
 
-// localToolConfig holds path settings for one tool.
-// Custom tools are stored only here (name + paths + enabled).
-type localToolConfig struct {
+// localAgentConfig holds path settings for one agent.
+// Custom agents are stored only here (name + paths + enabled).
+type localAgentConfig struct {
 	Name     string   `json:"name"`
 	ScanDirs []string `json:"scanDirs"`
 	PushDir  string   `json:"pushDir"`
 	Custom   bool     `json:"custom"`
-	Enabled  bool     `json:"enabled"` // only meaningful for custom tools
+	Enabled  bool     `json:"enabled"` // only meaningful for custom agents
 }
 
 // legacyAppConfig is used to detect the old single-file format that included
@@ -130,7 +130,7 @@ func (s *Service) Save(cfg AppConfig) error {
 		return err
 	}
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
-	cfg.AutoPushTools = NormalizeToolNameList(cfg.AutoPushTools)
+	cfg.AutoPushAgents = NormalizeAgentNameList(cfg.AutoPushAgents)
 	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
 	cfg.SkillStatusVisibility = NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility)
 	cfg.Proxy = NormalizeProxyConfig(cfg.Proxy)
@@ -237,7 +237,7 @@ func (s *Service) loadLocal() localConfig {
 	if lc.SkillsStorageDir == "" {
 		lc.SkillsStorageDir = filepath.Join(s.dataDir, "skills")
 	}
-	lc.AutoPushTools = NormalizeToolNameList(lc.AutoPushTools)
+	lc.AutoPushAgents = NormalizeAgentNameList(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
 	if lc.Window != nil {
@@ -265,7 +265,7 @@ func (s *Service) saveShared(sc sharedConfig) error {
 
 func (s *Service) saveLocal(lc localConfig) error {
 	lc.CloudCredentials = nil
-	lc.AutoPushTools = NormalizeToolNameList(lc.AutoPushTools)
+	lc.AutoPushAgents = NormalizeAgentNameList(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
 	if lc.Window != nil {
@@ -305,68 +305,68 @@ func (s *Service) SaveWindowState(state WindowState) error {
 }
 
 func (s *Service) defaultShared() sharedConfig {
-	tools := make([]sharedToolConfig, 0, len(builtinTools))
-	for _, name := range builtinTools {
-		tools = append(tools, sharedToolConfig{Name: name, Enabled: true})
+	agents := make([]sharedAgentConfig, 0, len(builtinAgents))
+	for _, name := range builtinAgents {
+		agents = append(agents, sharedAgentConfig{Name: name, Enabled: true})
 	}
 	return sharedConfig{
 		DefaultCategory:       "Default",
 		LogLevel:              DefaultLogLevel,
 		RepoScanMaxDepth:      DefaultRepoScanMaxDepth,
 		SkillStatusVisibility: DefaultSkillStatusVisibility(),
-		Tools:                 tools,
+		Agents:                agents,
 	}
 }
 
 func (s *Service) defaultLocal() localConfig {
-	tools := make([]localToolConfig, 0, len(builtinTools))
-	for _, name := range builtinTools {
-		tools = append(tools, localToolConfig{
+	agents := make([]localAgentConfig, 0, len(builtinAgents))
+	for _, name := range builtinAgents {
+		agents = append(agents, localAgentConfig{
 			Name:     name,
-			ScanDirs: DefaultToolScanDirs(name),
-			PushDir:  DefaultToolsDir(name),
+			ScanDirs: DefaultAgentScanDirs(name),
+			PushDir:  DefaultAgentPushDir(name),
 		})
 	}
 	return localConfig{
 		SkillsStorageDir: filepath.Join(s.dataDir, "skills"),
-		Tools:            tools,
+		Agents:           agents,
 		Proxy:            ProxyConfig{Mode: ProxyModeNone},
 	}
 }
 
 // merge combines shared and local configs into the single AppConfig used by the app.
 func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
-	localMap := make(map[string]localToolConfig, len(local.Tools))
-	for _, lt := range local.Tools {
-		localMap[lt.Name] = lt
+	localMap := make(map[string]localAgentConfig, len(local.Agents))
+	for _, la := range local.Agents {
+		localMap[la.Name] = la
 	}
 
-	var tools []ToolConfig
-	for _, st := range shared.Tools {
-		lt := localMap[st.Name]
-		scanDirs := lt.ScanDirs
-		pushDir := lt.PushDir
+	var agents []AgentConfig
+	for _, sa := range shared.Agents {
+		la := localMap[sa.Name]
+		scanDirs := la.ScanDirs
+		pushDir := la.PushDir
 		if len(scanDirs) == 0 {
-			scanDirs = DefaultToolScanDirs(st.Name)
+			scanDirs = DefaultAgentScanDirs(sa.Name)
 		}
 		if pushDir == "" {
-			pushDir = DefaultToolsDir(st.Name)
+			pushDir = DefaultAgentPushDir(sa.Name)
 		}
-		tools = append(tools, ToolConfig{
-			Name:     st.Name,
+		agents = append(agents, AgentConfig{
+			Name:     sa.Name,
 			ScanDirs: scanDirs,
 			PushDir:  pushDir,
-			Enabled:  st.Enabled,
+			Enabled:  sa.Enabled,
 			Custom:   false,
 		})
 	}
-	for _, lt := range local.Tools {
-		if lt.Custom {
-			tools = append(tools, ToolConfig{
-				Name:     lt.Name,
-				ScanDirs: lt.ScanDirs,
-				PushDir:  lt.PushDir,
-				Enabled:  lt.Enabled,
+	for _, la := range local.Agents {
+		if la.Custom {
+			agents = append(agents, AgentConfig{
+				Name:     la.Name,
+				ScanDirs: la.ScanDirs,
+				PushDir:  la.PushDir,
+				Enabled:  la.Enabled,
 				Custom:   true,
 			})
 		}
@@ -375,13 +375,13 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
 		SkillsStorageDir:      local.SkillsStorageDir,
-		AutoPushTools:         NormalizeToolNameList(local.AutoPushTools),
+		AutoPushAgents:        NormalizeAgentNameList(local.AutoPushAgents),
 		LaunchAtLogin:         local.LaunchAtLogin,
 		DefaultCategory:       shared.DefaultCategory,
 		LogLevel:              NormalizeLogLevel(shared.LogLevel),
 		RepoScanMaxDepth:      NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
 		SkillStatusVisibility: NormalizeSkillStatusVisibility(shared.SkillStatusVisibility),
-		Tools:                 tools,
+		Agents:                agents,
 		Cloud:                 buildRuntimeCloudConfig(shared.Cloud, cloudProfiles),
 		CloudProfiles:         cloudProfiles,
 		Proxy:                 NormalizeProxyConfig(local.Proxy),
@@ -391,10 +391,10 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 
 // splitShared extracts the platform-agnostic fields from AppConfig.
 func (s *Service) splitShared(cfg AppConfig) sharedConfig {
-	var tools []sharedToolConfig
-	for _, t := range cfg.Tools {
-		if !t.Custom {
-			tools = append(tools, sharedToolConfig{Name: t.Name, Enabled: t.Enabled})
+	var agents []sharedAgentConfig
+	for _, agent := range cfg.Agents {
+		if !agent.Custom {
+			agents = append(agents, sharedAgentConfig{Name: agent.Name, Enabled: agent.Enabled})
 		}
 	}
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
@@ -403,7 +403,7 @@ func (s *Service) splitShared(cfg AppConfig) sharedConfig {
 		LogLevel:              NormalizeLogLevel(cfg.LogLevel),
 		RepoScanMaxDepth:      NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
 		SkillStatusVisibility: NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility),
-		Tools:                 tools,
+		Agents:                agents,
 		Cloud:                 sharedCloudState{Provider: strings.TrimSpace(cfg.Cloud.Provider), Enabled: cfg.Cloud.Enabled, SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes},
 		CloudProfiles:         splitSharedCloudProfiles(profiles),
 		SkippedUpdateVersion:  cfg.SkippedUpdateVersion,
@@ -412,22 +412,22 @@ func (s *Service) splitShared(cfg AppConfig) sharedConfig {
 
 // splitLocal extracts the path-sensitive fields from AppConfig.
 func (s *Service) splitLocal(cfg AppConfig) localConfig {
-	tools := make([]localToolConfig, 0, len(cfg.Tools))
-	for _, t := range cfg.Tools {
-		tools = append(tools, localToolConfig{
-			Name:     t.Name,
-			ScanDirs: t.ScanDirs,
-			PushDir:  t.PushDir,
-			Custom:   t.Custom,
-			Enabled:  t.Enabled,
+	agents := make([]localAgentConfig, 0, len(cfg.Agents))
+	for _, agent := range cfg.Agents {
+		agents = append(agents, localAgentConfig{
+			Name:     agent.Name,
+			ScanDirs: agent.ScanDirs,
+			PushDir:  agent.PushDir,
+			Custom:   agent.Custom,
+			Enabled:  agent.Enabled,
 		})
 	}
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return localConfig{
 		SkillsStorageDir:           cfg.SkillsStorageDir,
-		AutoPushTools:              NormalizeToolNameList(cfg.AutoPushTools),
+		AutoPushAgents:             NormalizeAgentNameList(cfg.AutoPushAgents),
 		LaunchAtLogin:              cfg.LaunchAtLogin,
-		Tools:                      tools,
+		Agents:                     agents,
 		CloudCredentialsByProvider: splitLocalCloudCredentialsByProvider(profiles),
 		Proxy:                      NormalizeProxyConfig(cfg.Proxy),
 	}

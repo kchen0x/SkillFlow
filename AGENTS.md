@@ -18,11 +18,12 @@ The root directory must contain **no Go source files**. All code lives in clearl
     config/              ← AppConfig model, Service
     notify/              ← event Hub
     install/             ← Installer interface + implementations
-    sync/                ← ToolAdapter interface + FilesystemAdapter
+    sync/                ← AgentAdapter interface + FilesystemAdapter
     backup/              ← CloudProvider interface + implementations
     update/              ← update Checker
     registry/            ← global adapter/provider maps
     git/                 ← git operations, starred repo storage
+    upgrade/             ← startup cutover and schema/terminology migration
   cmd/
     skillflow/           ← package main (Wails desktop app)
       main.go            ← entry point + //go:embed all:frontend/dist
@@ -114,6 +115,18 @@ All other documentation lives under `docs/`:
 - Pure formatting-only changes that do not change persisted keys, file names, storage location, or semantics do not require doc churn.
 - Do not merge config/schema changes while `docs/config.md` and `docs/config_zh.md` are stale.
 
+## Upgrade Cutover Rule — MANDATORY
+
+Any persisted schema, terminology, or config-structure upgrade that changes repo-tracked on-disk data must use an explicit startup cutover rather than long-term backward compatibility in business code.
+
+**Rules:**
+- Put upgrade/cutover code under `core/upgrade/`.
+- Run the cutover automatically during startup **before** loading config or other persisted business data.
+- Rewrite persisted files in place to the latest schema/terminology so the rest of the codebase reads only the new format.
+- Do **not** keep business-layer compatibility branches for the old on-disk schema after the cutover is in place.
+- When an upgrade rewrites config or metadata files, update `docs/config.md` and `docs/config_zh.md` in the same commit.
+- When the upgrade changes user-facing terminology or flows, also update `README.md`, `README_zh.md`, `docs/features.md`, `docs/features_zh.md`, and architecture docs as needed in the same commit.
+
 ## Path Persistence Rule — MANDATORY
 
 Any repo-tracked file that can be backed up or synced across devices must avoid machine-specific absolute paths.
@@ -150,13 +163,13 @@ The following operations must have reasonable logs (at minimum `info` on start/s
 - Resource mutations (state-changing operations):
   - create / delete / rename / move / overwrite.
 - Config mutations:
-  - settings save, log-level changes, provider/tool config updates.
+  - settings save, log-level changes, provider/agent config updates.
 
 ### Message quality requirements
 
 - Log message should include:
   - operation name
-  - target/resource identifier (skill id/name, repo url/name, tool/provider, path, etc.)
+  - target/resource identifier (skill id/name, repo url/name, agent/provider, path, etc.)
   - result status (`started` / `completed` / `failed`)
   - failure reason for `error` logs
 - Keep wording stable and searchable across the same operation.
@@ -253,18 +266,18 @@ For comprehensive architecture docs, data models, and extension guides, see **[d
 
 ## Cross-Module Skill Identity Rule — MANDATORY
 
-Any change touching skill identity, install/import/push/pull state, starred repo correlation, tool scan correlation, or skill update badges **must** follow the **"Unified Skill Identity & State Model"** section in `docs/architecture.md` and `docs/architecture_zh.md`.
+Any change touching skill identity, install/import/push/pull state, starred repo correlation, agent scan correlation, or skill update badges **must** follow the **"Unified Skill Identity & State Model"** section in `docs/architecture.md` and `docs/architecture_zh.md`.
 
 - Distinguish **instance identity** (`Skill.ID`) from **logical identity** (stable cross-module key).
 - Do **not** use `Name` or absolute `Path` as the primary cross-module identity.
 - `imported` is the external-source wording for `installed`.
-- `pushed` means the logical skill exists in a tool's configured `PushDir`.
-- `seenInToolScan` means the logical skill was detected in a tool's configured `ScanDirs`; it does **not** imply SkillFlow previously pushed it.
+- `pushed` means the logical skill exists in an agent's configured `PushDir`.
+- `seenInAgentScan` means the logical skill was detected in an agent's configured `ScanDirs`; it does **not** imply SkillFlow previously pushed it.
 - Git-backed update detection must be keyed by normalized repo source + subpath, and compare installed `SourceSHA` against the latest remote SHA for that same logical source.
 
 ### Key Design Decisions
 
-- **`core/sync` import alias** — always import as `toolsync "github.com/shinerio/skillflow/core/sync"` (conflicts with stdlib `sync`)
+- **`core/sync` import alias** — always import as `agentsync "github.com/shinerio/skillflow/core/sync"` (conflicts with stdlib `sync`)
 - **`package main` files in `cmd/skillflow/`** — `app.go`, `adapters.go`, `providers.go`, `events.go` are all `package main` alongside `main.go` in `cmd/skillflow/` because Wails requires the app struct in the same package as `main`
 - **Wails bindings are auto-generated** — after adding/removing exported methods on `App`, run `make generate` to update `cmd/skillflow/frontend/wailsjs/go/main/App.{js,d.ts}`; also manually add entries to `App.js` and `App.d.ts` if Wails CLI is unavailable
 - **Installed skill instances are UUID-based, but cross-module identity must use a stable logical key** — see `docs/architecture.md#unified-skill-identity--state-model`
@@ -283,7 +296,7 @@ Any change touching skill identity, install/import/push/pull state, starred repo
 2. Register in `cmd/skillflow/providers.go`: `registry.RegisterCloudProvider(NewXxxProvider())`
 3. Settings page auto-renders credential fields from `RequiredCredentials()`
 
-### Adding a New Tool Adapter
+### Adding a New Agent Adapter
 
-Standard flat-directory tools: add to `registerAdapters()` in `cmd/skillflow/adapters.go`.
-Custom behavior: implement `toolsync.ToolAdapter` and register via `registry.RegisterAdapter()`.
+Standard flat-directory agents: add to `registerAdapters()` in `cmd/skillflow/adapters.go`.
+Custom behavior: implement `agentsync.AgentAdapter` and register via `registry.RegisterAdapter()`.

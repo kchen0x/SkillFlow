@@ -1,9 +1,9 @@
-export function summarizePushedTools(pushedTools: string[], maxVisiblePushedTools: number) {
-  const safeMaxVisible = Math.max(0, maxVisiblePushedTools)
-  const visibleTools = pushedTools.slice(0, safeMaxVisible)
+export function summarizePushedAgents(pushedAgents: string[], maxVisiblePushedAgents: number) {
+  const safeMaxVisible = Math.max(0, maxVisiblePushedAgents)
+  const visibleAgents = pushedAgents.slice(0, safeMaxVisible)
 
   return {
-    visibleTools,
-    overflowCount: Math.max(0, pushedTools.length - visibleTools.length),
+    visibleAgents,
+    overflowCount: Math.max(0, pushedAgents.length - visibleAgents.length),
   }
 }

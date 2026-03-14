@@ -45,8 +45,8 @@ func TestUpdateSkillRefreshesExistingPushedCopiesFromLocalCache(t *testing.T) {
 	sk.LatestSHA = newSHA
 	require.NoError(t, app.storage.UpdateMeta(sk))
 
-	app.autoPushImportedSkills("test.setup", []*skill.Skill{sk})
-	conflicts, err := app.PushToTools([]string{sk.ID}, []string{"claude-code"})
+	app.autoPushImportedSkillsToAgents("test.setup", []*skill.Skill{sk})
+	conflicts, err := app.PushToAgents([]string{sk.ID}, []string{"claude-code"})
 	require.NoError(t, err)
 	require.Empty(t, conflicts)
 
@@ -68,7 +68,7 @@ func TestUpdateSkillRefreshesExistingPushedCopiesFromLocalCache(t *testing.T) {
 	assert.Empty(t, updated.LatestSHA)
 }
 
-func TestUpdateSkillAutoPushesToSelectedToolsWhenMissing(t *testing.T) {
+func TestUpdateSkillAutoPushesToSelectedAgentsWhenMissing(t *testing.T) {
 	app, codexPushDir, claudePushDir, dataDir := newUpdateSkillTestApp(t)
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
 	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
@@ -86,7 +86,7 @@ func TestUpdateSkillAutoPushesToSelectedToolsWhenMissing(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
-func TestUpdateSkillAutoPushOverwritesSelectedToolSkill(t *testing.T) {
+func TestUpdateSkillAutoPushOverwritesSelectedAgentSkill(t *testing.T) {
 	app, codexPushDir, _, dataDir := newUpdateSkillTestApp(t)
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
 	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
@@ -97,12 +97,12 @@ func TestUpdateSkillAutoPushOverwritesSelectedToolSkill(t *testing.T) {
 	sk.LatestSHA = newSHA
 	require.NoError(t, app.storage.UpdateMeta(sk))
 
-	toolSkillDir := filepath.Join(codexPushDir, "demo-skill")
-	require.NoError(t, os.MkdirAll(toolSkillDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(toolSkillDir, "skill.md"), []byte("# Demo\nOld Tool Copy\n"), 0644))
+	agentSkillDir := filepath.Join(codexPushDir, "demo-skill")
+	require.NoError(t, os.MkdirAll(agentSkillDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(agentSkillDir, "skill.md"), []byte("# Demo\nOld Agent Copy\n"), 0644))
 
 	require.NoError(t, app.UpdateSkill(sk.ID))
-	assertFileContentEquals(t, filepath.Join(toolSkillDir, "skill.md"), "# Demo\nNew\n")
+	assertFileContentEquals(t, filepath.Join(agentSkillDir, "skill.md"), "# Demo\nNew\n")
 }
 
 func TestUpdateSkillFailsWhenLocalCacheMissing(t *testing.T) {
@@ -128,8 +128,8 @@ func newUpdateSkillTestApp(t *testing.T) (*App, string, string, string) {
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
 	cfg.SkillsStorageDir = skillsDir
-	cfg.AutoPushTools = []string{"codex"}
-	cfg.Tools = []config.ToolConfig{
+	cfg.AutoPushAgents = []string{"codex"}
+	cfg.Agents = []config.AgentConfig{
 		{
 			Name:     "codex",
 			ScanDirs: []string{codexPushDir},

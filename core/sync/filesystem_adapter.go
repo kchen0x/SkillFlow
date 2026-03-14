@@ -12,7 +12,7 @@ import (
 	"github.com/shinerio/skillflow/core/skill"
 )
 
-// FilesystemAdapter works for all tools — they all share the same file-based skills directory model.
+// FilesystemAdapter works for all agents — they all share the same file-based skills directory model.
 type FilesystemAdapter struct {
 	name             string
 	defaultSkillsDir string

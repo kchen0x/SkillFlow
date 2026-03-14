@@ -8,12 +8,12 @@ import (
 
 var (
 	installers     = map[string]install.Installer{}
-	adapters       = map[string]skillsync.ToolAdapter{}
+	adapters       = map[string]skillsync.AgentAdapter{}
 	cloudProviders = map[string]backup.CloudProvider{}
 )
 
 func RegisterInstaller(i install.Installer)       { installers[i.Type()] = i }
-func RegisterAdapter(a skillsync.ToolAdapter)     { adapters[a.Name()] = a }
+func RegisterAdapter(a skillsync.AgentAdapter)    { adapters[a.Name()] = a }
 func RegisterCloudProvider(p backup.CloudProvider) { cloudProviders[p.Name()] = p }
 
 func GetInstaller(t string) (install.Installer, bool) {
@@ -21,7 +21,7 @@ func GetInstaller(t string) (install.Installer, bool) {
 	return i, ok
 }
 
-func GetAdapter(name string) (skillsync.ToolAdapter, bool) {
+func GetAdapter(name string) (skillsync.AgentAdapter, bool) {
 	a, ok := adapters[name]
 	return a, ok
 }
@@ -31,8 +31,8 @@ func GetCloudProvider(name string) (backup.CloudProvider, bool) {
 	return p, ok
 }
 
-func AllAdapters() []skillsync.ToolAdapter {
-	result := make([]skillsync.ToolAdapter, 0, len(adapters))
+func AllAdapters() []skillsync.AgentAdapter {
+	result := make([]skillsync.AgentAdapter, 0, len(adapters))
 	for _, a := range adapters {
 		result = append(result, a)
 	}
