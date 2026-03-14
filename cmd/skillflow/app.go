@@ -2065,8 +2065,10 @@ func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
 }
 
 func (a *App) UpdateStarredRepo(repoURL string) error {
+	a.logInfof("update starred repo started: repo=%s", repoURL)
 	repos, err := a.starStorage.Load()
 	if err != nil {
+		a.logErrorf("update starred repo failed: repo=%s err=%v", repoURL, err)
 		return err
 	}
 	for i, r := range repos {
@@ -2075,13 +2077,30 @@ func (a *App) UpdateStarredRepo(repoURL string) error {
 		}
 		syncErr := coregit.CloneOrUpdate(a.ctx, r.URL, r.LocalDir, a.gitProxyURL())
 		if syncErr != nil {
+			a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, syncErr)
 			repos[i].SyncError = syncErr.Error()
 		} else {
+			a.logInfof("update starred repo completed: repo=%s", r.URL)
 			repos[i].SyncError = ""
 			repos[i].LastSync = time.Now()
 		}
-		return a.starStorage.Save(repos)
+		err = a.starStorage.Save(repos)
+		if err != nil {
+			a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, err)
+			return err
+		}
+		a.hub.Publish(notify.Event{
+			Type: notify.EventStarSyncProgress,
+			Payload: notify.StarSyncProgressPayload{
+				RepoURL:   repos[i].URL,
+				RepoName:  repos[i].Name,
+				SyncError: repos[i].SyncError,
+			},
+		})
+		a.hub.Publish(notify.Event{Type: notify.EventStarSyncDone})
+		return nil
 	}
+	a.logErrorf("update starred repo failed: repo=%s err=starred repo not found", repoURL)
 	return nil
 }
 
@@ -2102,11 +2121,14 @@ func (a *App) UpdateAllStarredRepos() error {
 		go func(idx int) {
 			defer wg.Done()
 			r := repos[idx]
+			a.logInfof("update starred repo started: repo=%s", r.URL)
 			syncErr := coregit.CloneOrUpdate(a.ctx, r.URL, r.LocalDir, a.gitProxyURL())
 			mu.Lock()
 			if syncErr != nil {
+				a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, syncErr)
 				repos[idx].SyncError = syncErr.Error()
 			} else {
+				a.logInfof("update starred repo completed: repo=%s", r.URL)
 				repos[idx].SyncError = ""
 				repos[idx].LastSync = time.Now()
 			}
