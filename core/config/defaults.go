@@ -22,7 +22,7 @@ func defaultAgentsSkillsDir() string {
 	return filepath.Join(home, ".agents", "skills")
 }
 
-func DefaultToolScanDirs(toolName string) []string {
+func DefaultAgentScanDirs(agentName string) []string {
 	home, _ := os.UserHomeDir()
 	agentsDir := defaultAgentsSkillsDir()
 
@@ -48,26 +48,26 @@ func DefaultToolScanDirs(toolName string) []string {
 			filepath.Join(home, ".openclaw", "workspace", "skills"),
 		},
 	}
-	return dirs[toolName]
+	return dirs[agentName]
 }
 
-// DefaultToolsDir returns the default push path for a tool.
-func DefaultToolsDir(toolName string) string {
-	scanDirs := DefaultToolScanDirs(toolName)
+// DefaultAgentPushDir returns the default push path for an agent.
+func DefaultAgentPushDir(agentName string) string {
+	scanDirs := DefaultAgentScanDirs(agentName)
 	if len(scanDirs) == 0 {
 		return ""
 	}
 	return scanDirs[0]
 }
 
-var builtinTools = []string{"claude-code", "opencode", "codex", "gemini-cli", "openclaw"}
+var builtinAgents = []string{"claude-code", "opencode", "codex", "gemini-cli", "openclaw"}
 
 func DefaultConfig(dataDir string) AppConfig {
-	tools := make([]ToolConfig, 0, len(builtinTools))
-	for _, name := range builtinTools {
-		scanDirs := DefaultToolScanDirs(name)
-		pushDir := DefaultToolsDir(name)
-		tools = append(tools, ToolConfig{
+	agents := make([]AgentConfig, 0, len(builtinAgents))
+	for _, name := range builtinAgents {
+		scanDirs := DefaultAgentScanDirs(name)
+		pushDir := DefaultAgentPushDir(name)
+		agents = append(agents, AgentConfig{
 			Name:     name,
 			ScanDirs: scanDirs,
 			PushDir:  pushDir,
@@ -81,7 +81,7 @@ func DefaultConfig(dataDir string) AppConfig {
 		LogLevel:              DefaultLogLevel,
 		RepoScanMaxDepth:      DefaultRepoScanMaxDepth,
 		SkillStatusVisibility: DefaultSkillStatusVisibility(),
-		Tools:                 tools,
+		Agents:                agents,
 		Cloud:                 CloudConfig{RemotePath: DefaultCloudRemotePath},
 		Proxy:                 ProxyConfig{Mode: ProxyModeNone},
 	}

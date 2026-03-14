@@ -39,8 +39,8 @@ export default function Dashboard() {
   const [categoryDragActive, setCategoryDragActive] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIDs, setSelectedIDs] = useState<Set<string>>(new Set())
-  const [toolOptions, setToolOptions] = useState<any[]>([])
-  const [autoPushTools, setAutoPushTools] = useState<Set<string>>(new Set())
+  const [agentOptions, setAgentOptions] = useState<any[]>([])
+  const [autoPushAgents, setAutoPushAgents] = useState<Set<string>>(new Set())
   const [dashboardCfg, setDashboardCfg] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingAutoPush, setSavingAutoPush] = useState(false)
@@ -60,8 +60,8 @@ export default function Dashboard() {
       setSkills(s ?? [])
       setCategories(c ?? [])
       setDashboardCfg(cfg)
-      setToolOptions((cfg?.tools ?? []).filter((tool: any) => tool.enabled))
-      setAutoPushTools(new Set(cfg?.autoPushTools ?? []))
+      setAgentOptions((cfg?.agents ?? []).filter((agent: any) => agent.enabled))
+      setAutoPushAgents(new Set(cfg?.autoPushAgents ?? []))
     } finally {
       if (!options?.silent) setLoading(false)
     }
@@ -199,19 +199,19 @@ export default function Dashboard() {
 
   const allSelected = filtered.length > 0 && filtered.every(sk => selectedIDs.has(sk.id))
 
-  const toggleAutoPushTool = async (name: string) => {
+  const toggleAutoPushAgent = async (name: string) => {
     if (!dashboardCfg || savingAutoPush) return
 
-    const nextSet = new Set(autoPushTools)
+    const nextSet = new Set(autoPushAgents)
     if (nextSet.has(name)) nextSet.delete(name)
     else nextSet.add(name)
 
     const nextCfg = {
       ...dashboardCfg,
-      autoPushTools: Array.from(nextSet),
+      autoPushAgents: Array.from(nextSet),
     }
 
-    setAutoPushTools(new Set(nextSet))
+    setAutoPushAgents(new Set(nextSet))
     setDashboardCfg(nextCfg)
     setSavingAutoPush(true)
 
@@ -219,11 +219,11 @@ export default function Dashboard() {
       await SaveConfig(nextCfg)
       await load()
     } catch (error) {
-      console.error('Save auto push tools failed:', error)
+      console.error('Save auto push agents failed:', error)
       const latestCfg = await GetConfig()
       setDashboardCfg(latestCfg)
-      setToolOptions((latestCfg?.tools ?? []).filter((tool: any) => tool.enabled))
-      setAutoPushTools(new Set(latestCfg?.autoPushTools ?? []))
+      setAgentOptions((latestCfg?.agents ?? []).filter((agent: any) => agent.enabled))
+      setAutoPushAgents(new Set(latestCfg?.autoPushAgents ?? []))
     } finally {
       setSavingAutoPush(false)
     }
@@ -466,14 +466,14 @@ export default function Dashboard() {
             <p className="text-sm flex-1" style={{ color: 'var(--text-muted)' }}>
               {t('common.loading')}
             </p>
-          ) : toolOptions.length > 0 ? (
+          ) : agentOptions.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
-              {toolOptions.map(tool => {
-                const active = autoPushTools.has(tool.name)
+              {agentOptions.map(agent => {
+                const active = autoPushAgents.has(agent.name)
                 return (
                   <button
-                    key={tool.name}
-                    onClick={() => void toggleAutoPushTool(tool.name)}
+                    key={agent.name}
+                    onClick={() => void toggleAutoPushAgent(agent.name)}
                     disabled={savingAutoPush}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${active ? 'font-semibold -translate-y-px' : ''}`}
                     style={active ? {
@@ -487,8 +487,8 @@ export default function Dashboard() {
                       border: '1px solid var(--border-base)',
                     }}
                   >
-                    <ToolIcon name={tool.name} size={20} />
-                    <span>{tool.name}</span>
+                    <ToolIcon name={agent.name} size={20} />
+                    <span>{agent.name}</span>
                   </button>
                 )
               })}
@@ -537,10 +537,10 @@ export default function Dashboard() {
                       source: sk.source,
                       hasUpdate: !!sk.updatable,
                       path: sk.path,
-                      pushedTools: sk.pushedTools,
+                      pushedAgents: sk.pushedAgents,
                     }}
                     showUpdatable={visibility.includes('updatable')}
-                    showPushedTools={visibility.includes('pushedTools')}
+                    showPushedAgents={visibility.includes('pushedAgents')}
                     categories={categories}
                     onDelete={async () => { await DeleteSkill(sk.id); load() }}
                     onUpdate={() => handleSkillUpdate(sk)}

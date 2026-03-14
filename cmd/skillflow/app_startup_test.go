@@ -1,9 +1,13 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/upgrade"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,4 +42,81 @@ func TestScheduleStartupBackgroundTasksRegistersAllTasks(t *testing.T) {
 
 	assert.Equal(t, []time.Duration{250 * time.Millisecond, time.Second}, scheduled)
 	assert.Equal(t, []string{"first", "second"}, executed)
+}
+
+func TestStartupRunsUpgradeBeforeConfigLoad(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{
+  "defaultCategory": "Default",
+  "skillStatusVisibility": {
+    "mySkills": ["updatable", "pushedTools"],
+    "myTools": ["imported", "updatable", "pushedTools"],
+    "pushToTool": ["pushedTools"],
+    "pullFromTool": ["imported"],
+    "starredRepos": ["imported", "pushedTools"],
+    "githubInstall": ["imported", "updatable", "pushedTools"]
+  },
+  "tools": [
+    { "name": "codex", "enabled": true }
+  ]
+}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(`{
+  "skillsStorageDir": "/tmp/skills",
+  "autoPushTools": ["codex"],
+  "tools": [
+    {
+      "name": "codex",
+      "scanDirs": ["/tmp/codex/skills"],
+      "pushDir": "/tmp/codex/skills",
+      "custom": false,
+      "enabled": true
+    }
+  ]
+}`), 0o644))
+
+	prevAppDataDirFunc := appDataDirFunc
+	prevRunStartupUpgrade := runStartupUpgrade
+	prevLoadStartupConfig := loadStartupConfig
+	t.Cleanup(func() {
+		appDataDirFunc = prevAppDataDirFunc
+		runStartupUpgrade = prevRunStartupUpgrade
+		loadStartupConfig = prevLoadStartupConfig
+	})
+
+	callOrder := make([]string, 0, 2)
+	appDataDirFunc = func() string {
+		return dir
+	}
+	runStartupUpgrade = func(dataDir string) error {
+		callOrder = append(callOrder, "upgrade")
+		return upgrade.Run(dataDir)
+	}
+	loadStartupConfig = func(dataDir string) (*config.Service, config.AppConfig, error) {
+		callOrder = append(callOrder, "load")
+		svc := config.NewService(dataDir)
+		cfg, err := svc.Load()
+		return svc, cfg, err
+	}
+
+	controller := &fakeLaunchAtLoginController{}
+	app := NewApp()
+	app.autostartFactory = func() (launchAtLoginController, error) {
+		return controller, nil
+	}
+
+	app.startup(nil)
+
+	assert.Equal(t, []string{"upgrade", "load"}, callOrder)
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sharedData), `"agents"`)
+	assert.NotContains(t, string(sharedData), `"tools"`)
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"agents"`)
+	assert.Contains(t, string(localData), `"autoPushAgents"`)
+	assert.NotContains(t, string(localData), `"autoPushTools"`)
 }

@@ -135,7 +135,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
                 <div className="max-w-[48%] shrink-0">
                   <SkillStatusStrip
                     className="justify-end"
-                    maxVisiblePushedTools={2}
+                    maxVisiblePushedAgents={2}
                     badges={[
                       ...(visibility.includes('imported') && c.Installed ? [{
                         key: 'imported',
@@ -148,7 +148,7 @@ export default function GitHubInstallDialog({ onClose, onDone }: Props) {
                         tone: 'warning' as const,
                       }] : []),
                     ]}
-                    pushedTools={visibility.includes('pushedTools') ? (c.PushedTools ?? []) : []}
+                    pushedAgents={visibility.includes('pushedAgents') ? (c.PushedAgents ?? []) : []}
                   />
                 </div>
               </label>

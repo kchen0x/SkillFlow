@@ -11,8 +11,8 @@
 
 1. [Navigation & Shell](#1-navigation--shell)
 2. [My Skills (Dashboard)](#2-my-skills-dashboard)
-3. [Push to Tools](#3-push-to-tools)
-4. [Pull from Tools](#4-pull-from-tools)
+3. [Push to Agents](#3-push-to-agents)
+4. [Pull from Agents](#4-pull-from-agents)
 5. [Starred Repos](#5-starred-repos)
 6. [Cloud Backup](#6-cloud-backup)
 7. [Settings](#7-settings)
@@ -21,7 +21,7 @@
 10. [Shared Dialogs](#10-shared-dialogs)
 11. [Backend Events](#11-backend-events)
 12. [App Update Dialog](#12-app-update-dialog)
-13. [My Tools](#13-my-tools)
+13. [My Agents](#13-my-agents)
 14. [My Prompts](#14-my-prompts)
 
 ---
@@ -33,10 +33,10 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 | Route | Icon | Label |
 |-------|------|-------|
 | `/` | Package | My Skills |
-| `/tools` | Wrench | My Tools |
+| `/tools` | Wrench | My Agents |
 | `/prompts` | FileText | My Prompts |
-| `/sync/push` | ArrowUpFromLine | Push to Tools |
-| `/sync/pull` | ArrowDownToLine | Pull from Tools |
+| `/sync/push` | ArrowUpFromLine | Push to Agents |
+| `/sync/pull` | ArrowDownToLine | Pull from Agents |
 | `/starred` | Star | Starred Repos |
 | `/backup` | Cloud | Cloud Backup |
 | `/settings` | Settings | Settings |
@@ -48,7 +48,7 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 - Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light**.
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
 - Window close button behavior: clicking the top-left close button closes the current UI process instead of only hiding it. The lightweight helper remains in the tray/menu bar, so `Show SkillFlow` or launching the app again opens a fresh window.
-- Primary-page refresh behavior: route transitions remount the page subtree keyed by `location.pathname`, so re-entering pages such as **My Skills**, **My Tools**, **My Prompts**, and **Starred Repos** fetches fresh backend state again without requiring a manual in-page refresh.
+- Primary-page refresh behavior: route transitions remount the page subtree keyed by `location.pathname`, so re-entering pages such as **My Skills**, **My Agents**, **My Prompts**, and **Starred Repos** fetches fresh backend state again without requiring a manual in-page refresh.
 - Startup smoothing behavior: after the shell is ready, background startup jobs are staggered instead of launching together, so the first interactive second is less likely to compete with skill update checks, starred refresh, app update checks, and git startup pull at the same time.
 - Background memory trim behavior: if the window stays hidden from tray/menu actions or inactive for about 30 seconds, SkillFlow unmounts the current routed page tree to release page-local React state and large loaded datasets. When the window becomes active again, the current route mounts again and reloads fresh data automatically.
 - Initial window sizing: on launch, SkillFlow first restores the most recently saved window size from local-only `config_local.json`; if none is saved yet, it sizes itself against the current display with a larger desktop-friendly default, clamps to the available screen, and centers the window.
@@ -74,13 +74,13 @@ Central library for managing your skill collection.
 
 ### Auto Push Targets
 
-- A compact single-row strip under the toolbar shows the **Auto Push Targets** title and tool chips together, using the same icon-chip selection style as **Push to Tools**.
+- A compact single-row strip under the toolbar shows the **Auto Push Targets** title and agent chips together, using the same icon-chip selection style as **Push to Agents**.
 - The selection is persisted locally on the current device and reused for future imports into **My Skills**.
-- Turning a tool on here immediately backfills the current library to that tool, so existing My Skills entries are pushed right away instead of waiting for the next import.
-- Any newly added skill in **My Skills** is automatically copied to the selected tools after the library import succeeds. This applies to local folder import, GitHub install, Pull from Tools, and Starred Repo import.
-- If a cloud restore brings skills onto the current device, SkillFlow auto-pushes any newly restored or newly updated library skills to the selected tools on this device.
-- Import/install auto-push remains non-destructive: if a selected tool already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
-- Turning a tool off in this strip does not delete anything that was already pushed earlier; removing tool copies still requires manual deletion from **My Tools** or the tool directory.
+- Turning an agent on here immediately backfills the current library to that agent, so existing My Skills entries are pushed right away instead of waiting for the next import.
+- Any newly added skill in **My Skills** is automatically copied to the selected agents after the library import succeeds. This applies to local folder import, GitHub install, Pull from Agents, and Starred Repo import.
+- If a cloud restore brings skills onto the current device, SkillFlow auto-pushes any newly restored or newly updated library skills to the selected agents on this device.
+- Import/install auto-push remains non-destructive: if a selected agent already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
+- Turning an agent off in this strip does not delete anything that was already pushed earlier; removing agent copies still requires manual deletion from **My Agents** or the agent directory.
 
 ### Select Mode (activated by "Batch Delete")
 
@@ -106,7 +106,7 @@ Central library for managing your skill collection.
 - Grid layout: 3 columns, 4 on wide screens.
 - List performance behavior: page entry now prefers a local derived snapshot for installed skills when dependencies still match, and route transitions use a lighter fade-only animation to reduce navigation jank.
 - Dense-list animation fallback: when the visible Dashboard list exceeds 18 cards, staggered per-card entry motion is disabled automatically and cards render immediately instead of animating one-by-one.
-- Card status-strip overflow: status badges and pushed-tool icons now use deterministic truncation with compact `+N` overflow instead of per-card runtime measurement.
+- Card status-strip overflow: status badges and pushed-agent icons now use deterministic truncation with compact `+N` overflow instead of per-card runtime measurement.
 - **Empty state** — "No Skills found" message with usage hint.
 - **Right-click skill menu** — includes move-to-category actions for every category other than the current one, plus delete and update where applicable.
 - **Drag-and-drop** — drag a skill card to a category in the sidebar to move it; when drag starts, a smaller floating card follows the cursor; once a sidebar category is targeted, the original card collapses into a thin line until drag ends. Dragging a folder from the OS file manager onto the window imports it directly.
@@ -116,7 +116,7 @@ Central library for managing your skill collection.
 ### Skill Update Flow
 
 - Toolbar **Update** compares installed Git-backed skills against their locally cached repo clones and only marks cards as updatable.
-- Card-level **Update** is the action that copies the latest files from the local repo cache, overwrites the installed copy in **My Skills**, refreshes any same-skill copies that already exist in tool `PushDir`s, and force-updates all tools currently selected in **Auto Push Targets** (creating missing copies and overwriting existing copies there).
+- Card-level **Update** is the action that copies the latest files from the local repo cache, overwrites the installed copy in **My Skills**, refreshes any same-skill copies that already exist in agent `PushDir`s, and force-updates all agents currently selected in **Auto Push Targets** (creating missing copies and overwriting existing copies there).
 - While a card update is running, that card keeps the Update action visible, disables repeat clicks, and spins the Refresh icon until the request finishes.
 - The Dashboard also shows a temporary top-of-page status banner for skill update progress, success, or failure so users can tell whether the click really triggered work.
 - Cache-based checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
@@ -148,7 +148,7 @@ Copy latest repo subpath from local cache clone
 Overwrite installed folder in My Skills
           |
           v
-Refresh existing tool PushDir copies for that skill
+Refresh existing agent PushDir copies for that skill
           |
           v
 SourceSHA = LatestSHA -> clear update marker
@@ -156,22 +156,22 @@ SourceSHA = LatestSHA -> clear update marker
 
 ---
 
-## 3. Push to Tools
+## 3. Push to Agents
 
-Copies skills from your library to external tool directories.
+Copies skills from your library to external agent directories.
 
 ### Layout
 
 - Uses a two-column layout similar to My Skills.
 - Left sidebar shows category filters: **All** plus every existing category.
-- Right side shows the tool selector, search + A-Z/Z-A sort controls, push mode controls, and a skill-card grid for the current category scope.
+- Right side shows the agent selector, search + A-Z/Z-A sort controls, push mode controls, and a skill-card grid for the current category scope.
 - Spacing is tuned so the adaptive startup window can usually show the header controls, the current skill grid, and the bottom push action together on common laptop/desktop displays before scrolling is needed.
 
-### Tool Selection
+### Agent Selection
 
-- One toggle button per enabled tool (icon + name).
-- Multiple tools can be selected simultaneously.
-- Active category, tool, and scope buttons use a brighter theme-tinted background, a lighter border, and a clearer glow so selection remains obvious in dark mode without adding extra symbols.
+- One toggle button per enabled agent (icon + name).
+- Multiple agents can be selected simultaneously.
+- Active category, agent, and scope buttons use a brighter theme-tinted background, a lighter border, and a clearer glow so selection remains obvious in dark mode without adding extra symbols.
 
 ### Sync Scope
 
@@ -184,9 +184,9 @@ Two push behaviors based on the current left-sidebar category filter:
 
 ### Missing Directory Check
 
-Before pushing, the app calls `CheckMissingPushDirs()`. If any target tool directory does not exist yet, a confirmation dialog appears:
+Before pushing, the app calls `CheckMissingPushDirs()`. If any target agent directory does not exist yet, a confirmation dialog appears:
 
-- Lists each missing tool name and its full directory path.
+- Lists each missing agent name and its full directory path.
 - **"Create & Push"** — creates the directory then proceeds.
 - **"Cancel"** — aborts without creating anything.
 
@@ -196,39 +196,39 @@ If a skill already exists in the target directory, a conflict dialog appears for
 
 ### Skill Grid
 
-- Library cards surface only push-relevant state on this page: which tools already contain that logical skill in their `PushDir`.
+- Library cards surface only push-relevant state on this page: which agents already contain that logical skill in their `PushDir`.
 - Cards also keep the installed-source badge from My Skills so users can still distinguish manual imports from GitHub installs while deciding what to push.
-- The pushed-tool indicator uses compact tool icons with ellipsis overflow and hover-to-reveal full lists.
+- The pushed-agent indicator uses compact agent icons with ellipsis overflow and hover-to-reveal full lists.
 
 ### Bottom Bar
 
-- **"Start Push (n)"** button — disabled when no tools selected or skill count is zero; shows "Pushing…" while in progress.
+- **"Start Push (n)"** button — disabled when no agents selected or skill count is zero; shows "Pushing…" while in progress.
 - **"Push complete ✓"** — green success message after all pushes finish.
 
 ---
 
-## 4. Pull from Tools
+## 4. Pull from Agents
 
-Imports skills from external tool directories into your library.
+Imports skills from external agent directories into your library.
 
 ### Layout
 
-- Uses the same two-column shell as Push to Tools.
+- Uses the same two-column shell as Push to Agents.
 - Left sidebar lists all categories and controls the import target category.
-- Right side contains the source-tool selector, scan feedback, search + A-Z/Z-A sort controls, selectable skill grid, and bottom action bar.
+- Right side contains the source-agent selector, scan feedback, search + A-Z/Z-A sort controls, selectable skill grid, and bottom action bar.
 
-### Tool Selection
+### Agent Selection
 
-- Same toggle buttons as Push; selecting a different tool resets the scanned list.
-- The active import target category and selected source tool use the same brighter background, lighter border, and glow treatment as Push so the current choice stays visually distinct in dark mode.
+- Same toggle buttons as Push; selecting a different agent resets the scanned list.
+- The active import target category and selected source agent use the same brighter background, lighter border, and glow treatment as Push so the current choice stays visually distinct in dark mode.
 
 ### Scan
 
-- **"Scan"** button — calls `ScanToolSkills(toolName)`; recursively searches the tool's configured scan directories for `skill.md` files.
-- Local tool scanning uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
+- **"Scan"** button — calls `ScanAgentSkills(agentName)`; recursively searches the agent's configured scan directories for `skill.md` files.
+- Local agent scanning uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Shows animated "Scanning…" state while in progress.
 - **Error alert** (red) if scan fails; **warning alert** (yellow) if no skills found.
-- Tool-scan candidates are deduplicated and correlated by logical key first; same-name items are kept distinct when their content-derived keys differ.
+- Agent-scan candidates are deduplicated and correlated by logical key first; same-name items are kept distinct when their content-derived keys differ.
 
 ### Skill Grid
 
@@ -239,11 +239,11 @@ Imports skills from external tool directories into your library.
 - Cards still show the pull-specific imported state; newly discovered scan items that do not correlate to an installed entry keep the source badge empty instead of guessing.
 - After each scan, all skills start unchecked by default.
 - Select individual skills, use "Select All / Deselect All" for the currently visible list, or use the matching square-style "Select Not Imported" toggle to bulk-select only visible skills that are not yet imported.
-- Selection and pull conflicts are tracked by scanned path, so same-name skills from different tool folders remain independent.
+- Selection and pull conflicts are tracked by scanned path, so same-name skills from different agent folders remain independent.
 
 ### Bottom Bar
 
-- **"Start Pull (n)"** button — calls `PullFromTool()`.
+- **"Start Pull (n)"** button — calls `PullFromAgent()`.
 - **"Pull complete ✓"** — green success message.
 - Conflicts handled by the same [Conflict Dialog](#101-conflict-dialog).
 
@@ -278,7 +278,7 @@ Browse and import skills directly from watched Git repositories without installi
 | Button | Action |
 |--------|--------|
 | **Select All / Deselect All** | Toggles all visible skills |
-| **Push to Tools (n)** | Opens the Push to Tools dialog (see below) |
+| **Push to Agents (n)** | Opens the Push to Agents dialog (see below) |
 | **Import to My Skills (n)** | Opens the Import dialog |
 | **Cancel** | Exits select mode |
 
@@ -305,15 +305,15 @@ Browse and import skills directly from watched Git repositories without installi
 - Breadcrumb back button (ChevronLeft) to return to the repo grid.
 - Skills grid with same select/import behavior as flat view.
 - While repo skills are still loading, both the toolbar count label and the content pane show **Loading...** instead of a transient `0 skills` / `No Skills found` empty state.
-- Repo skill cards show only imported and pushed-tool state on this page.
+- Repo skill cards show only imported and pushed-agent state on this page.
 - Imported badges are resolved from normalized repo source + subpath, so same-name skills from different repos are not conflated.
-- Pushed state is rendered as tool-brand icons with hover-to-reveal full tool lists.
+- Pushed state is rendered as agent-brand icons with hover-to-reveal full agent lists.
 
 ### Repo Sync vs Installed Skill Update
 
 - Repo-card **Update** and toolbar **Update All** refresh the locally cached clone for the starred repo.
 - This makes the latest repo contents visible in **Starred Repos** so the user can browse or import newer skill files.
-- If cloud restore syncs a newly starred repo onto this device, SkillFlow immediately clones that repo locally so search, import, and direct push-to-tools are ready without waiting for a manual update.
+- If cloud restore syncs a newly starred repo onto this device, SkillFlow immediately clones that repo locally so search, import, and direct push-to-agents are ready without waiting for a manual update.
 - It does **not** overwrite the already installed copy in **My Skills**.
 - If a skill has already been imported into the library, updating that installed copy still happens from **My Skills (Dashboard)** via the card-level **Update** action.
 
@@ -365,25 +365,25 @@ Refresh Starred Repos list                     Clear update marker in My Skills
 - **"Import n"** — `ImportStarSkills(paths, repoURL, category)`.
 - **"Cancel"**.
 
-### Push to Tools Dialog
+### Push to Agents Dialog
 
-- Description: "Copies skills directly to the tool directory; no need to import first."
-- Lists all enabled tools as checkboxes with their push directory paths shown.
-- **Empty state** message if no tools are configured.
-- **"Push to n tools"** button.
-- If conflicts exist, a follow-up dialog lists the exact `skill → tool` pairs that were skipped; **Overwrite All** only overwrites those listed pairs.
+- Description: "Copies skills directly to the agent directory; no need to import first."
+- Lists all enabled agents as checkboxes with their push directory paths shown.
+- **Empty state** message if no agents are configured.
+- **"Push to n agents"** button.
+- If conflicts exist, a follow-up dialog lists the exact `skill → agent` pairs that were skipped; **Overwrite All** only overwrites those listed pairs.
 - **"Cancel"**.
 
 ### Missing Directory Confirmation
 
-Same behavior as [Push to Tools page](#missing-directory-check): confirms before creating absent push directories.
+Same behavior as [Push to Agents page](#missing-directory-check): confirms before creating absent push directories.
 
 ### Push Conflict Dialog
 
-When skills already exist in the target tool directory:
+When skills already exist in the target agent directory:
 
 - Lists all conflicting skill names.
-- **"Overwrite All"** (amber) — `PushStarSkillsToToolsForce()`.
+- **"Overwrite All"** (amber) — `PushStarSkillsToAgentsForce()`.
 - **"Skip Conflicts"** — `PushStarSkillsToTools()` (already resolved; conflicts discarded).
 
 ---
@@ -421,10 +421,10 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json` and `star_repos.json`) are stored as forward-slash relative paths under the synchronized root, so restores continue to work across macOS and Windows.
 - **Local-only volatile skill metadata** — high-churn per-skill check timestamps (`LastCheckedAt`) are stored in local-only `meta_local/*.local.json` overlays, so they do not create cross-device git/cloud merge churn.
 - **Local-only starred-repo sync runtime state** — per-repo `lastSync` and `syncError` are stored in local-only `star_repos_local.json`, so background sync attempts on one device do not churn synced repo metadata on other devices.
-- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as external `SkillsStorageDir` values, tool `ScanDirs` / `PushDir`, and proxy settings; it is excluded from backup and git sync.
+- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as external `SkillsStorageDir` values, agent `ScanDirs` / `PushDir`, and proxy settings; it is excluded from backup and git sync.
 - **Local-only cloud secrets** — sensitive cloud credentials (for example access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as provider, bucket name, remote path, endpoint, repo URL, or branch.
 - **Git backup compatibility** — when Git backup uses a parent directory as the working tree, SkillFlow automatically moves any legacy nested `skills/.git` metadata aside so actual skill files remain trackable.
-- **Post-restore device compensation** — after a successful cloud restore, newly restored library skills are auto-pushed to this device's selected auto-push tools, and newly restored starred repos are cloned locally right away.
+- **Post-restore device compensation** — after a successful cloud restore, newly restored library skills are auto-pushed to this device's selected auto-push agents, and newly restored starred repos are cloned locally right away.
 
 ### Provider Coverage
 
@@ -439,7 +439,7 @@ Triggered automatically after any of these mutations (when cloud is enabled):
 - Create / update / delete prompt
 - Manual import
 - Install from GitHub
-- Pull from tool
+- Pull from agent
 - Update skill
 - Import from starred repo
 
@@ -471,26 +471,26 @@ When the **git** provider is selected:
 
 ## 7. Settings
 
-Configuration panel with four tabs in this order: Tools, Cloud, Proxy, General.
+Configuration panel with four tabs in this order: Agents, Cloud, Proxy, General.
 
 The Settings page content expands with the window up to a wider desktop-friendly maximum width instead of staying pinned to a narrow fixed column.
 
-### Tools Tab
+### Agents Tab
 
-For each built-in or custom tool:
+For each built-in or custom agent:
 
 | Control | Description |
 |---------|-------------|
-| **Enable toggle** | Enables or disables the tool across the app |
+| **Enable toggle** | Enables or disables the agent across the app |
 | **Push directory** | Single directory where skills are copied on push; supports both manual text entry and folder-picker button (FolderOpen icon), which opens at the current path or nearest existing parent |
 | **Scan directories** | Multiple directories searched when pulling; each row has a folder-picker button and a delete button; new directories added with an input + folder-picker + "Add" button, with the picker reopening at the current path or nearest existing parent |
-| **Delete tool** (custom tools only) | Removes the custom tool entry |
+| **Delete agent** (custom agents only) | Removes the custom agent entry |
 
-**Add Custom Tool** section (dashed border):
+**Add Custom Agent** section (dashed border):
 
-- Tool name input.
+- Agent name input.
 - Push directory input with folder-picker button that reopens at the current path or nearest existing parent.
-- **"Add"** button — `AddCustomTool(name, pushDir)`.
+- **"Add"** button — `AddCustomAgent(name, pushDir)`.
 
 ### Cloud Tab
 
@@ -512,9 +512,9 @@ For each built-in or custom tool:
 |---------|-------------|
 | **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
 | **Appearance theme** | Three visual presets shown as preview cards: **Dark** (default, refined graphite with muted mist-blue accents), **Young** (a softened paper-blue evolution of the previous sky-blue Light palette), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
-| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed tools; **My Tools** = imported + updatable + pushed tools; **Push to Tool** = pushed tools; **Pull from Tool** = imported; **Starred Repos** = imported + pushed tools; **GitHub Install** = imported + updatable + pushed tools |
+| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed agents; **My Agents** = imported + updatable + pushed agents; **Push to Agent** = pushed agents; **Pull from Agent** = imported; **Starred Repos** = imported + pushed agents; **GitHub Install** = imported + updatable + pushed agents |
 | **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button that opens at the current path or nearest existing parent |
-| **Skill recursive scan depth** | Maximum recursion depth used when scanning local tool directories, starred repos, and GitHub-install repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
+| **Skill recursive scan depth** | Maximum recursion depth used when scanning local agent directories, starred repos, and GitHub-install repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
 | **Log level buttons** | Toggle runtime log level between `debug`, `info`, and `error` (default: `error`); takes effect after saving settings |
 | **Launch at login toggle** | Enables/disables OS login-item registration so SkillFlow auto-starts after sign-in on the current device; stored only in local `config_local.json`. Reconcile runs on startup and Settings save: already-missing disabled entries are treated as a no-op, while the enabled path is refreshed to the current executable so moved or updated app installs keep working on macOS and Windows |
@@ -554,7 +554,7 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Status strip** | Source badge plus any coexisting state badges (for example Update available + pushed-tool icons) rendered in one compact header row on the card; the strip prefers a single line when space allows, then automatically wraps instead of clipping badges away when cards become too narrow |
+| **Status strip** | Source badge plus any coexisting state badges (for example Update available + pushed-agent icons) rendered in one compact header row on the card; the strip prefers a single line when space allows, then automatically wraps instead of clipping badges away when cards become too narrow |
 | **Skill name** | Two-line clamp; padded to avoid overlap with action buttons |
 | **Open folder button** (FolderOpenDot, top-right) | `OpenPath(skill.path)` — opens directory in OS file manager; visible on hover only |
 | **Select checkbox** (top-left) | Visible in select mode only |
@@ -568,8 +568,8 @@ Reusable card component shown in the My Skills grid and Sync pages.
 
 | Element | Description |
 |---------|-------------|
-| **Status strip** | Source badge plus only the page-selected state badges (for example imported, update-available, or pushed-tool icons) rendered together in one compact header row; cards keep imported and pushed-tool indicators on the same line when they fit, and automatically wrap them to a second row when the card width is too tight |
-| **Pushed-tool indicator** | Shows the exact tools whose `PushDir` already contains this logical skill via small tool-brand icons without an extra arrow prefix; overflows collapse into a compact count badge while hover still reveals the full list |
+| **Status strip** | Source badge plus only the page-selected state badges (for example imported, update-available, or pushed-agent icons) rendered together in one compact header row; cards keep imported and pushed-agent indicators on the same line when they fit, and automatically wrap them to a second row when the card width is too tight |
+| **Pushed-agent indicator** | Shows the exact agents whose `PushDir` already contains this logical skill via small agent-brand icons without an extra arrow prefix; overflows collapse into a compact count badge while hover still reveals the full list |
 | **Skill name** | Two-line clamp |
 | **Subtitle** | Category or repo name |
 | **Copy button** (hover) | Same clipboard behavior |
@@ -581,10 +581,10 @@ Reusable card component shown in the My Skills grid and Sync pages.
 | State | Meaning |
 |------|---------|
 | **installed** | The logical skill already exists in **My Skills** as at least one installed instance |
-| **imported** | External-page wording for **installed**; on GitHub / Starred Repos / tool views it means “already in My Skills” |
-| **pushed** | The logical skill already exists in a tool's configured **PushDir** |
-| **pushedTools** | The exact tool names whose configured **PushDir** currently contains that logical skill; used for icon rendering on cards |
-| **seenInToolScan** | The logical skill was detected in one of a tool's configured **ScanDirs**; this means the tool already has it somewhere, but not necessarily because SkillFlow pushed it. This is currently used for grouping and correlation, not shown as a card badge. |
+| **imported** | External-page wording for **installed**; on GitHub / Starred Repos / agent views it means “already in My Skills” |
+| **pushed** | The logical skill already exists in an agent's configured **PushDir** |
+| **pushedAgents** | The exact agent names whose configured **PushDir** currently contains that logical skill; used for icon rendering on cards |
+| **seenInAgentScan** | The logical skill was detected in one of an agent's configured **ScanDirs**; this means the agent already has it somewhere, but not necessarily because SkillFlow pushed it. This is currently used for grouping and correlation, not shown as a card badge. |
 | **updatable** | An installed Git-backed skill has a newer remote SHA than its installed `SourceSHA` |
 
 These statuses are resolved by the backend from a unified logical-key model; frontend pages no longer infer them independently from `Name` or `Path`.
@@ -592,7 +592,7 @@ These statuses are resolved by the backend from a unified logical-key model; fro
 ```text
                  Unified skill status picture
 
-[GitHub candidate] [Starred skill] [Tool scan candidate]
+[GitHub candidate] [Starred skill] [Agent scan candidate]
          \              |               /
           \             |              /
            +---- same logical skill ----+
@@ -602,11 +602,11 @@ These statuses are resolved by the backend from a unified logical-key model; fro
                   installed = true
            external pages show imported = true
                         |
-                        +---- copy to tool PushDir ----> pushed = true
+                        +---- copy to agent PushDir ---> pushed = true
                         |
                         +---- remote newer SHA -------> updatable = true
 
-[Tool ScanDirs] ---- detect same logical skill ----> seenInToolScan = true
+[Agent ScanDirs] --- detect same logical skill ----> seenInAgentScan = true
 ```
 
 ---
@@ -659,14 +659,14 @@ Opened from Dashboard toolbar.
 - Candidate discovery is recursive across the cloned repo, so nested layouts such as `plugins/<plugin>/skills/<name>` are also listed; `skill.md` matching is case-insensitive.
 - Recursive candidate discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Already-installed badges are resolved from normalized repo source + subpath instead of `Name`, and checkbox state is tracked by candidate path so same-name candidates remain independent.
-- Candidate rows can show imported / update-available / pushed-tool state according to the **Settings → General → Card status visibility** policy for GitHub Install, and display the candidate subpath so same-name entries stay distinguishable in the dialog.
+- Candidate rows can show imported / update-available / pushed-agent state according to the **Settings → General → Card status visibility** policy for GitHub Install, and display the candidate subpath so same-name entries stay distinguishable in the dialog.
 - Separate error alerts for scan errors and install errors.
 
 ### 10.3 Missing Directory Dialog
 
 Appears before any push when target directories do not exist.
 
-- Lists each affected tool name and full directory path.
+- Lists each affected agent name and full directory path.
 - **"Create & Push"** — auto-creates directories then proceeds.
 - **"Cancel"** — aborts.
 
@@ -771,13 +771,13 @@ The startup check is skipped when `Version == "dev"` (local development).
 
 ---
 
-## 13. My Tools
+## 13. My Agents
 
-Browse the skills currently present inside each enabled tool.
+Browse the skills currently present inside each enabled agent.
 
 ### Layout
 
-- Left sidebar lists enabled tools.
+- Left sidebar lists enabled agents.
 - Main area shows one toolbar plus two skill-card sections: **Push Path** and **Scan Path**.
 
 ### Toolbar
@@ -790,18 +790,18 @@ Browse the skills currently present inside each enabled tool.
 
 ### Push Path Section
 
-- Shows deletable tool-local skills under the configured push directory.
+- Shows deletable agent-local skills under the configured push directory.
 - Push-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - In select mode, **Select All / Deselect All** applies to the currently visible filtered Push Path cards only.
-- When a tool-local skill correlates to an installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from GitHub installs.
-- Cards continue showing imported, update-available, and "pushed to other tools" states. The current tool is excluded from the pushed-tool icon list so the card only surfaces cross-tool distribution that adds information.
+- When a agent-local skill correlates to an installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from GitHub installs.
+- Cards continue showing imported, update-available, and "pushed to other agents" states. The current agent is excluded from the pushed-agent icon list so the card only surfaces cross-agent distribution that adds information.
 
 ### Scan Path Section
 
 - Shows read-only skills discovered only from scan directories.
 - Scan-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Shares the same search and sort controls as Push Path.
-- Scan-path cards use the same compact strip for source / imported / update-available / pushed-to-other-tools states whenever the scanned item can be correlated to an installed My Skills entry; the fact that they were found via scan paths is conveyed by the section itself instead of repeating a detected badge on every card.
+- Scan-path cards use the same compact strip for source / imported / update-available / pushed-to-other-agents states whenever the scanned item can be correlated to an installed My Skills entry; the fact that they were found via scan paths is conveyed by the section itself instead of repeating a detected badge on every card.
 
 ---
 
@@ -811,7 +811,7 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ### Navigation & Storage
 
-- Sidebar adds **My Prompts** directly below **My Tools**.
+- Sidebar adds **My Prompts** directly below **My Agents**.
 - Each prompt is stored as `prompts/<category>/<name>/system.md` under the backup root, so both object-storage providers and the Git provider sync the same prompt files automatically.
 - Prompt names are required, globally unique in the library, and used as the folder key.
 

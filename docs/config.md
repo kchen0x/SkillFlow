@@ -30,12 +30,12 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, and `star_repo
 
 Path: `<AppDataDir>/cache/viewstate/*.json`
 
-These files store local-only derived state used to speed up page entry and reduce repeated directory scans. Typical payloads include installed-skill card snapshots and tool-presence indexes.
+These files store local-only derived state used to speed up page entry and reduce repeated directory scans. Typical payloads include installed-skill card snapshots and agent-presence indexes.
 
 Rules:
 
 - They are optimization artifacts, not source-of-truth records.
-- They must be rebuilt from `skills/`, `meta/`, tool directories, and other existing truth-layer files.
+- They must be rebuilt from `skills/`, `meta/`, agent directories, and other existing truth-layer files.
 - They must not be uploaded by cloud backup or written back into synced metadata files.
 - Cross-device cache differences are expected and harmless.
 
@@ -58,6 +58,8 @@ Path: `<AppDataDir>/config.json`
 
 `config.json` stores settings that are safe to move across devices. It must not contain machine-specific absolute paths or sensitive credentials.
 
+Before config is loaded, SkillFlow runs the one-time terminology cutover in `core/upgrade`. Legacy `tools`-based keys are rewritten in place to the new `agents`-based schema, and runtime code only reads the new schema.
+
 ### Example
 
 ```json
@@ -66,14 +68,14 @@ Path: `<AppDataDir>/config.json`
   "logLevel": "info",
   "repoScanMaxDepth": 5,
   "skillStatusVisibility": {
-    "mySkills": ["updatable", "pushedTools"],
-    "myTools": ["imported", "updatable", "pushedTools"],
-    "pushToTool": ["pushedTools"],
-    "pullFromTool": ["imported"],
-    "starredRepos": ["imported", "pushedTools"],
-    "githubInstall": ["imported", "updatable", "pushedTools"]
+    "mySkills": ["updatable", "pushedAgents"],
+    "myAgents": ["imported", "updatable", "pushedAgents"],
+    "pushToAgent": ["pushedAgents"],
+    "pullFromAgent": ["imported"],
+    "starredRepos": ["imported", "pushedAgents"],
+    "githubInstall": ["imported", "updatable", "pushedAgents"]
   },
-  "tools": [
+  "agents": [
     { "name": "claude-code", "enabled": true },
     { "name": "codex", "enabled": true },
     { "name": "gemini-cli", "enabled": false }
@@ -111,17 +113,17 @@ Path: `<AppDataDir>/config.json`
 |-----|------|---------|
 | `defaultCategory` | string | Default category used when importing or creating skills. |
 | `logLevel` | string | Backend log level. Valid values are `debug`, `info`, and `error`. Invalid values are normalized to `error`. |
-| `repoScanMaxDepth` | number | Maximum recursive depth used when scanning tool directories and repos. Values are normalized to the `1-20` range, with `5` as the default. |
+| `repoScanMaxDepth` | number | Maximum recursive depth used when scanning agent directories and repos. Values are normalized to the `1-20` range, with `5` as the default. |
 | `skillStatusVisibility` | object | Per-page visibility policy for skill status badges. |
-| `skillStatusVisibility.mySkills` | string[] | Status badges shown on the "My Skills" page. Allowed values there are `updatable` and `pushedTools`. |
-| `skillStatusVisibility.myTools` | string[] | Status badges shown on the "My Tools" page. Allowed values there are `imported`, `updatable`, and `pushedTools`. |
-| `skillStatusVisibility.pushToTool` | string[] | Status badges shown on the "Push to Tool" page. Allowed value there is `pushedTools`. |
-| `skillStatusVisibility.pullFromTool` | string[] | Status badges shown on the "Pull from Tool" page. Allowed value there is `imported`. |
-| `skillStatusVisibility.starredRepos` | string[] | Status badges shown on the starred-repos page. Allowed values there are `imported` and `pushedTools`. |
-| `skillStatusVisibility.githubInstall` | string[] | Status badges shown in the GitHub install flow. Allowed values there are `imported`, `updatable`, and `pushedTools`. |
-| `tools` | object[] | Built-in tool enable/disable state only. Path-related tool settings are stored in `config_local.json`. |
-| `tools[].name` | string | Built-in tool name such as `claude-code`, `codex`, `gemini-cli`, `opencode`, or `openclaw`. |
-| `tools[].enabled` | boolean | Whether this built-in tool is enabled in the UI and scanning/push flows. |
+| `skillStatusVisibility.mySkills` | string[] | Status badges shown on the "My Skills" page. Allowed values there are `updatable` and `pushedAgents`. |
+| `skillStatusVisibility.myAgents` | string[] | Status badges shown on the "My Agents" page. Allowed values there are `imported`, `updatable`, and `pushedAgents`. |
+| `skillStatusVisibility.pushToAgent` | string[] | Status badges shown on the "Push to Agent" page. Allowed value there is `pushedAgents`. |
+| `skillStatusVisibility.pullFromAgent` | string[] | Status badges shown on the "Pull from Agent" page. Allowed value there is `imported`. |
+| `skillStatusVisibility.starredRepos` | string[] | Status badges shown on the starred-repos page. Allowed values there are `imported` and `pushedAgents`. |
+| `skillStatusVisibility.githubInstall` | string[] | Status badges shown in the GitHub install flow. Allowed values there are `imported`, `updatable`, and `pushedAgents`. |
+| `agents` | object[] | Built-in agent enable/disable state only. Path-related agent settings are stored in `config_local.json`. |
+| `agents[].name` | string | Built-in agent name such as `claude-code`, `codex`, `gemini-cli`, `opencode`, or `openclaw`. |
+| `agents[].enabled` | boolean | Whether this built-in agent is enabled in the UI and scanning/push flows. |
 | `cloud` | object | Active cloud-backup selection and scheduling state. |
 | `cloud.provider` | string | Active provider name, such as `git`, `aws`, `aliyun`, `azure`, `google`, `huawei`, or `tencent`. |
 | `cloud.enabled` | boolean | Whether cloud backup is enabled. |
@@ -152,14 +154,16 @@ Path: `<AppDataDir>/config_local.json`
 
 `config_local.json` stores machine-specific paths, local runtime state, and secrets. It is intentionally excluded from cloud backup and Git sync.
 
+The same startup cutover also rewrites legacy local keys such as `autoPushTools` / `tools` to `autoPushAgents` / `agents` before `config_local.json` is read.
+
 ### Example
 
 ```json
 {
   "skillsStorageDir": "/Users/demo/Library/Application Support/SkillFlow/skills",
-  "autoPushTools": ["codex", "gemini-cli"],
+  "autoPushAgents": ["codex", "gemini-cli"],
   "launchAtLogin": true,
-  "tools": [
+  "agents": [
     {
       "name": "claude-code",
       "scanDirs": [
@@ -171,9 +175,9 @@ Path: `<AppDataDir>/config_local.json`
       "enabled": true
     },
     {
-      "name": "my-custom-tool",
-      "scanDirs": ["/Users/demo/work/my-tool/skills"],
-      "pushDir": "/Users/demo/work/my-tool/skills",
+      "name": "my-custom-agent",
+      "scanDirs": ["/Users/demo/work/my-agent/skills"],
+      "pushDir": "/Users/demo/work/my-agent/skills",
       "custom": true,
       "enabled": true
     }
@@ -206,14 +210,14 @@ Path: `<AppDataDir>/config_local.json`
 | Key | Type | Meaning |
 |-----|------|---------|
 | `skillsStorageDir` | string | Absolute local path of the installed `skills/` directory. |
-| `autoPushTools` | string[] | Tool names that should receive auto-push after import/update flows. Values are trimmed and deduplicated. |
+| `autoPushAgents` | string[] | Agent names that should receive auto-push after import/update flows. Values are trimmed and deduplicated. |
 | `launchAtLogin` | boolean | Whether SkillFlow should register itself as a login/startup item on the current machine. |
-| `tools` | object[] | Tool path configuration. This includes built-in tools and all custom tools. |
-| `tools[].name` | string | Tool identifier. |
-| `tools[].scanDirs` | string[] | Local directories scanned for external skills from this tool. |
-| `tools[].pushDir` | string | Local target directory used when pushing skills to this tool. |
-| `tools[].custom` | boolean | `true` for user-created custom tools, `false` for built-in tools. |
-| `tools[].enabled` | boolean | Stored for every tool, but only meaningful for custom tools in `config_local.json`; built-in enable state comes from `config.json`. |
+| `agents` | object[] | Agent path configuration. This includes built-in agents and all custom agents. |
+| `agents[].name` | string | Agent identifier. |
+| `agents[].scanDirs` | string[] | Local directories scanned for external skills from this agent. |
+| `agents[].pushDir` | string | Local target directory used when pushing skills to this agent. |
+| `agents[].custom` | boolean | `true` for user-created custom agents, `false` for built-in agents. |
+| `agents[].enabled` | boolean | Stored for every agent, but only meaningful for custom agents in `config_local.json`; built-in enable state comes from `config.json`. |
 | `cloudCredentialsByProvider` | object | Sensitive provider credentials keyed by provider name. |
 | `cloudCredentialsByProvider.<provider>` | object | Local-only credential map for one provider. |
 | `proxy` | object | Local proxy settings used for outbound HTTP requests. |
@@ -334,7 +338,7 @@ Each installed skill gets one JSON sidecar file named after `Skill.ID` rather th
 
 ### Important note
 
-`meta/<skill-id>.json` stores installation state, not the YAML frontmatter parsed from `SKILL.md`. Frontmatter fields such as `name`, `description`, and `allowed-tools` stay in the skill content itself.
+`meta/<skill-id>.json` stores installation state, not the YAML frontmatter parsed from `SKILL.md`. Frontmatter fields such as `name`, `description`, and `allowed-agents` stay in the skill content itself.
 
 ## `meta_local/<skill-id>.local.json`
 

@@ -1,32 +1,32 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizePushedTools } from '../.tmp-tests/skillStatusStrip.js'
+import { summarizePushedAgents } from '../.tmp-tests/skillStatusStrip.js'
 
-test('summarizePushedTools returns all tools when under the visible cap', () => {
+test('summarizePushedAgents returns all agents when under the visible cap', () => {
   assert.deepEqual(
-    summarizePushedTools(['codex', 'claude'], 3),
+    summarizePushedAgents(['codex', 'claude'], 3),
     {
-      visibleTools: ['codex', 'claude'],
+      visibleAgents: ['codex', 'claude'],
       overflowCount: 0,
     },
   )
 })
 
-test('summarizePushedTools truncates visible tools and reports overflow count', () => {
+test('summarizePushedAgents truncates visible agents and reports overflow count', () => {
   assert.deepEqual(
-    summarizePushedTools(['codex', 'claude', 'gemini', 'opencode'], 2),
+    summarizePushedAgents(['codex', 'claude', 'gemini', 'opencode'], 2),
     {
-      visibleTools: ['codex', 'claude'],
+      visibleAgents: ['codex', 'claude'],
       overflowCount: 2,
     },
   )
 })
 
-test('summarizePushedTools handles a zero visible cap', () => {
+test('summarizePushedAgents handles a zero visible cap', () => {
   assert.deepEqual(
-    summarizePushedTools(['codex', 'claude'], 0),
+    summarizePushedAgents(['codex', 'claude'], 0),
     {
-      visibleTools: [],
+      visibleAgents: [],
       overflowCount: 2,
     },
   )

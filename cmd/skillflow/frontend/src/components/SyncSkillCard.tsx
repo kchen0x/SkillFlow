@@ -15,10 +15,10 @@ interface Props {
   showSelection?: boolean
   imported?: boolean
   updatable?: boolean
-  pushedTools?: string[]
+  pushedAgents?: string[]
   showImported?: boolean
   showUpdatable?: boolean
-  showPushedTools?: boolean
+  showPushedAgents?: boolean
   selected: boolean
   onToggle: () => void
 }
@@ -28,10 +28,10 @@ export default function SyncSkillCard({
   showSelection = true,
   imported,
   updatable,
-  pushedTools = [],
+  pushedAgents = [],
   showImported = false,
   showUpdatable = false,
-  showPushedTools = false,
+  showPushedAgents = false,
   selected,
   onToggle,
 }: Props) {
@@ -160,7 +160,7 @@ export default function SyncSkillCard({
             : <FolderOpen size={12} style={{ color: 'var(--text-muted)' }} className="shrink-0" />}
           <SkillStatusStrip
             badges={badges}
-            pushedTools={showPushedTools ? pushedTools : []}
+            pushedAgents={showPushedAgents ? pushedAgents : []}
             className="flex-1 min-w-0"
             singleLine
           />

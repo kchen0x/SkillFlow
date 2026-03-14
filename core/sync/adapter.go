@@ -6,7 +6,7 @@ import (
 	"github.com/shinerio/skillflow/core/skill"
 )
 
-type ToolAdapter interface {
+type AgentAdapter interface {
 	Name() string
 	DefaultSkillsDir() string
 	// Push copies skills into targetDir, flattened (no category subdirs)

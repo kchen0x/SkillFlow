@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/skill"
-	toolsync "github.com/shinerio/skillflow/core/sync"
+	agentsync "github.com/shinerio/skillflow/core/sync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +25,7 @@ func TestFilesystemAdapterPushFlattens(t *testing.T) {
 	writeSkill(t, skillDir, "skill.md")
 	sk := &skill.Skill{Name: "my-skill", Path: skillDir}
 
-	adapter := toolsync.NewFilesystemAdapter("test-tool", "")
+	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
 	require.NoError(t, adapter.Push(context.Background(), []*skill.Skill{sk}, dst))
 
 	_, err := os.Stat(filepath.Join(dst, "my-skill", "skill.md"))
@@ -38,7 +38,7 @@ func TestFilesystemAdapterPullFlat(t *testing.T) {
 	writeSkill(t, filepath.Join(src, "skill-y"), "SKILL.MD")
 	require.NoError(t, os.MkdirAll(filepath.Join(src, "not-a-skill"), 0755)) // no skill.md
 
-	adapter := toolsync.NewFilesystemAdapter("test-tool", "")
+	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
 	assert.Len(t, skills, 2)
@@ -55,7 +55,7 @@ func TestFilesystemAdapterPullNested(t *testing.T) {
 	// category dir itself has no skill.md — should not be returned
 	require.NoError(t, os.MkdirAll(filepath.Join(src, "empty-category"), 0755))
 
-	adapter := toolsync.NewFilesystemAdapter("test-tool", "")
+	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
 
@@ -71,7 +71,7 @@ func TestFilesystemAdapterPullWithMaxDepth(t *testing.T) {
 	writeSkill(t, filepath.Join(src, "skills", "skill-a"), "skill.md")
 	writeSkill(t, filepath.Join(src, "a", "b", "c", "skill-d"), "skill.md")
 
-	adapter := toolsync.NewFilesystemAdapter("test-tool", "")
+	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.PullWithMaxDepth(context.Background(), src, 2)
 	require.NoError(t, err)
 
@@ -86,7 +86,7 @@ func TestFilesystemAdapterPullDefaultRespectsDepthLimit(t *testing.T) {
 	src := t.TempDir()
 	writeSkill(t, filepath.Join(src, "a", "b", "c", "d", "e", "f", "skill-g"), "skill.md")
 
-	adapter := toolsync.NewFilesystemAdapter("test-tool", "")
+	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
 	assert.Empty(t, skills)
@@ -100,7 +100,7 @@ func TestFilesystemAdapterPullSkillNotRecursed(t *testing.T) {
 	// sub-dir inside the skill that also has a skill.md
 	writeSkill(t, filepath.Join(skillDir, "nested"), "skill.md")
 
-	adapter := toolsync.NewFilesystemAdapter("test-tool", "")
+	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
 	// only parent-skill, not nested
@@ -109,7 +109,7 @@ func TestFilesystemAdapterPullSkillNotRecursed(t *testing.T) {
 }
 
 func TestFilesystemAdapterPullDirNotExist(t *testing.T) {
-	adapter := toolsync.NewFilesystemAdapter("test-tool", "")
+	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
 	_, err := adapter.Pull(context.Background(), "/nonexistent/path")
 	assert.Error(t, err)
 }

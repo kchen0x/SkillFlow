@@ -82,12 +82,13 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 `App.startup()` 完成核心后端初始化：
 
 1. 解析 `config.AppDataDir()`
-2. 通过 `core/config.Service` 加载配置
-3. 初始化滚动日志
-4. 创建 Skill 存储、收藏仓库存储，以及本地派生视图缓存管理器
-5. 注册工具适配器与云服务商
-6. 启动后端事件转发
-7. 启动云备份自动同步计时器
+2. 执行 `core/upgrade` 中的单次启动割接
+3. 通过 `core/config.Service` 加载配置
+4. 初始化滚动日志
+5. 创建 Skill 存储、收藏仓库存储，以及本地派生视图缓存管理器
+6. 注册智能体适配器与云服务商
+7. 启动后端事件转发
+8. 启动云备份自动同步计时器
 
 `App.domReady()` 负责外壳/UI 相关初始化：
 
@@ -138,11 +139,11 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 重要规则：
 
 - `config.json` 只保存跨设备可同步的安全配置。
-- `config_local.json` 保存机器相关路径、自动推送目标、开机自启、代理、窗口状态、自定义工具路径配置，以及敏感云凭据。
+- `config_local.json` 保存机器相关路径、自动推送目标、开机自启、代理、窗口状态、自定义智能体路径配置，以及敏感云凭据。
 - `meta/*.json`、`star_repos.json` 等可同步文件中的本地路径，在目标位于同步根目录内时必须以 **正斜杠相对路径** 形式持久化。
 - 如果 `SkillsStorageDir` 被移出默认应用数据目录，同步根目录会变成 `skills/` 与 `meta/` 的共同父目录。
 - 日志文件固定为 **两个**，每个 **1MB** 上限：`skillflow.log` 与 `skillflow.log.1`。
-- `cache/viewstate/*.json` 只保存可重建的派生状态，例如已安装 Skill 快照和工具 presence 索引。这些文件只存在于本机，绝不能被视为可同步真值。
+- `cache/viewstate/*.json` 只保存可重建的派生状态，例如已安装 Skill 快照和智能体 presence 索引。这些文件只存在于本机，绝不能被视为可同步真值。
 - `runtime/*` 保存 helper/UI 的回环端点、token、PID 以及单实例协调状态。这些文件只属于当前设备，绝不能参与同步，需要时会自动重建。
 
 ---
@@ -160,12 +161,13 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 | `core/notify` | 缓冲事件总线与事件载荷类型 |
 | `core/pathutil` | 跨平台路径归一化与相对路径持久化辅助 |
 | `core/prompt` | 提示词库存储与导入导出 |
-| `core/registry` | 工具适配器和云服务商的全局注册表 |
+| `core/registry` | 智能体适配器和云服务商的全局注册表 |
 | `core/skill` | Skill 模型、存储、校验、已安装索引 |
 | `core/skillkey` | Git Skill 与内容型 Skill 的稳定逻辑主键生成 |
-| `core/sync` | `ToolAdapter` 接口和基于文件系统的适配器实现 |
-| `core/update` | 保留给测试和直连式辅助场景的 GitHub commit 检测工具；已安装 Skill 的更新状态现在来自本地仓库缓存 SHA 比较 |
-| `core/viewstate` | 本地派生快照缓存、fingerprint 计算，以及增量工具 presence 辅助逻辑 |
+| `core/sync` | `AgentAdapter` 接口和基于文件系统的适配器实现 |
+| `core/upgrade` | 启动时对持久化配置做术语/schema 割接 |
+| `core/update` | 保留给测试和直连式辅助场景的 GitHub commit 检测逻辑；已安装 Skill 的更新状态现在来自本地仓库缓存 SHA 比较 |
+| `core/viewstate` | 本地派生快照缓存、fingerprint 计算，以及增量智能体 presence 辅助逻辑 |
 
 ---
 
@@ -194,8 +196,8 @@ Wails 应用包必须保持扁平，因此通过文件名前缀划分职责：
 为了让页面切换和大列表渲染更流畅，后端现在会在 `cache/viewstate/` 下维护本地专属的派生缓存。
 
 - `ListSkills()` 采用 snapshot-first：当已安装 Skill 的 fingerprint 匹配时，会直接返回缓存的 `InstalledSkillEntry[]`，而不是立刻重新构建 push presence。
-- 已安装 Skill fingerprint 由同步相关的 skill 元数据和工具 push 目录摘要共同决定，因此用户切走页面再回来时，如果这些依赖发生变化，就会重新读取当前真值。
-- 工具 push presence 按工具粒度增量重建，使用每个工具自己的 fingerprint，而不是每次请求都把所有配置过的 `PushDir` 全量重扫一遍。
+- 已安装 Skill fingerprint 由同步相关的 skill 元数据和智能体 push 目录摘要共同决定，因此用户切走页面再回来时，如果这些依赖发生变化，就会重新读取当前真值。
+- 智能体 push presence 按智能体粒度增量重建，使用每个智能体自己的 fingerprint，而不是每次请求都把所有配置过的 `PushDir` 全量重扫一遍。
 
 这些缓存只是性能优化产物：
 
@@ -237,13 +239,13 @@ type Skill struct {
 ```go
 type AppConfig struct {
     SkillsStorageDir      string
-    AutoPushTools         []string
+    AutoPushAgents        []string
     LaunchAtLogin         bool
     DefaultCategory       string
     LogLevel              string
     RepoScanMaxDepth      int
     SkillStatusVisibility SkillStatusVisibilityConfig
-    Tools                 []ToolConfig
+    Agents                []AgentConfig
     Cloud                 CloudConfig
     CloudProfiles         map[string]CloudProviderConfig
     Proxy                 ProxyConfig
@@ -253,13 +255,13 @@ type AppConfig struct {
 
 配置拆分规则：
 
-- **共享 / 可同步**：`DefaultCategory`、`LogLevel`、`RepoScanMaxDepth`、状态显示策略、内置工具启用状态、当前云服务商状态、云服务商非敏感配置、跳过的应用版本。
-- **本地专属**：`SkillsStorageDir`、`AutoPushTools`、`LaunchAtLogin`、工具路径、自定义工具定义、代理、窗口尺寸、敏感云凭据。
+- **共享 / 可同步**：`DefaultCategory`、`LogLevel`、`RepoScanMaxDepth`、状态显示策略、内置智能体启用状态、当前云服务商状态、云服务商非敏感配置、跳过的应用版本。
+- **本地专属**：`SkillsStorageDir`、`AutoPushAgents`、`LaunchAtLogin`、智能体路径、自定义智能体定义、代理、窗口尺寸、敏感云凭据。
 
 相关嵌套模型：
 
 ```go
-type ToolConfig struct {
+type AgentConfig struct {
     Name     string
     ScanDirs []string
     PushDir  string
@@ -309,14 +311,14 @@ type StarSkill struct {
 
 ## 统一的 Skill 身份与状态模型
 
-本节对所有涉及 Skill 卡片、导入/安装/推送/拉取流程、收藏仓库、工具扫描或更新徽标的改动都具有约束力。
+本节对所有涉及 Skill 卡片、导入/安装/推送/拉取流程、收藏仓库、智能体扫描或更新徽标的改动都具有约束力。
 
 ### 身份分层
 
 SkillFlow 区分两类身份：
 
 - **实例身份**：`Skill.ID`，用于“我的 Skills”中的单个已安装副本操作，例如删除、移动分类、实例更新。
-- **逻辑身份**：跨模块稳定身份，用来判断 Dashboard、Starred Repos、Tool Skills、Pull、Push 中展示的是不是同一个 Skill。
+- **逻辑身份**：跨模块稳定身份，用来判断 Dashboard、Starred Repos、我的智能体、Pull、Push 中展示的是不是同一个 Skill。
 
 `Name` 和绝对 `Path` 只是展示或定位信息，**不能** 作为跨模块主键。
 
@@ -336,21 +338,21 @@ SkillFlow 区分两类身份：
 | Sync Push | 已安装 `Skill` | 选择用 `Skill.ID`；推送状态解析用逻辑主键 |
 | GitHub 扫描/安装 | 远端候选项 | 用 repo source + subpath 派生的逻辑主键 |
 | Starred Repos | `StarSkill` | 用 repo source + subpath 派生的逻辑主键 |
-| Tool Skills | 工具侧候选项 / 聚合项 | 去重与状态用逻辑主键；工具内打开/删除才用 path |
-| Sync Pull | 工具侧候选项 | 导入与冲突检测用逻辑主键 |
+| Agent Skills | 智能体侧候选项 / 聚合项 | 去重与状态用逻辑主键；智能体内打开/删除才用 path |
+| Sync Pull | 智能体侧候选项 | 导入与冲突检测用逻辑主键 |
 
 ### 统一状态语义
 
 - **installed**：该逻辑主键在“我的 Skills”中至少存在一个已安装实例
 - **imported**：外部来源页面对 `installed` 的文案别名
-- **pushed**：该逻辑 Skill 已存在于某工具配置的 `PushDir`
-- **seenInToolScan**：该逻辑 Skill 已出现在某工具配置的 `ScanDirs`；这 **不代表** SkillFlow 已经推送过它
+- **pushed**：该逻辑 Skill 已存在于某智能体配置的 `PushDir`
+- **seenInAgentScan**：该逻辑 Skill 已出现在某智能体配置的 `ScanDirs`；这 **不代表** SkillFlow 已经推送过它
 - **updatable**：至少有一个已安装 Git Skill 实例在本地缓存仓库中的 SHA 比本地 `SourceSHA` 更新
 
 ### 状态与去重规则
 
-- `pushed` 比“工具里某处存在”更窄，它特指配置的推送目标。
-- `seenInToolScan` 是观察型状态，不能被误写成“已推送”。
+- `pushed` 比“智能体里某处存在”更窄，它特指配置的推送目标。
+- `seenInAgentScan` 是观察型状态，不能被误写成“已推送”。
 - 跨模块去重必须优先使用逻辑主键。
 - 不同仓库中的同名项，只要逻辑主键不同，就必须视为不同 Skill。
 - 仅按名称匹配只能作为最后兼容兜底，且不能覆盖更强的逻辑主键匹配。
@@ -360,7 +362,7 @@ SkillFlow 区分两类身份：
 - 只有具备稳定 repo source + subpath，且其对应仓库 clone 已经存在于本地 `cache/` 树中的已安装 Git Skill 才参与更新检测。
 - 缓存查询与已安装实例关联必须使用同一逻辑 Git 主键。
 - `CheckUpdates()` 会把已安装 Skill 的 `SourceSHA` 与本地缓存仓库中同一 `SourceSubPath` 的最新提交 SHA 做比较，不会直接调用 GitHub Commits API。
-- `UpdateSkill()` 会把该缓存仓库子目录的文件复制到已安装库目录中，然后再基于更新后的已安装副本刷新已推送到工具目录的副本。
+- `UpdateSkill()` 会把该缓存仓库子目录的文件复制到已安装库目录中，然后再基于更新后的已安装副本刷新已推送到智能体目录的副本。
 - 当最新检查确认本地已是最新时，应清空 `LatestSHA`。
 - 每次完成检查后都应更新 `LastCheckedAt`，并将其写入仅本地持久化的 `meta_local/<skill-id>.local.json`（不参与同步）。
 
@@ -369,7 +371,7 @@ SkillFlow 区分两类身份：
 - 跨模块关联由后端统一负责，并将归一化状态返回给前端。
 - 前端页面不应仅基于 `Name` 或 `Path` 自行判断“是否同一个 Skill”“是否已导入”“是否已推送”。
 - `core/skillkey` 负责生成逻辑主键。
-- `core/skill.BuildInstalledIndex` 负责把 GitHub 扫描、收藏仓库、工具扫描结果关联回已安装状态。
+- `core/skill.BuildInstalledIndex` 负责把 GitHub 扫描、收藏仓库、智能体扫描结果关联回已安装状态。
 
 ---
 
@@ -424,7 +426,7 @@ cmd/skillflow/frontend/
 
 主要前端区域：
 
-- `src/pages/`：Dashboard、Sync Push/Pull、Starred Repos、Backup、Settings、My Tools、My Prompts 等路由页
+- `src/pages/`：Dashboard、Sync Push/Pull、Starred Repos、Backup、Settings、My Agents、My Prompts 等路由页
 - `src/components/`：卡片、对话框、分类栏、列表控件等共享组件
 - `src/contexts/`：语言、主题、状态显示策略等上下文状态
 - `src/i18n/`：中英文翻译词典
@@ -486,11 +488,11 @@ import { ListSkills } from '../../wailsjs/go/main/App'
 2. 在 `cmd/skillflow/providers.go` 中注册
 3. 通过 `RequiredCredentials()` 暴露其凭据字段
 
-### 新增工具适配器
+### 新增智能体适配器
 
-1. 标准文件系统型工具可直接在 `cmd/skillflow/adapters.go` 中注册
-2. 如需自定义行为，实现 `toolsync.ToolAdapter`
-3. 导入 `core/sync` 时始终使用 `toolsync` 别名，避免与标准库 `sync` 冲突
+1. 标准文件系统型智能体可直接在 `cmd/skillflow/adapters.go` 中注册
+2. 如需自定义行为，实现 `agentsync.AgentAdapter`
+3. 导入 `core/sync` 时始终使用 `agentsync` 别名，避免与标准库 `sync` 冲突
 
 ### 新增可复用后端模块
 
@@ -500,4 +502,4 @@ import { ListSkills } from '../../wailsjs/go/main/App'
 
 ---
 
-*最后更新：2026-03-11*
+*最后更新：2026-03-14*

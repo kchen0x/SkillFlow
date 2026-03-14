@@ -6,7 +6,7 @@ import {
   UpdateStarredRepo, UpdateAllStarredRepos,
   ListAllStarSkills, ListRepoStarSkills,
   ImportStarSkills, ListCategories, OpenURL,
-  GetEnabledTools, PushStarSkillsToTools, PushStarSkillsToToolsForce, CheckMissingPushDirs,
+  GetEnabledAgents, PushStarSkillsToAgents, PushStarSkillsToAgentsForce, CheckMissingAgentPushDirs,
 } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
@@ -47,10 +47,10 @@ export default function StarredRepos() {
   const [importCategory, setImportCategory] = useState('')
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [tools, setTools] = useState<any[]>([])
+  const [agents, setAgents] = useState<any[]>([])
   const [showPushToolDialog, setShowPushToolDialog] = useState(false)
-  const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
-  const [pushingToTools, setPushingToTools] = useState(false)
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set())
+  const [pushingToAgents, setPushingToAgents] = useState(false)
   const [pushConflicts, setPushConflicts] = useState<any[]>([])
   const [showPushConflictDialog, setShowPushConflictDialog] = useState(false)
   const [missingDirs, setMissingDirs] = useState<{name: string, dir: string}[]>([])
@@ -89,7 +89,7 @@ export default function StarredRepos() {
       setCategories(c ?? [])
       if (c && c.length > 0) setImportCategory(c[0])
     })
-    GetEnabledTools().then(t => setTools(t ?? []))
+    GetEnabledAgents().then(a => setAgents(a ?? []))
     const off1 = EventsOn('star.sync.progress', () => loadRepos())
     const off2 = EventsOn('star.sync.done', () => { loadRepos(); loadAllSkills(); setSyncing(false) })
     return () => { off1?.(); off2?.() }
@@ -205,12 +205,12 @@ export default function StarredRepos() {
     } finally { setImporting(false) }
   }
 
-  const doPushToTools = async () => {
-    setPushingToTools(true)
+  const doPushToAgents = async () => {
+    setPushingToAgents(true)
     try {
       const paths = [...selectedPaths]
-      const toolNames = [...selectedTools]
-      const conflicts = await PushStarSkillsToTools(paths, toolNames)
+      const agentNames = [...selectedAgents]
+      const conflicts = await PushStarSkillsToAgents(paths, agentNames)
       setShowPushToolDialog(false)
       if (conflicts && conflicts.length > 0) {
         setPushConflicts(conflicts)
@@ -219,52 +219,52 @@ export default function StarredRepos() {
         setSelectMode(false)
         setSelectedPaths(new Set())
         const count = paths.length
-        const toolCount = toolNames.length
-        setPushSuccessMsg(t('starred.successMsg', { count, toolCount }))
+        const agentCount = agentNames.length
+        setPushSuccessMsg(t('starred.successMsg', { count, toolCount: agentCount }))
         setTimeout(() => setPushSuccessMsg(''), 3000)
       }
     } catch (e: any) {
-      console.error('Push to tools failed:', e)
+      console.error('Push to agents failed:', e)
     } finally {
-      setPushingToTools(false)
+      setPushingToAgents(false)
     }
   }
 
-  const handlePushToTools = async () => {
-    const toolNames = [...selectedTools]
-    const missing = await CheckMissingPushDirs(toolNames)
+  const handlePushToAgents = async () => {
+    const agentNames = [...selectedAgents]
+    const missing = await CheckMissingAgentPushDirs(agentNames)
     if (missing && missing.length > 0) {
       setMissingDirs(missing as {name: string, dir: string}[])
       setShowMkdirDialog(true)
     } else {
-      await doPushToTools()
+      await doPushToAgents()
     }
   }
 
   const confirmMkdirAndPush = async () => {
     setShowMkdirDialog(false)
     setMissingDirs([])
-    await doPushToTools()
+    await doPushToAgents()
   }
 
-  const handlePushToToolsForce = async () => {
+  const handlePushToAgentsForce = async () => {
     try {
       for (const conflict of pushConflicts) {
-        await PushStarSkillsToToolsForce([conflict.skillPath], [conflict.toolName])
+        await PushStarSkillsToAgentsForce([conflict.skillPath], [conflict.agentName])
       }
       setShowPushConflictDialog(false)
       setSelectMode(false)
       setSelectedPaths(new Set())
       setPushConflicts([])
-      setPushSuccessMsg(t('starred.successMsg', { count: selectedPaths.size, toolCount: selectedTools.size }))
+      setPushSuccessMsg(t('starred.successMsg', { count: selectedPaths.size, toolCount: selectedAgents.size }))
       setTimeout(() => setPushSuccessMsg(''), 3000)
     } catch (e: any) {
       console.error('Force push failed:', e)
     }
   }
 
-  const toggleTool = (name: string) => {
-    setSelectedTools(prev => {
+  const toggleAgent = (name: string) => {
+    setSelectedAgents(prev => {
       const next = new Set(prev)
       next.has(name) ? next.delete(name) : next.add(name)
       return next
@@ -391,7 +391,7 @@ export default function StarredRepos() {
               <CheckSquare size={14} />{selectedPaths.size === skills.length ? t('common.deselectAll') : t('common.selectAll')}
             </button>
             <button
-              onClick={() => { setSelectedTools(new Set()); setShowPushToolDialog(true) }}
+              onClick={() => { setSelectedAgents(new Set()); setShowPushToolDialog(true) }}
               disabled={selectedPaths.size === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:opacity-40 transition-colors"
               style={{ background: 'rgba(52,211,153,0.2)', color: 'var(--color-success)', border: '1px solid rgba(52,211,153,0.4)' }}
@@ -586,7 +586,7 @@ export default function StarredRepos() {
         </div>
       </AnimatedDialog>
 
-      {/* Push to tool dialog */}
+      {/* Push to agent dialog */}
       <AnimatedDialog open={showPushToolDialog} onClose={() => setShowPushToolDialog(false)} width="w-[420px]">
         <div className="flex justify-between items-center mb-1">
           <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -595,16 +595,16 @@ export default function StarredRepos() {
           <button onClick={() => setShowPushToolDialog(false)} style={{ color: 'var(--text-muted)' }}><X size={16} /></button>
         </div>
         <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>{t('starred.pushDialogDesc')}</p>
-        {tools.length === 0 ? (
+        {agents.length === 0 ? (
           <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>{t('starred.noTools')}</p>
         ) : (
           <div className="flex flex-wrap gap-2 mb-4">
-            {tools.map((t: any) => (
+            {agents.map((t: any) => (
               <button
                 key={t.name}
-                onClick={() => toggleTool(t.name)}
+                onClick={() => toggleAgent(t.name)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200"
-                style={toolBtnStyle(selectedTools.has(t.name))}
+                style={toolBtnStyle(selectedAgents.has(t.name))}
               >
                 <ToolIcon name={t.name} size={16} />
                 {t.name}
@@ -614,11 +614,11 @@ export default function StarredRepos() {
         )}
         <div className="flex gap-3">
           <button
-            onClick={handlePushToTools}
-            disabled={pushingToTools || selectedTools.size === 0 || tools.length === 0}
+            onClick={handlePushToAgents}
+            disabled={pushingToAgents || selectedAgents.size === 0 || agents.length === 0}
             className="btn-primary flex-1 py-2 rounded-lg text-sm"
           >
-            {pushingToTools ? t('starred.pushingToTools') : t('starred.pushToNTools', { count: selectedTools.size })}
+            {pushingToAgents ? t('starred.pushingToTools') : t('starred.pushToNTools', { count: selectedAgents.size })}
           </button>
           <button onClick={() => setShowPushToolDialog(false)} className="btn-secondary flex-1 py-2 rounded-lg text-sm">{t('common.cancel')}</button>
         </div>
@@ -690,17 +690,17 @@ export default function StarredRepos() {
         <ul className="space-y-1 mb-4 max-h-40 overflow-y-auto">
           {pushConflicts.map(c => (
             <li
-              key={`${c.skillPath}|${c.toolName}`}
+              key={`${c.skillPath}|${c.agentName}`}
               className="text-sm px-3 py-1.5 rounded"
               style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
             >
-              {c.skillName} → {c.toolName}
+              {c.skillName} → {c.agentName}
             </li>
           ))}
         </ul>
         <div className="flex gap-3">
           <button
-            onClick={handlePushToToolsForce}
+            onClick={handlePushToAgentsForce}
             className="flex-1 py-2 rounded-lg text-sm text-white transition-colors"
             style={{ background: 'var(--color-warning)' }}
           >{t('starred.overwriteAll')}</button>
@@ -868,9 +868,9 @@ function SkillGrid({ skills, loading, selectMode, selectedPaths, onToggle, showR
             source={sourceType}
             subtitle={showRepo ? sk.repoName : undefined}
             imported={sk.imported}
-            pushedTools={sk.pushedTools}
+            pushedAgents={sk.pushedAgents}
             showImported={visibility.includes('imported')}
-            showPushedTools={visibility.includes('pushedTools')}
+            showPushedAgents={visibility.includes('pushedAgents')}
             showSelection={selectMode}
             selected={selectedPaths.has(sk.path)}
             onToggle={() => selectMode && onToggle(sk.path)}

@@ -15,7 +15,7 @@ import (
 )
 
 const installedSkillsSnapshotName = "installed_skills"
-const toolPresenceSnapshotName = "tool_presence"
+const agentPresenceSnapshotName = "agent_presence"
 const allStarSkillsSnapshotName = "all_star_skills"
 
 func (a *App) ensureViewCache() *viewstate.Manager {
@@ -25,7 +25,7 @@ func (a *App) ensureViewCache() *viewstate.Manager {
 
 	root := a.cacheDir
 	if strings.TrimSpace(root) == "" {
-		root = filepath.Join(config.AppDataDir(), "cache")
+		root = filepath.Join(appDataDirFunc(), "cache")
 	}
 	a.viewCache = viewstate.NewManager(filepath.Join(root, "viewstate"))
 	return a.viewCache
@@ -42,7 +42,7 @@ func (a *App) listSkillsUncached() ([]InstalledSkillEntry, error) {
 		}
 	}
 	installedIndex := skill.BuildInstalledIndex(skills)
-	return a.buildInstalledSkillEntries(skills, a.buildToolPresenceIndex(installedIndex)), nil
+	return a.buildInstalledSkillEntries(skills, a.buildAgentPresenceIndex(installedIndex)), nil
 }
 
 func (a *App) installedSkillsFingerprint() (string, error) {
@@ -62,40 +62,40 @@ func (a *App) installedSkillsFingerprint() (string, error) {
 		return "", err
 	}
 
-	toolsConfig, err := json.Marshal(cfg.Tools)
+	agentsConfig, err := json.Marshal(cfg.Agents)
 	if err != nil {
 		return "", err
 	}
 
 	parts := []string{
 		strconv.Itoa(cfg.RepoScanMaxDepth),
-		string(toolsConfig),
+		string(agentsConfig),
 		metaFingerprint,
 		metaLocalFingerprint,
 	}
-	for _, tool := range cfg.Tools {
-		pushDirFingerprint, err := directorySummaryFingerprint(tool.PushDir)
+	for _, agent := range cfg.Agents {
+		pushDirFingerprint, err := directorySummaryFingerprint(agent.PushDir)
 		if err != nil {
 			return "", err
 		}
-		parts = append(parts, tool.Name, pushDirFingerprint)
+		parts = append(parts, agent.Name, pushDirFingerprint)
 	}
 
 	return viewstate.HashFingerprint(parts...), nil
 }
 
-func (a *App) toolPresenceConfigFingerprint(cfg config.AppConfig) (string, error) {
-	toolsConfig, err := json.Marshal(struct {
-		RepoScanMaxDepth int                 `json:"repoScanMaxDepth"`
-		Tools            []config.ToolConfig `json:"tools"`
+func (a *App) agentPresenceConfigFingerprint(cfg config.AppConfig) (string, error) {
+	agentsConfig, err := json.Marshal(struct {
+		RepoScanMaxDepth int                  `json:"repoScanMaxDepth"`
+		Agents           []config.AgentConfig `json:"agents"`
 	}{
 		RepoScanMaxDepth: cfg.RepoScanMaxDepth,
-		Tools:            cfg.Tools,
+		Agents:           cfg.Agents,
 	})
 	if err != nil {
 		return "", err
 	}
-	return viewstate.HashFingerprint(string(toolsConfig)), nil
+	return viewstate.HashFingerprint(string(agentsConfig)), nil
 }
 
 func (a *App) allStarSkillsFingerprint() (string, error) {
@@ -123,60 +123,60 @@ func (a *App) allStarSkillsFingerprint() (string, error) {
 	return viewstate.HashFingerprint(installedFingerprint, string(repoData)), nil
 }
 
-func (a *App) buildToolPresenceSnapshot(cfg config.AppConfig, idx *skill.InstalledIndex) (viewstate.ToolPresenceSnapshot, error) {
-	configFingerprint, err := a.toolPresenceConfigFingerprint(cfg)
+func (a *App) buildAgentPresenceSnapshot(cfg config.AppConfig, idx *skill.InstalledIndex) (viewstate.AgentPresenceSnapshot, error) {
+	configFingerprint, err := a.agentPresenceConfigFingerprint(cfg)
 	if err != nil {
-		return viewstate.ToolPresenceSnapshot{}, err
+		return viewstate.AgentPresenceSnapshot{}, err
 	}
 
-	var previous viewstate.ToolPresenceSnapshot
-	_, _ = a.ensureViewCache().Load(toolPresenceSnapshotName, configFingerprint, &previous)
+	var previous viewstate.AgentPresenceSnapshot
+	_, _ = a.ensureViewCache().Load(agentPresenceSnapshotName, configFingerprint, &previous)
 
-	inputs := make([]viewstate.ToolPresenceInput, 0, len(cfg.Tools))
-	toolsByName := make(map[string]config.ToolConfig, len(cfg.Tools))
-	for _, tool := range cfg.Tools {
-		if strings.TrimSpace(tool.PushDir) == "" {
+	inputs := make([]viewstate.AgentPresenceInput, 0, len(cfg.Agents))
+	agentsByName := make(map[string]config.AgentConfig, len(cfg.Agents))
+	for _, agent := range cfg.Agents {
+		if strings.TrimSpace(agent.PushDir) == "" {
 			continue
 		}
-		fingerprint, err := directorySummaryFingerprint(tool.PushDir)
+		fingerprint, err := directorySummaryFingerprint(agent.PushDir)
 		if err != nil {
-			return viewstate.ToolPresenceSnapshot{}, err
+			return viewstate.AgentPresenceSnapshot{}, err
 		}
-		inputs = append(inputs, viewstate.ToolPresenceInput{
-			Name:        tool.Name,
+		inputs = append(inputs, viewstate.AgentPresenceInput{
+			Name:        agent.Name,
 			Fingerprint: fingerprint,
 		})
-		toolsByName[tool.Name] = tool
+		agentsByName[agent.Name] = agent
 	}
 
-	next, err := viewstate.RebuildToolPresence(previous, inputs, func(toolName string) ([]string, error) {
-		tool, ok := toolsByName[toolName]
+	next, err := viewstate.RebuildAgentPresence(previous, inputs, func(agentName string) ([]string, error) {
+		agent, ok := agentsByName[agentName]
 		if !ok {
 			return nil, nil
 		}
-		if _, err := os.Stat(tool.PushDir); err != nil {
+		if _, err := os.Stat(agent.PushDir); err != nil {
 			if os.IsNotExist(err) {
 				return nil, nil
 			}
 			return nil, err
 		}
 
-		pushed, err := pullToolSkills(a.ctx, getAdapter(tool), tool.PushDir, a.repoScanMaxDepth())
+		pushed, err := pullAgentSkills(a.ctx, getAdapter(agent), agent.PushDir, a.repoScanMaxDepth())
 		if err != nil {
 			return nil, err
 		}
 
 		var keys []string
 		for _, candidate := range pushed {
-			keys = append(keys, toolPresenceKeys(candidate, idx)...)
+			keys = append(keys, agentPresenceKeys(candidate, idx)...)
 		}
 		return compactKeys(keys...), nil
 	})
 	if err != nil {
-		return viewstate.ToolPresenceSnapshot{}, err
+		return viewstate.AgentPresenceSnapshot{}, err
 	}
 
-	_ = a.ensureViewCache().Save(toolPresenceSnapshotName, configFingerprint, next)
+	_ = a.ensureViewCache().Save(agentPresenceSnapshotName, configFingerprint, next)
 	return next, nil
 }
 

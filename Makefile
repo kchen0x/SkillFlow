@@ -51,9 +51,10 @@ ifneq ($(OS),Windows_NT)
 	fi
 endif
 
-## test: Run all Go tests
+## test: Run Go tests and frontend unit tests
 test:
 	go test ./core/...
+	cd $(APP_DIR)/frontend && npm run test:unit
 
 ## test-cloud: Run Go tests with only selected cloud providers, e.g. make test-cloud PROVIDERS="aws,google"
 test-cloud:

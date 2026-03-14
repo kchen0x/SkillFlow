@@ -104,7 +104,7 @@ func newViewStateTestApp(t *testing.T) (*App, string, string, string) {
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
 	cfg.SkillsStorageDir = skillsDir
-	cfg.Tools = []config.ToolConfig{
+	cfg.Agents = []config.AgentConfig{
 		{
 			Name:     "codex",
 			ScanDirs: []string{pushDir},

@@ -13,12 +13,12 @@ interface Skill {
   source: 'github' | 'manual'
   hasUpdate: boolean
   path?: string
-  pushedTools?: string[]
+  pushedAgents?: string[]
 }
 interface Props {
   skill: Skill
   showUpdatable: boolean
-  showPushedTools: boolean
+  showPushedAgents: boolean
   categories: string[]
   onDelete: () => void
   onUpdate?: () => Promise<void> | void
@@ -35,7 +35,7 @@ interface Props {
 }
 
 export default function SkillCard({
-  skill, showUpdatable, showPushedTools, categories, onDelete, onUpdate, onMoveCategory,
+  skill, showUpdatable, showPushedAgents, categories, onDelete, onUpdate, onMoveCategory,
   updating = false, dragging = false, dropTargetActive = false, onDragStateChange,
   selectMode, selected, onToggleSelect,
   onHoverStart, onHoverEnd,
@@ -211,7 +211,7 @@ export default function SkillCard({
           <SkillStatusStrip
             className="min-w-0 flex-1 pr-14"
             badges={badges}
-            pushedTools={showPushedTools ? (skill.pushedTools ?? []) : []}
+            pushedAgents={showPushedAgents ? (skill.pushedAgents ?? []) : []}
             singleLine
           />
         </div>

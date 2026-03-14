@@ -1,7 +1,7 @@
 import { type CSSProperties } from 'react'
 import { ToolIcon } from '../config/toolIcons'
 import { useLanguage } from '../contexts/LanguageContext'
-import { summarizePushedTools } from '../lib/skillStatusStrip'
+import { summarizePushedAgents } from '../lib/skillStatusStrip'
 
 type BadgeTone = 'accent' | 'success' | 'warning' | 'muted' | 'info'
 
@@ -13,8 +13,8 @@ export type SkillStatusBadge = {
 
 interface Props {
   badges?: SkillStatusBadge[]
-  pushedTools?: string[]
-  maxVisiblePushedTools?: number
+  pushedAgents?: string[]
+  maxVisiblePushedAgents?: number
   className?: string
   singleLine?: boolean
 }
@@ -49,13 +49,13 @@ const toneStyles: Record<BadgeTone, CSSProperties> = {
 
 export default function SkillStatusStrip({
   badges = [],
-  pushedTools = [],
-  maxVisiblePushedTools = 3,
+  pushedAgents = [],
+  maxVisiblePushedAgents = 3,
   className = '',
   singleLine = true,
 }: Props) {
   const { t } = useLanguage()
-  const { visibleTools, overflowCount } = summarizePushedTools(pushedTools, maxVisiblePushedTools)
+  const { visibleAgents, overflowCount } = summarizePushedAgents(pushedAgents, maxVisiblePushedAgents)
 
   return (
     <div
@@ -74,15 +74,15 @@ export default function SkillStatusStrip({
         </span>
       ))}
 
-      {pushedTools.length > 0 && (
+      {pushedAgents.length > 0 && (
         <span
           className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] leading-4"
           style={toneStyles.success}
-          title={t('common.pushedToTools', { tools: pushedTools.join(', ') })}
+          title={t('common.pushedToAgents', { agents: pushedAgents.join(', ') })}
         >
           <span className="flex min-w-0 max-w-[8rem] items-center gap-1 overflow-hidden">
-            {visibleTools.map((toolName) => (
-              <ToolIcon key={toolName} name={toolName} size={16} />
+            {visibleAgents.map((agentName) => (
+              <ToolIcon key={agentName} name={agentName} size={16} />
             ))}
             {overflowCount > 0 && (
               <span

@@ -4,6 +4,6 @@ type PushConflict struct {
 	SkillID    string `json:"skillId,omitempty"`
 	SkillName  string `json:"skillName"`
 	SkillPath  string `json:"skillPath,omitempty"`
-	ToolName   string `json:"toolName"`
+	AgentName  string `json:"agentName"`
 	TargetPath string `json:"targetPath"`
 }
