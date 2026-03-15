@@ -49,14 +49,19 @@ func (a *App) ListPromptCategories() ([]string, error) {
 	return categories, nil
 }
 
-func (a *App) CreatePrompt(name, description, category, content string) (*prompt.Prompt, error) {
+func (a *App) CreatePrompt(name, description, category, content string, imageURLs []string, webLinksMarkdown string) (*prompt.Prompt, error) {
 	store, root, err := a.promptStorage()
 	if err != nil {
 		a.logErrorf("prompt create failed: load storage failed: %v", err)
 		return nil, err
 	}
-	a.logInfof("prompt create started: prompt=%s category=%s root=%s", name, category, root)
-	item, err := store.Create(name, description, category, content)
+	webLinks, err := prompt.ParseWebLinksMarkdown(webLinksMarkdown)
+	if err != nil {
+		a.logErrorf("prompt create failed: prompt=%s category=%s root=%s err=%v", name, category, root, err)
+		return nil, err
+	}
+	a.logInfof("prompt create started: prompt=%s category=%s images=%d links=%d root=%s", name, category, len(imageURLs), len(webLinks), root)
+	item, err := store.Create(name, description, category, content, imageURLs, webLinks)
 	if err != nil {
 		a.logErrorf("prompt create failed: prompt=%s category=%s root=%s err=%v", name, category, root, err)
 		return nil, err
@@ -66,14 +71,19 @@ func (a *App) CreatePrompt(name, description, category, content string) (*prompt
 	return item, nil
 }
 
-func (a *App) UpdatePrompt(originalName, name, description, category, content string) (*prompt.Prompt, error) {
+func (a *App) UpdatePrompt(originalName, name, description, category, content string, imageURLs []string, webLinksMarkdown string) (*prompt.Prompt, error) {
 	store, root, err := a.promptStorage()
 	if err != nil {
 		a.logErrorf("prompt update failed: prompt=%s load storage failed: %v", originalName, err)
 		return nil, err
 	}
-	a.logInfof("prompt update started: prompt=%s next=%s category=%s root=%s", originalName, name, category, root)
-	item, err := store.Update(originalName, name, description, category, content)
+	webLinks, err := prompt.ParseWebLinksMarkdown(webLinksMarkdown)
+	if err != nil {
+		a.logErrorf("prompt update failed: prompt=%s next=%s category=%s root=%s err=%v", originalName, name, category, root, err)
+		return nil, err
+	}
+	a.logInfof("prompt update started: prompt=%s next=%s category=%s images=%d links=%d root=%s", originalName, name, category, len(imageURLs), len(webLinks), root)
+	item, err := store.Update(originalName, name, description, category, content, imageURLs, webLinks)
 	if err != nil {
 		a.logErrorf("prompt update failed: prompt=%s next=%s category=%s root=%s err=%v", originalName, name, category, root, err)
 		return nil, err

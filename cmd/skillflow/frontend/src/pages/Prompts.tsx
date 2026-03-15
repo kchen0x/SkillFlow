@@ -16,6 +16,7 @@ import AnimatedDialog from '../components/ui/AnimatedDialog'
 import SkillListControls from '../components/SkillListControls'
 import { useLanguage } from '../contexts/LanguageContext'
 import { copyTextToClipboard } from '../lib/clipboard'
+import { buildPromptLinksMarkdown, normalizePromptImageURLs, type PromptWebLink } from '../lib/promptRichContent'
 import { SkillSortOrder } from '../lib/skillList'
 import { matchesKeywordExpression } from '../lib/search'
 
@@ -26,6 +27,8 @@ type PromptItem = {
   path: string
   filePath: string
   content: string
+  imageURLs?: string[]
+  webLinks?: PromptWebLink[]
   createdAt?: string
   updatedAt?: string
 }
@@ -44,6 +47,8 @@ function createEmptyDraft(category = defaultCategoryName): PromptDraft {
     description: '',
     category,
     content: '',
+    imageURLs: [],
+    webLinks: [],
   }
 }
 
@@ -101,7 +106,12 @@ export default function Prompts() {
   const filteredPrompts = useMemo(() => {
     const items = prompts.filter((item) => selectedCat === null || item.category === selectedCat)
     const searched = search.trim()
-      ? items.filter((item) => matchesKeywordExpression(search, `${item.name}\n${item.description}\n${item.content}`))
+      ? items.filter((item) => matchesKeywordExpression(search, [
+        item.name,
+        item.description,
+        item.content,
+        (item.webLinks ?? []).map(link => `${link.label} ${link.url}`).join('\n'),
+      ].join('\n')))
       : items
     return [...searched].sort((left, right) => {
       const result = collator.compare(left.name.trim(), right.name.trim())
@@ -121,6 +131,9 @@ export default function Prompts() {
     if (raw.includes('prompt not found')) return t('prompts.notFoundError')
     if (raw.includes('prompt already exists')) return t('prompts.duplicateNameError')
     if (raw.includes('invalid prompt name')) return t('prompts.invalidNameError')
+    if (raw.includes('prompt has too many image urls')) return t('prompts.tooManyImagesError')
+    if (raw.includes('prompt image url is invalid')) return t('prompts.invalidImageError')
+    if (raw.includes('prompt web link is invalid')) return t('prompts.invalidWebLinkError')
     return raw
   }
 
@@ -140,6 +153,8 @@ export default function Prompts() {
       description: item.description ?? '',
       category: item.category || defaultCategoryName,
       content: item.content,
+      imageURLs: item.imageURLs ?? [],
+      webLinks: item.webLinks ?? [],
     })
     setEditorOpen(true)
   }
@@ -148,10 +163,12 @@ export default function Prompts() {
     setSaving(true)
     setSaveError('')
     try {
+      const imageURLs = normalizePromptImageURLs(nextDraft.imageURLs)
+      const webLinksMarkdown = buildPromptLinksMarkdown(nextDraft.webLinks)
       if (editorMode === 'create') {
-        await CreatePrompt(nextDraft.name, nextDraft.description, nextDraft.category, nextDraft.content)
+        await CreatePrompt(nextDraft.name, nextDraft.description, nextDraft.category, nextDraft.content, imageURLs, webLinksMarkdown)
       } else {
-        await UpdatePrompt(nextDraft.originalName ?? nextDraft.name, nextDraft.name, nextDraft.description, nextDraft.category, nextDraft.content)
+        await UpdatePrompt(nextDraft.originalName ?? nextDraft.name, nextDraft.name, nextDraft.description, nextDraft.category, nextDraft.content, imageURLs, webLinksMarkdown)
       }
       await load()
       setEditorOpen(false)
@@ -424,10 +441,13 @@ ${item.description}` : item.name
         ) : (
           <div className="mt-1 h-[16px]" />
         )}
-        <p className="mt-1 truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>{preview}</p>
+
+        {preview && (
+          <p className="mt-3 line-clamp-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>{preview}</p>
+        )}
       </div>
 
-      <div className="mt-auto flex min-w-0 items-center gap-2 pt-2">
+      <div className="mt-auto flex min-w-0 items-center gap-2 pt-3">
         <span className="max-w-[96px] shrink-0 truncate rounded px-1.5 py-0.5 text-[10px]" style={{ color: 'var(--text-muted)', background: 'var(--bg-base)', border: '1px solid var(--border-base)' }}>
           {item.category}
         </span>

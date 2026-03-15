@@ -19,6 +19,7 @@
 | `config_local.json` | 机器相关路径、敏感信息和本地运行状态 | 否 |
 | `star_repos.json` | 收藏仓库的本地缓存元数据 | 是 |
 | `star_repos_local.json` | 收藏仓库本地同步状态覆盖文件 | 否 |
+| `prompts/<category>/<name>/prompt.json` | 提示词卡片元数据，如描述、关联图片和网页链接 | 是 |
 | `meta/<skill-id>.json` | 每个已安装 Skill 的 sidecar 元数据 | 是 |
 | `meta_local/<skill-id>.local.json` | 每个 Skill 的本地易变元数据覆盖文件 | 否 |
 | `cache/viewstate/*.json` | 本地派生 UI / 缓存快照 | 否 |
@@ -293,6 +294,50 @@
 | `repos` | object | 以仓库 source 键（或 URL 兜底）为 key 的本地同步状态映射。 |
 | `repos.<key>.lastSync` | string | 当前设备最近一次成功同步时间（RFC3339）。 |
 | `repos.<key>.syncError` | string | 当前设备最近一次同步失败错误信息；为空时省略。 |
+
+## `prompts/<category>/<name>/prompt.json`
+
+路径：`<SyncRoot>/prompts/<category>/<name>/prompt.json`
+
+每个提示词的正文保存在同级的 `system.md` 中，提示词卡片元数据则保存在 `prompt.json`。
+
+### 示例
+
+```json
+{
+  "name": "Review API",
+  "description": "Review backend changes",
+  "imageURLs": [
+    "https://cdn.example.com/review-1.png",
+    "https://cdn.example.com/review-2.png"
+  ],
+  "webLinks": [
+    {
+      "label": "PRD",
+      "url": "https://docs.example.com/prd"
+    },
+    {
+      "label": "Preview",
+      "url": "https://preview.example.com/review"
+    }
+  ],
+  "createdAt": "2026-03-15T13:00:00Z",
+  "updatedAt": "2026-03-15T13:05:00Z"
+}
+```
+
+### 字段说明
+
+| 键 | 类型 | 说明 |
+|----|------|------|
+| `name` | string | 提示词名称。通常与提示词目录名一致，并在整个提示词库内保持全局唯一。 |
+| `description` | string | 可选的简短描述，会显示在提示词卡片上。 |
+| `imageURLs` | string[] | 可选的关联图片 URL。当前最多支持 3 条，且必须是 `http` 或 `https` URL。 |
+| `webLinks` | object[] | 可选的结构化网页链接，会渲染为提示词卡片上的可点击胶囊。 |
+| `webLinks[].label` | string | 链接展示文本。 |
+| `webLinks[].url` | string | 点击卡片胶囊后打开的外部 URL。持久化时只允许 `http` 和 `https`。 |
+| `createdAt` | string | 提示词创建时间（RFC3339）。 |
+| `updatedAt` | string | 最近一次元数据更新时间（RFC3339）。 |
 
 ## `meta/<skill-id>.json`
 

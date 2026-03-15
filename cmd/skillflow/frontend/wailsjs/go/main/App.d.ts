@@ -28,7 +28,7 @@ export function CheckUpdates():Promise<void>;
 
 export function CreateCategory(arg1:string):Promise<void>;
 
-export function CreatePrompt(arg1:string,arg2:string,arg3:string,arg4:string):Promise<prompt.Prompt>;
+export function CreatePrompt(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Array<string>,arg6:string):Promise<prompt.Prompt>;
 
 export function CreatePromptCategory(arg1:string):Promise<void>;
 
@@ -150,7 +150,7 @@ export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 
 export function UpdateAllStarredRepos():Promise<void>;
 
-export function UpdatePrompt(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<prompt.Prompt>;
+export function UpdatePrompt(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:Array<string>,arg7:string):Promise<prompt.Prompt>;
 
 export function UpdateSkill(arg1:string):Promise<void>;
 

@@ -15,17 +15,54 @@ func TestStorageCreateUpdateMoveDelete(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)
 
-	created, err := store.Create("Review API", "Review backend changes", "Default", "Please review the API diff.")
+	created, err := store.Create(
+		"Review API",
+		"Review backend changes",
+		"Default",
+		"Please review the API diff.",
+		[]string{
+			"https://cdn.example.com/review-1.png",
+			"https://cdn.example.com/review-2.png",
+		},
+		[]prompt.PromptLink{{
+			Label: "PRD",
+			URL:   "https://docs.example.com/prd",
+		}},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, "Review API", created.Name)
 	assert.Equal(t, "Default", created.Category)
 	assert.Equal(t, filepath.Join(root, "Default", "Review API", prompt.FileName), created.FilePath)
+	assert.Equal(t, []string{
+		"https://cdn.example.com/review-1.png",
+		"https://cdn.example.com/review-2.png",
+	}, created.ImageURLs)
+	assert.Equal(t, []prompt.PromptLink{{
+		Label: "PRD",
+		URL:   "https://docs.example.com/prd",
+	}}, created.WebLinks)
 
-	updated, err := store.Update("Review API", "Review API", "Review backend and frontend changes", "Writing", "Please review the UI diff too.")
+	updated, err := store.Update(
+		"Review API",
+		"Review API",
+		"Review backend and frontend changes",
+		"Writing",
+		"Please review the UI diff too.",
+		[]string{"https://cdn.example.com/review-3.png"},
+		[]prompt.PromptLink{{
+			Label: "Preview",
+			URL:   "https://preview.example.com/review",
+		}},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, "Writing", updated.Category)
 	assert.Equal(t, "Review backend and frontend changes", updated.Description)
 	assert.Equal(t, "Please review the UI diff too.", updated.Content)
+	assert.Equal(t, []string{"https://cdn.example.com/review-3.png"}, updated.ImageURLs)
+	assert.Equal(t, []prompt.PromptLink{{
+		Label: "Preview",
+		URL:   "https://preview.example.com/review",
+	}}, updated.WebLinks)
 
 	items, err := store.ListAll()
 	require.NoError(t, err)
@@ -47,7 +84,7 @@ func TestStorageCategories(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"Default", "Research"}, categories)
 
-	_, err = store.Create("Architecture", "", "Research", "Summarize the architecture.")
+	_, err = store.Create("Architecture", "", "Research", "Summarize the architecture.", nil, nil)
 	require.NoError(t, err)
 
 	err = store.DeleteCategory("Research")
@@ -60,9 +97,12 @@ func TestStorageCategories(t *testing.T) {
 func TestStorageExportImportJSON(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)
-	_, err := store.Create("Prompt A", "Desc A", "Default", "Content A")
+	_, err := store.Create("Prompt A", "Desc A", "Default", "Content A", []string{"https://cdn.example.com/prompt-a.png"}, []prompt.PromptLink{{
+		Label: "Repo",
+		URL:   "https://github.com/example/prompt-a",
+	}})
 	require.NoError(t, err)
-	_, err = store.Create("Prompt B", "Desc B", "Ops", "Content B")
+	_, err = store.Create("Prompt B", "Desc B", "Ops", "Content B", nil, nil)
 	require.NoError(t, err)
 
 	data, err := store.ExportJSON()
@@ -78,19 +118,29 @@ func TestStorageExportImportJSON(t *testing.T) {
 	items, err := other.ListAll()
 	require.NoError(t, err)
 	require.Len(t, items, 2)
+	assert.Equal(t, []string{"https://cdn.example.com/prompt-a.png"}, items[0].ImageURLs)
+	assert.Equal(t, []prompt.PromptLink{{
+		Label: "Repo",
+		URL:   "https://github.com/example/prompt-a",
+	}}, items[0].WebLinks)
 }
 
 func TestStorageImportArrayPayloadUpdatesExistingPrompt(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)
-	_, err := store.Create("Prompt A", "Old", "Default", "Old content")
+	_, err := store.Create("Prompt A", "Old", "Default", "Old content", nil, nil)
 	require.NoError(t, err)
 
-	payload, err := json.Marshal([]map[string]string{{
+	payload, err := json.Marshal([]map[string]any{{
 		"name":        "Prompt A",
 		"description": "New",
 		"category":    "Research",
 		"content":     "New content",
+		"imageURLs":   []string{"https://cdn.example.com/new.png"},
+		"webLinks": []map[string]string{{
+			"label": "Spec",
+			"url":   "https://docs.example.com/spec",
+		}},
 	}})
 	require.NoError(t, err)
 
@@ -103,6 +153,11 @@ func TestStorageImportArrayPayloadUpdatesExistingPrompt(t *testing.T) {
 	assert.Equal(t, "Research", item.Category)
 	assert.Equal(t, "New", item.Description)
 	assert.Equal(t, "New content", item.Content)
+	assert.Equal(t, []string{"https://cdn.example.com/new.png"}, item.ImageURLs)
+	assert.Equal(t, []prompt.PromptLink{{
+		Label: "Spec",
+		URL:   "https://docs.example.com/spec",
+	}}, item.WebLinks)
 }
 
 func TestStorageMigratesLegacyLayout(t *testing.T) {
@@ -125,10 +180,10 @@ func TestStorageUpdateAllowsCaseOnlyRename(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)
 
-	_, err := store.Create("Gitacp", "Git helper", "Default", "git add && git commit && git push")
+	_, err := store.Create("Gitacp", "Git helper", "Default", "git add && git commit && git push", nil, nil)
 	require.NoError(t, err)
 
-	updated, err := store.Update("Gitacp", "gitacp", "Git helper", "Default", "git add && git commit && git push")
+	updated, err := store.Update("Gitacp", "gitacp", "Git helper", "Default", "git add && git commit && git push", nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "gitacp", updated.Name)
 	assert.Equal(t, filepath.Join(root, "Default", "gitacp"), updated.Path)
@@ -146,4 +201,24 @@ func TestStorageUpdateAllowsCaseOnlyRename(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, "gitacp", entries[0].Name())
+}
+
+func TestStorageCreateRejectsTooManyImages(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create(
+		"Review API",
+		"Review backend changes",
+		"Default",
+		"Please review the API diff.",
+		[]string{
+			"https://cdn.example.com/1.png",
+			"https://cdn.example.com/2.png",
+			"https://cdn.example.com/3.png",
+			"https://cdn.example.com/4.png",
+		},
+		nil,
+	)
+	assert.ErrorIs(t, err, prompt.ErrTooManyImages)
 }

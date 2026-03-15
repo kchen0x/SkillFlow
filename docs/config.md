@@ -21,6 +21,7 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, and `star_repo
 | `config_local.json` | Machine-specific paths, secrets, and local runtime state | No |
 | `star_repos.json` | Starred repository cache metadata | Yes |
 | `star_repos_local.json` | Local-only starred-repo runtime sync state overlay | No |
+| `prompts/<category>/<name>/prompt.json` | Prompt metadata such as description, related images, and web links | Yes |
 | `meta/<skill-id>.json` | One sidecar metadata file per installed skill | Yes |
 | `meta_local/<skill-id>.local.json` | Local-only per-skill volatile metadata overlay | No |
 | `cache/viewstate/*.json` | Local derived UI/cache snapshots | No |
@@ -295,6 +296,50 @@ This local-only overlay stores per-repo volatile sync state that should not be s
 | `repos` | object | Map keyed by repo source key (or URL fallback) to local sync state entries. |
 | `repos.<key>.lastSync` | string | Last successful sync timestamp on the current device (RFC3339). |
 | `repos.<key>.syncError` | string | Last sync error message on the current device. Omitted when empty. |
+
+## `prompts/<category>/<name>/prompt.json`
+
+Path: `<SyncRoot>/prompts/<category>/<name>/prompt.json`
+
+Each prompt keeps its body in the sibling `system.md` file and stores prompt-card metadata in `prompt.json`.
+
+### Example
+
+```json
+{
+  "name": "Review API",
+  "description": "Review backend changes",
+  "imageURLs": [
+    "https://cdn.example.com/review-1.png",
+    "https://cdn.example.com/review-2.png"
+  ],
+  "webLinks": [
+    {
+      "label": "PRD",
+      "url": "https://docs.example.com/prd"
+    },
+    {
+      "label": "Preview",
+      "url": "https://preview.example.com/review"
+    }
+  ],
+  "createdAt": "2026-03-15T13:00:00Z",
+  "updatedAt": "2026-03-15T13:05:00Z"
+}
+```
+
+### Keys
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `name` | string | Prompt name. It normally matches the prompt directory name and stays globally unique in the prompt library. |
+| `description` | string | Optional short prompt description shown on the card. |
+| `imageURLs` | string[] | Optional related image URLs. SkillFlow currently accepts up to 3 entries and requires `http` or `https` URLs. |
+| `webLinks` | object[] | Optional structured web links rendered as clickable chips on the prompt card. |
+| `webLinks[].label` | string | Visible link text. |
+| `webLinks[].url` | string | External URL opened by the card chip. Only `http` and `https` URLs are persisted. |
+| `createdAt` | string | Prompt creation timestamp (RFC3339). |
+| `updatedAt` | string | Last metadata update timestamp (RFC3339). |
 
 ## `meta/<skill-id>.json`
 

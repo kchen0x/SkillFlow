@@ -234,6 +234,35 @@ Notes:
 - `Path` is a runtime absolute path; when persisted inside synced metadata it should be stored as a portable relative path whenever possible.
 - `SourceURL + SourceSubPath` identify the logical git source for GitHub-installed skills.
 
+### Prompt (`core/prompt/storage.go`)
+
+```go
+type PromptLink struct {
+    Label string
+    URL   string
+}
+
+type Prompt struct {
+    Name        string
+    Description string
+    Category    string
+    Path        string
+    FilePath    string
+    Content     string
+    ImageURLs   []string
+    WebLinks    []PromptLink
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
+}
+```
+
+Notes:
+
+- Prompt body lives in `prompts/<category>/<name>/system.md`.
+- Prompt-card metadata such as description, related images, and web links lives in the sidecar `prompts/<category>/<name>/prompt.json`.
+- `ImageURLs` is capped at 3 items and currently persists only `http` / `https` URLs.
+- The editor accepts markdown-style web-link input, but persistence normalizes it into structured `PromptLink{Label, URL}` records.
+
 ### AppConfig (`core/config/model.go`)
 
 ```go
