@@ -1,7 +1,7 @@
-//go:build !bindings && !darwin
+//go:build darwin && !bindings
 
 package main
 
 func helperBootstrapEnabled() bool {
-	return true
+	return false
 }

@@ -168,6 +168,7 @@ func (a *App) proxyHTTPClient() *http.Client {
 
 func (a *App) domReady(ctx context.Context) {
 	a.fitInitialWindowToScreen(ctx)
+	a.setupTrayForUI(ctx)
 	a.startUIControlServer()
 	a.startBackgroundStartupTasks()
 }
@@ -194,6 +195,7 @@ func (a *App) beforeClose(ctx context.Context) bool {
 
 func (a *App) shutdown(_ context.Context) {
 	a.stopUIControlServer()
+	a.teardownTrayForUI()
 	a.logInfof("application shutdown completed")
 }
 
