@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -15,7 +17,8 @@ const (
 	DefaultCategoryName = "Default"
 	FileName            = "system.md"
 	MetaFileName        = "prompt.json"
-	exportVersion       = 1
+	MaxImageURLs        = 3
+	exportVersion       = 2
 )
 
 var (
@@ -24,17 +27,29 @@ var (
 	ErrEmptyContent     = errors.New("prompt content is empty")
 	ErrInvalidName      = errors.New("invalid prompt name")
 	ErrCategoryNotEmpty = errors.New("category not empty")
+	ErrTooManyImages    = errors.New("prompt has too many image urls")
+	ErrInvalidImageURL  = errors.New("prompt image url is invalid")
+	ErrInvalidWebLink   = errors.New("prompt web link is invalid")
 )
 
+var promptMarkdownLinkPattern = regexp.MustCompile(`^\[(.+?)\]\((.+?)\)$`)
+
+type PromptLink struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
+}
+
 type Prompt struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	Category    string    `json:"category"`
-	Path        string    `json:"path"`
-	FilePath    string    `json:"filePath"`
-	Content     string    `json:"content"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Category    string       `json:"category"`
+	Path        string       `json:"path"`
+	FilePath    string       `json:"filePath"`
+	Content     string       `json:"content"`
+	ImageURLs   []string     `json:"imageURLs,omitempty"`
+	WebLinks    []PromptLink `json:"webLinks,omitempty"`
+	CreatedAt   time.Time    `json:"createdAt"`
+	UpdatedAt   time.Time    `json:"updatedAt"`
 }
 
 type Storage struct {
@@ -42,10 +57,12 @@ type Storage struct {
 }
 
 type promptMeta struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	ImageURLs   []string     `json:"imageURLs,omitempty"`
+	WebLinks    []PromptLink `json:"webLinks,omitempty"`
+	CreatedAt   time.Time    `json:"createdAt"`
+	UpdatedAt   time.Time    `json:"updatedAt"`
 }
 
 type exportBundle struct {
@@ -55,10 +72,12 @@ type exportBundle struct {
 }
 
 type exportPrompt struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Category    string `json:"category,omitempty"`
-	Content     string `json:"content"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Category    string       `json:"category,omitempty"`
+	Content     string       `json:"content"`
+	ImageURLs   []string     `json:"imageURLs,omitempty"`
+	WebLinks    []PromptLink `json:"webLinks,omitempty"`
 }
 
 func NewStorage(root string) *Storage {
@@ -215,7 +234,7 @@ func (s *Storage) Get(name string) (*Prompt, error) {
 	return nil, ErrPromptNotFound
 }
 
-func (s *Storage) Create(name, description, category, content string) (*Prompt, error) {
+func (s *Storage) Create(name, description, category, content string, imageURLs []string, webLinks []PromptLink) (*Prompt, error) {
 	if err := s.migrateLegacyLayout(); err != nil {
 		return nil, err
 	}
@@ -230,6 +249,14 @@ func (s *Storage) Create(name, description, category, content string) (*Prompt, 
 	if strings.TrimSpace(content) == "" {
 		return nil, ErrEmptyContent
 	}
+	normalizedImages, err := normalizePromptImageURLs(imageURLs)
+	if err != nil {
+		return nil, err
+	}
+	normalizedLinks, err := normalizePromptLinks(webLinks)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := s.Get(promptName); err == nil {
 		return nil, ErrPromptExists
 	} else if !errors.Is(err, ErrPromptNotFound) {
@@ -243,6 +270,8 @@ func (s *Storage) Create(name, description, category, content string) (*Prompt, 
 	meta := promptMeta{
 		Name:        promptName,
 		Description: strings.TrimSpace(description),
+		ImageURLs:   normalizedImages,
+		WebLinks:    normalizedLinks,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -252,7 +281,7 @@ func (s *Storage) Create(name, description, category, content string) (*Prompt, 
 	return s.readPromptDir(promptCategory, promptDir)
 }
 
-func (s *Storage) Update(originalName, name, description, category, content string) (*Prompt, error) {
+func (s *Storage) Update(originalName, name, description, category, content string, imageURLs []string, webLinks []PromptLink) (*Prompt, error) {
 	if err := s.migrateLegacyLayout(); err != nil {
 		return nil, err
 	}
@@ -270,6 +299,14 @@ func (s *Storage) Update(originalName, name, description, category, content stri
 	}
 	if strings.TrimSpace(content) == "" {
 		return nil, ErrEmptyContent
+	}
+	normalizedImages, err := normalizePromptImageURLs(imageURLs)
+	if err != nil {
+		return nil, err
+	}
+	normalizedLinks, err := normalizePromptLinks(webLinks)
+	if err != nil {
+		return nil, err
 	}
 	if current.Name != promptName {
 		if _, err := s.Get(promptName); err == nil {
@@ -302,6 +339,8 @@ func (s *Storage) Update(originalName, name, description, category, content stri
 	}
 	meta.Name = promptName
 	meta.Description = strings.TrimSpace(description)
+	meta.ImageURLs = normalizedImages
+	meta.WebLinks = normalizedLinks
 	meta.UpdatedAt = time.Now()
 	if meta.CreatedAt.IsZero() {
 		meta.CreatedAt = meta.UpdatedAt
@@ -325,7 +364,7 @@ func (s *Storage) MoveCategory(name, category string) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.Update(current.Name, current.Name, current.Description, category, current.Content)
+	_, err = s.Update(current.Name, current.Name, current.Description, category, current.Content, current.ImageURLs, current.WebLinks)
 	return err
 }
 
@@ -345,6 +384,8 @@ func (s *Storage) ExportJSON() ([]byte, error) {
 			Description: item.Description,
 			Category:    item.Category,
 			Content:     item.Content,
+			ImageURLs:   item.ImageURLs,
+			WebLinks:    item.WebLinks,
 		})
 	}
 	return json.MarshalIndent(bundle, "", "  ")
@@ -364,11 +405,11 @@ func (s *Storage) ImportJSON(data []byte) (int, error) {
 			return count, fmt.Errorf("import prompt %s missing content", item.Name)
 		}
 		if _, err := s.Get(item.Name); err == nil {
-			if _, err := s.Update(item.Name, item.Name, item.Description, item.Category, item.Content); err != nil {
+			if _, err := s.Update(item.Name, item.Name, item.Description, item.Category, item.Content, item.ImageURLs, item.WebLinks); err != nil {
 				return count, err
 			}
 		} else if errors.Is(err, ErrPromptNotFound) {
-			if _, err := s.Create(item.Name, item.Description, item.Category, item.Content); err != nil {
+			if _, err := s.Create(item.Name, item.Description, item.Category, item.Content, item.ImageURLs, item.WebLinks); err != nil {
 				return count, err
 			}
 		} else {
@@ -474,6 +515,8 @@ func (s *Storage) readPromptDir(category string, dir string) (*Prompt, error) {
 		Path:        dir,
 		FilePath:    filepath.Join(dir, FileName),
 		Content:     content,
+		ImageURLs:   meta.ImageURLs,
+		WebLinks:    meta.WebLinks,
 		CreatedAt:   meta.CreatedAt,
 		UpdatedAt:   meta.UpdatedAt,
 	}, nil
@@ -515,6 +558,16 @@ func (s *Storage) readPromptMeta(dir string) (promptMeta, string, error) {
 	if meta.Name == "" {
 		meta.Name = filepath.Base(dir)
 	}
+	normalizedImages, err := normalizePromptImageURLs(meta.ImageURLs)
+	if err != nil {
+		return promptMeta{}, "", err
+	}
+	normalizedLinks, err := normalizePromptLinks(meta.WebLinks)
+	if err != nil {
+		return promptMeta{}, "", err
+	}
+	meta.ImageURLs = normalizedImages
+	meta.WebLinks = normalizedLinks
 	if meta.CreatedAt.IsZero() {
 		meta.CreatedAt = time.Now()
 	}
@@ -616,4 +669,101 @@ func compareFilesystemEntries(currentPath, targetPath string) (bool, bool, error
 		return false, false, err
 	}
 	return true, os.SameFile(currentInfo, targetInfo), nil
+}
+
+func ParseWebLinksMarkdown(raw string) ([]PromptLink, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
+	links := make([]PromptLink, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		matches := promptMarkdownLinkPattern.FindStringSubmatch(trimmed)
+		if len(matches) != 3 {
+			return nil, ErrInvalidWebLink
+		}
+		link, err := normalizePromptLink(PromptLink{
+			Label: matches[1],
+			URL:   matches[2],
+		})
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, nil
+}
+
+func normalizePromptImageURLs(imageURLs []string) ([]string, error) {
+	if len(imageURLs) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(imageURLs))
+	for _, rawURL := range imageURLs {
+		trimmed := strings.TrimSpace(rawURL)
+		if trimmed == "" {
+			continue
+		}
+		validURL, err := normalizePromptURL(trimmed)
+		if err != nil {
+			return nil, ErrInvalidImageURL
+		}
+		normalized = append(normalized, validURL)
+		if len(normalized) > MaxImageURLs {
+			return nil, ErrTooManyImages
+		}
+	}
+	return normalized, nil
+}
+
+func normalizePromptLinks(links []PromptLink) ([]PromptLink, error) {
+	if len(links) == 0 {
+		return nil, nil
+	}
+	normalized := make([]PromptLink, 0, len(links))
+	for _, link := range links {
+		if strings.TrimSpace(link.Label) == "" && strings.TrimSpace(link.URL) == "" {
+			continue
+		}
+		validLink, err := normalizePromptLink(link)
+		if err != nil {
+			return nil, err
+		}
+		normalized = append(normalized, validLink)
+	}
+	return normalized, nil
+}
+
+func normalizePromptLink(link PromptLink) (PromptLink, error) {
+	label := strings.TrimSpace(link.Label)
+	rawURL := strings.TrimSpace(link.URL)
+	if label == "" || rawURL == "" {
+		return PromptLink{}, ErrInvalidWebLink
+	}
+	validURL, err := normalizePromptURL(rawURL)
+	if err != nil {
+		return PromptLink{}, ErrInvalidWebLink
+	}
+	return PromptLink{
+		Label: label,
+		URL:   validURL,
+	}, nil
+}
+
+func normalizePromptURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", err
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("unsupported prompt url scheme")
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("prompt url host is empty")
+	}
+	return parsed.String(), nil
 }

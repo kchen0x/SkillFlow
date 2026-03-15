@@ -234,6 +234,35 @@ type Skill struct {
 - `Path` 运行时为绝对路径；若写入可同步元数据，应尽量保存为可移植的相对路径。
 - `SourceURL + SourceSubPath` 共同标识 GitHub 安装 Skill 的逻辑来源。
 
+### Prompt（`core/prompt/storage.go`）
+
+```go
+type PromptLink struct {
+    Label string
+    URL   string
+}
+
+type Prompt struct {
+    Name        string
+    Description string
+    Category    string
+    Path        string
+    FilePath    string
+    Content     string
+    ImageURLs   []string
+    WebLinks    []PromptLink
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
+}
+```
+
+说明：
+
+- 提示词正文保存在 `prompts/<category>/<name>/system.md`。
+- 描述、关联图片、网页链接等提示词卡片元数据保存在 sidecar 文件 `prompts/<category>/<name>/prompt.json`。
+- `ImageURLs` 最多保存 3 条，当前只允许持久化 `http` / `https` URL。
+- 编辑器里输入的 markdown 风格网页链接，会在持久化时规范化为结构化的 `PromptLink{Label, URL}` 记录。
+
 ### AppConfig（`core/config/model.go`）
 
 ```go

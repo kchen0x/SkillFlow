@@ -812,7 +812,7 @@ Store reusable system prompts inside the synced `prompts/` directory.
 ### Navigation & Storage
 
 - Sidebar adds **My Prompts** directly below **My Agents**.
-- Each prompt is stored as `prompts/<category>/<name>/system.md` under the backup root, so both object-storage providers and the Git provider sync the same prompt files automatically.
+- Each prompt is stored as `prompts/<category>/<name>/system.md` plus a sidecar `prompts/<category>/<name>/prompt.json` under the backup root, so both object-storage providers and the Git provider sync the same prompt files automatically.
 - Prompt names are required, globally unique in the library, and used as the folder key.
 
 ### Layout
@@ -833,6 +833,7 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 - Cards reuse the same visual language as Skill cards (`card-base`, hover glow, compact actions).
 - Each card shows **name**, optional **description**, and the opening content excerpt by default.
+- Cards no longer show related image thumbnails or saved web-link chips in the list, keeping the prompt grid focused on text scanning.
 - When the content is longer than the preview window, the card displays **Click to view more**.
 - Top-right action button copies the full prompt content to the desktop clipboard in one click, preserving multi-line content on Windows.
 - Prompt copy now falls back across desktop runtime, browser clipboard, and document copy APIs so the action still succeeds when one clipboard path is unavailable.
@@ -841,14 +842,19 @@ Store reusable system prompts inside the synced `prompts/` directory.
 ### Prompt Editor
 
 - Clicking **Add Prompt** opens a built-in editor with fields for **name** (required), **description** (optional), **category**, and full `system.md` content.
+- The editor supports up to **3 related image URLs**. Saved images stay visible in the image panel, while the image add-input row moves to the shared attachment area after the main prompt content for cleaner reading flow.
+- Each saved image thumbnail exposes a small delete action in the top-right corner.
+- Clicking an editor thumbnail opens an enlarged in-app preview overlay above the editor instead of sending the user to the external browser.
+- The editor now keeps the footer reachable inside smaller desktop windows by constraining the body and prompt content area with internal scrolling instead of growing beyond the app window.
+- The editor supports **web links** through a single-line markdown input placed in the shared attachment area after the main prompt content. Clicking **Add** appends the parsed link above as a clickable chip using the markdown label text from `[Label](https://example.com/doc)`, then clears the input field.
 - Clicking an existing prompt card opens the same editor pre-filled for editing and rename operations.
-- Saving writes the prompt back to `prompts/<category>/<name>/system.md`.
+- Saving writes the prompt body back to `prompts/<category>/<name>/system.md` and writes metadata such as description, image URLs, and web links to `prompts/<category>/<name>/prompt.json`.
 
 ### Import / Export
 
-- Toolbar **Import** reads a JSON prompt library file and creates or updates prompts by name.
-- Toolbar **Export** writes the full prompt library to a JSON file selected by the user.
+- Toolbar **Import** reads a JSON prompt library file and creates or updates prompts by name, including optional image URLs and web links.
+- Toolbar **Export** writes the full prompt library, including optional image URLs and web links, to a JSON file selected by the user.
 
 ---
 
-*Last updated: 2026-03-14*
+*Last updated: 2026-03-15*

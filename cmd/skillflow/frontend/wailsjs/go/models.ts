@@ -1,15 +1,15 @@
 export namespace backup {
-
+	
 	export class RemoteFile {
 	    path: string;
 	    size: number;
 	    isDir: boolean;
 	    action?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new RemoteFile(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
@@ -22,18 +22,18 @@ export namespace backup {
 }
 
 export namespace config {
-
+	
 	export class AgentConfig {
 	    name: string;
 	    scanDirs: string[];
 	    pushDir: string;
 	    enabled: boolean;
 	    custom: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AgentConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -46,11 +46,11 @@ export namespace config {
 	export class ProxyConfig {
 	    mode: string;
 	    url: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ProxyConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
@@ -61,11 +61,11 @@ export namespace config {
 	    bucketName: string;
 	    remotePath: string;
 	    credentials: Record<string, string>;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CloudProviderConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.bucketName = source["bucketName"];
@@ -80,11 +80,11 @@ export namespace config {
 	    remotePath: string;
 	    credentials: Record<string, string>;
 	    syncIntervalMinutes: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new CloudConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.provider = source["provider"];
@@ -102,11 +102,11 @@ export namespace config {
 	    pullFromAgent: string[];
 	    starredRepos: string[];
 	    githubInstall: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SkillStatusVisibilityConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mySkills = source["mySkills"];
@@ -130,11 +130,11 @@ export namespace config {
 	    cloudProfiles?: Record<string, CloudProviderConfig>;
 	    proxy: ProxyConfig;
 	    skippedUpdateVersion?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.skillsStorageDir = source["skillsStorageDir"];
@@ -150,7 +150,7 @@ export namespace config {
 	        this.proxy = this.convertValues(source["proxy"], ProxyConfig);
 	        this.skippedUpdateVersion = source["skippedUpdateVersion"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -169,14 +169,14 @@ export namespace config {
 		    return a;
 		}
 	}
-
-
-
+	
+	
+	
 
 }
 
 export namespace git {
-
+	
 	export class StarSkill {
 	    name: string;
 	    path: string;
@@ -190,11 +190,11 @@ export namespace git {
 	    updatable: boolean;
 	    pushed: boolean;
 	    pushedAgents: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new StarSkill(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -219,11 +219,11 @@ export namespace git {
 	    // Go type: time
 	    lastSync: any;
 	    syncError?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new StarredRepo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.url = source["url"];
@@ -233,7 +233,7 @@ export namespace git {
 	        this.lastSync = this.convertValues(source["lastSync"], null);
 	        this.syncError = source["syncError"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -256,7 +256,7 @@ export namespace git {
 }
 
 export namespace install {
-
+	
 	export class SkillCandidate {
 	    Name: string;
 	    Path: string;
@@ -265,11 +265,11 @@ export namespace install {
 	    Updatable: boolean;
 	    Pushed: boolean;
 	    PushedAgents: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SkillCandidate(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
@@ -285,7 +285,7 @@ export namespace install {
 }
 
 export namespace main {
-
+	
 	export class AgentSkillCandidate {
 	    name: string;
 	    path: string;
@@ -296,11 +296,11 @@ export namespace main {
 	    updatable: boolean;
 	    pushed: boolean;
 	    pushedAgents: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AgentSkillCandidate(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -325,11 +325,11 @@ export namespace main {
 	    pushed: boolean;
 	    pushedAgents: string[];
 	    seenInAgentScan: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AgentSkillEntry(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -352,11 +352,11 @@ export namespace main {
 	    downloadUrl: string;
 	    releaseNotes: string;
 	    canAutoUpdate: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AppUpdateInfo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hasUpdate = source["hasUpdate"];
@@ -379,11 +379,11 @@ export namespace main {
 	    updatable: boolean;
 	    pushed: boolean;
 	    pushedAgents: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstalledSkillEntry(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -404,11 +404,11 @@ export namespace main {
 	    skillPath?: string;
 	    agentName: string;
 	    targetPath: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PushConflict(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.skillId = source["skillId"];
@@ -422,7 +422,21 @@ export namespace main {
 }
 
 export namespace prompt {
-
+	
+	export class PromptLink {
+	    label: string;
+	    url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PromptLink(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.url = source["url"];
+	    }
+	}
 	export class Prompt {
 	    name: string;
 	    description?: string;
@@ -430,15 +444,17 @@ export namespace prompt {
 	    path: string;
 	    filePath: string;
 	    content: string;
+	    imageURLs?: string[];
+	    webLinks?: PromptLink[];
 	    // Go type: time
 	    createdAt: any;
 	    // Go type: time
 	    updatedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Prompt(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -447,10 +463,12 @@ export namespace prompt {
 	        this.path = source["path"];
 	        this.filePath = source["filePath"];
 	        this.content = source["content"];
+	        this.imageURLs = source["imageURLs"];
+	        this.webLinks = this.convertValues(source["webLinks"], PromptLink);
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -473,7 +491,7 @@ export namespace prompt {
 }
 
 export namespace skill {
-
+	
 	export class Skill {
 	    ID: string;
 	    Name: string;
@@ -490,11 +508,11 @@ export namespace skill {
 	    UpdatedAt: any;
 	    // Go type: time
 	    LastCheckedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Skill(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ID = source["ID"];
@@ -510,7 +528,7 @@ export namespace skill {
 	        this.UpdatedAt = this.convertValues(source["UpdatedAt"], null);
 	        this.LastCheckedAt = this.convertValues(source["LastCheckedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -536,11 +554,11 @@ export namespace skill {
 	    AllowedTools: string;
 	    Context: string;
 	    DisableModelInvocation: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SkillMeta(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Name = source["Name"];
@@ -553,3 +571,4 @@ export namespace skill {
 	}
 
 }
+

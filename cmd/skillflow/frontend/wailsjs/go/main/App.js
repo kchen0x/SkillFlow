@@ -42,8 +42,8 @@ export function CreateCategory(arg1) {
   return window['go']['main']['App']['CreateCategory'](arg1);
 }
 
-export function CreatePrompt(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['CreatePrompt'](arg1, arg2, arg3, arg4);
+export function CreatePrompt(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['CreatePrompt'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function CreatePromptCategory(arg1) {
@@ -286,8 +286,8 @@ export function UpdateAllStarredRepos() {
   return window['go']['main']['App']['UpdateAllStarredRepos']();
 }
 
-export function UpdatePrompt(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['UpdatePrompt'](arg1, arg2, arg3, arg4, arg5);
+export function UpdatePrompt(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['UpdatePrompt'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function UpdateSkill(arg1) {
