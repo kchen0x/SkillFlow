@@ -131,6 +131,53 @@ func TestRunIsNoOpForAlreadyUpgradedConfigFiles(t *testing.T) {
 	assert.Equal(t, string(beforeLocal), string(afterLocal))
 }
 
+func TestRunMigratesLegacyToolsWhenAgentsArrayAlreadyExistsButIsEmpty(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{
+  "defaultCategory": "Default",
+  "agents": [],
+  "tools": [
+    { "name": "codex", "enabled": true }
+  ]
+}`), 0o644))
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(`{
+  "skillsStorageDir": "/tmp/skills",
+  "agents": [],
+  "tools": [
+    {
+      "name": "codex",
+      "scanDirs": ["/tmp/codex/skills"],
+      "pushDir": "/tmp/codex/skills",
+      "custom": false,
+      "enabled": true
+    }
+  ],
+  "autoPushAgents": [],
+  "autoPushTools": ["codex"]
+}`), 0o644))
+
+	require.NoError(t, upgrade.Run(dir))
+
+	shared := readJSONMap(t, filepath.Join(dir, "config.json"))
+	sharedAgents := requireJSONArrayMaps(t, shared["agents"])
+	require.Len(t, sharedAgents, 1)
+	assert.Equal(t, "codex", sharedAgents[0]["name"])
+	assert.Equal(t, true, sharedAgents[0]["enabled"])
+	require.NotContains(t, shared, "tools")
+
+	local := readJSONMap(t, filepath.Join(dir, "config_local.json"))
+	localAgents := requireJSONArrayMaps(t, local["agents"])
+	require.Len(t, localAgents, 1)
+	assert.Equal(t, "codex", localAgents[0]["name"])
+	assert.Equal(t, []any{"/tmp/codex/skills"}, requireJSONArray(t, localAgents[0]["scanDirs"]))
+	assert.Equal(t, "/tmp/codex/skills", localAgents[0]["pushDir"])
+	assert.Equal(t, []any{"codex"}, requireJSONArray(t, local["autoPushAgents"]))
+	require.NotContains(t, local, "tools")
+	require.NotContains(t, local, "autoPushTools")
+}
+
 func TestRunFailsOnMalformedConfigJSON(t *testing.T) {
 	dir := t.TempDir()
 

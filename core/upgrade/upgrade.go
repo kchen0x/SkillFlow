@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func Run(dataDir string) error {
@@ -109,11 +110,30 @@ func renameKey(payload map[string]any, oldKey string, newKey string) bool {
 	if !ok {
 		return false
 	}
-	if _, exists := payload[newKey]; !exists {
+	if existing, exists := payload[newKey]; !exists || shouldPromoteLegacyValue(existing, value) {
 		payload[newKey] = value
 	}
 	delete(payload, oldKey)
 	return true
+}
+
+func shouldPromoteLegacyValue(current any, legacy any) bool {
+	return isEmptyJSONValue(current) && !isEmptyJSONValue(legacy)
+}
+
+func isEmptyJSONValue(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		return strings.TrimSpace(typed) == ""
+	case []any:
+		return len(typed) == 0
+	case map[string]any:
+		return len(typed) == 0
+	default:
+		return false
+	}
 }
 
 func writeFileAtomically(path string, data []byte, perm os.FileMode) error {

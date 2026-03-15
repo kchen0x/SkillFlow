@@ -12,13 +12,18 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+var (
+	runUIProcessFn           = runUIProcess
+	bootstrapHelperProcessFn = bootstrapHelperProcess
+)
+
 func main() {
 	os.Exit(runEntry(os.Args))
 }
 
 func runEntry(args []string) int {
 	if !helperBootstrapEnabled() {
-		if err := runUIProcess(); err != nil {
+		if err := runUIProcessFn(); err != nil {
 			println("Error:", err.Error())
 			return 1
 		}
@@ -31,7 +36,7 @@ func runEntry(args []string) int {
 		os.Args = filteredArgs
 	}
 	if role == processRoleUI {
-		if err := runUIProcess(); err != nil {
+		if err := runUIProcessFn(); err != nil {
 			println("Error:", err.Error())
 			return 1
 		}
@@ -41,7 +46,7 @@ func runEntry(args []string) int {
 	if len(filteredArgs) > 1 {
 		uiArgs = filteredArgs[1:]
 	}
-	if err := bootstrapHelperProcess(uiArgs); err != nil {
+	if err := bootstrapHelperProcessFn(uiArgs); err != nil {
 		println("Error:", err.Error())
 		return 1
 	}
@@ -51,13 +56,17 @@ func runEntry(args []string) int {
 func runUIProcess() error {
 	app := NewApp()
 
-	return wails.Run(&options.App{
+	return wails.Run(buildUIOptions(app))
+}
+
+func buildUIOptions(app *App) *options.App {
+	return &options.App{
 		Title:             "SkillFlow",
 		Width:             1360,
 		Height:            860,
 		MinWidth:          960,
 		MinHeight:         680,
-		HideWindowOnClose: false,
+		HideWindowOnClose: uiProcessOwnsTrayLifecycle(),
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
@@ -69,5 +78,5 @@ func runUIProcess() error {
 		Bind: []interface{}{
 			app,
 		},
-	})
+	}
 }

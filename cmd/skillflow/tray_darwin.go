@@ -339,7 +339,6 @@ func setupTray(controller trayController) error {
 	darwinTrayState.controller = controller
 	darwinTrayState.mu.Unlock()
 
-	C.skillflow_prepare_application()
 	controller.logInfof("tray setup started, platform=darwin")
 	if C.skillflow_setup_tray() == 0 {
 		controller.logErrorf("tray setup failed: create menu bar status item failed")

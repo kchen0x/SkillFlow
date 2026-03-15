@@ -388,7 +388,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 
 ## 6. 云端备份
 
-将 Skill 库镜像备份至云端。支持两种后端：**对象存储**（阿里云 OSS、腾讯云 COS、华为云 OBS）和 **Git 仓库**。
+将 Skill 库镜像备份至云端。支持两种后端：**对象存储**（阿里云 OSS、AWS S3、Azure Blob Storage、Google Cloud Storage、腾讯云 COS、华为云 OBS）和 **Git 仓库**。
 
 ### 状态提示
 
@@ -420,6 +420,7 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 - **Skill 易变检查时间仅本地保存** — 变化频繁的 `LastCheckedAt` 会写入本地 `meta_local/*.local.json`，不参与 git/云端同步，降低多机并行时的冲突概率。
 - **收藏仓库同步运行态仅本地保存** — 每个仓库的 `lastSync` 与 `syncError` 会写入本地 `star_repos_local.json`，避免某台设备后台同步导致其他设备的同步元数据频繁抖动与冲突。
 - **本地路径配置隔离** — `config_local.json` 保存机器相关的文件系统路径与代理设置，例如应用目录外的 `SkillsStorageDir`、智能体 `ScanDirs` / `PushDir` 以及代理配置；该文件不参与备份和 git 同步。
+- **其他设备本地状态仅本地保存** — 自动推送目标智能体、开机自启注册状态、最近一次窗口尺寸等设备级状态会继续保存在 `config_local.json` 中，因此某一台机器执行恢复时不会覆盖另一台机器的本地使用习惯。
 - **云端敏感凭据仅本地保存** — Access Key ID、Secret Key、访问令牌等敏感云凭据只会写入 `config_local.json` 中按服务商分组的本地配置；可同步的 `config.json` 仅保留云服务商、存储桶、远端路径、Endpoint、仓库地址、分支等非敏感配置。
 - **Git 备份兼容处理** — 当 Git 备份以父目录作为工作树时，SkillFlow 会自动迁移旧的 `skills/.git` 嵌套元数据，避免真实 Skill 文件被当作嵌套仓库而无法跟踪。
 - **恢复后的本机补偿动作** — 云端恢复成功后，当前设备上新恢复出来的库内 Skill 会自动推送到已勾选的自动推送目标智能体；新恢复出来的收藏仓库也会立刻在本地完成克隆。

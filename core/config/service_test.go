@@ -518,6 +518,35 @@ func TestLoadMigratesProxyOutOfSharedConfig(t *testing.T) {
 	assert.Contains(t, string(localData), `"url": "http://127.0.0.1:7890"`)
 }
 
+func TestLoadFallsBackToBuiltinAgentsWhenSharedAgentsMissing(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{
+	  "defaultCategory": "Default",
+	  "logLevel": "info",
+	  "repoScanMaxDepth": 5,
+	  "agents": []
+	}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(`{
+	  "skillsStorageDir": "`+filepath.ToSlash(filepath.Join(dir, "skills"))+`",
+	  "agents": []
+	}`), 0o644))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+
+	defaultCfg := config.DefaultConfig(dir)
+	require.Len(t, loaded.Agents, len(defaultCfg.Agents))
+	for i, agent := range defaultCfg.Agents {
+		assert.Equal(t, agent.Name, loaded.Agents[i].Name)
+		assert.Equal(t, agent.Enabled, loaded.Agents[i].Enabled)
+		assert.Equal(t, agent.Custom, loaded.Agents[i].Custom)
+		assert.Equal(t, agent.ScanDirs, loaded.Agents[i].ScanDirs)
+		assert.Equal(t, agent.PushDir, loaded.Agents[i].PushDir)
+	}
+}
+
 func TestMigrationFromLegacyConfig(t *testing.T) {
 	dir := t.TempDir()
 	// Write a legacy config.json that includes skillsStorageDir inline
