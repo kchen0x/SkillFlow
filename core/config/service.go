@@ -341,22 +341,35 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		localMap[la.Name] = la
 	}
 
-	var agents []AgentConfig
+	sharedMap := make(map[string]sharedAgentConfig, len(shared.Agents))
 	for _, sa := range shared.Agents {
-		la := localMap[sa.Name]
+		if strings.TrimSpace(sa.Name) == "" {
+			continue
+		}
+		sharedMap[sa.Name] = sa
+	}
+
+	agents := make([]AgentConfig, 0, len(builtinAgents)+len(local.Agents))
+	for _, name := range builtinAgents {
+		sa, ok := sharedMap[name]
+		enabled := true
+		if ok {
+			enabled = sa.Enabled
+		}
+		la := localMap[name]
 		scanDirs := la.ScanDirs
 		pushDir := la.PushDir
 		if len(scanDirs) == 0 {
-			scanDirs = DefaultAgentScanDirs(sa.Name)
+			scanDirs = DefaultAgentScanDirs(name)
 		}
 		if pushDir == "" {
-			pushDir = DefaultAgentPushDir(sa.Name)
+			pushDir = DefaultAgentPushDir(name)
 		}
 		agents = append(agents, AgentConfig{
-			Name:     sa.Name,
+			Name:     name,
 			ScanDirs: scanDirs,
 			PushDir:  pushDir,
-			Enabled:  sa.Enabled,
+			Enabled:  enabled,
 			Custom:   false,
 		})
 	}

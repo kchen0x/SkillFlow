@@ -12,8 +12,14 @@ func TestGetEnabledAgentsReturnsEnabledAgents(t *testing.T) {
 
 	agents, err := app.GetEnabledAgents()
 	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, "codex", agents[0].Name)
+	require.NotEmpty(t, agents)
+
+	enabledNames := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		assert.True(t, agent.Enabled)
+		enabledNames = append(enabledNames, agent.Name)
+	}
+	assert.Contains(t, enabledNames, "codex")
 }
 
 func TestPushConflictUsesAgentNameField(t *testing.T) {
