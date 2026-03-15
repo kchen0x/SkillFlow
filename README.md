@@ -33,7 +33,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app, with per-skill spinner feedback and a top-of-page status banner for success or failure, including push-dir refresh and auto-push target overwrite to keep selected agents current. |
 | **Desktop Experience** | Bilingual UI, multiple themes, helper-backed tray/menu bar reopen after window close, launch-at-login, per-agent settings, and background route-memory trimming when a hidden window stays inactive. |
 
-For the complete UI/UX reference, see **[docs/features.md](docs/features.md)**.
+For the complete UI/UX reference, including cloud backup behavior and provider details, see **[docs/features.md](docs/features.md)**.
 
 ## Supported Agents
 
@@ -56,17 +56,5 @@ my-skill/
   skill.md
   ...other files
 ```
-
-## Cloud Backup
-
-Configure backup in **Settings → Cloud Storage**.
-
-- Supported providers: **Aliyun OSS**, **AWS S3**, **Azure Blob Storage**, **Google Cloud Storage**, **Tencent COS**, **Huawei OBS**, and **Git**.
-- Skills, prompts, and synced metadata are backed up together so a new device can restore the same library state.
-- Synced metadata stores portable relative paths where possible, which keeps cross-device restore working across macOS and Windows.
-- High-churn per-skill check timestamps are kept in local-only `meta_local/*.local.json`, so multi-device backup syncs avoid unnecessary merge conflicts.
-- High-churn starred-repo sync state (`lastSync`, `syncError`) is kept in local-only `star_repos_local.json` to reduce multi-device merge churn.
-- Machine-specific paths, proxy settings, auto-push targets, launch-at-login state, window size, and sensitive cloud credentials stay local in `config_local.json`.
-- Git backup supports startup pull, periodic auto-sync, and explicit conflict-resolution actions.
 
 For contributing guidelines and building from source, see **[docs/contributing.md](contributing.md)**.
