@@ -10,6 +10,16 @@ SkillFlow is a cross-platform desktop app for managing skills and reusable promp
 
 ![skilflow](docs/skillflow.gif)
 
+## What Problems Does SkillFlow Solve?
+
+- **📦 Turn discoveries into assets**: Solve the "saved means forgotten" problem by turning scattered skills from blogs and videos into personal assets you can manage, iterate on, retire, and update deliberately.
+- **🎛️ Stay in control**: Avoid black-box skill management by organizing large skill collections by scenario, so developers always understand and control an agent's capability boundaries.
+- **🔄 Sync across agents**: Break model silos by reusing one skill setup across Claude Code, Codex, Gemini, and other agents with different strengths, limits, and use cases.
+- **🖥️ Keep environments consistent**: Build a cloud-backed workflow across macOS and Windows devices so your development environment and skill configuration stay aligned wherever you work.
+- **⚡ Iterate automatically**: Replace tedious manual maintenance with automatic skill updates, so distributed sources do not turn into stale versions.
+- **📝 Version prompts intentionally**: Manage prompts as versioned assets instead of rewriting them ad hoc, improving consistency, optimization, and standardization over time.
+- **🛠️ Focus on real work**: Move beyond repetitive toy exercises and use AI practice to solve real productivity problems while building tools that matter in day-to-day development.
+
 ## Download & Install
 
 Get the latest release from **[GitHub Releases →](https://github.com/shinerio/SkillFlow/releases/latest)**
