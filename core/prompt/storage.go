@@ -80,6 +80,20 @@ type exportPrompt struct {
 	WebLinks    []PromptLink `json:"webLinks,omitempty"`
 }
 
+type ImportPrompt struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Category    string       `json:"category"`
+	Content     string       `json:"content"`
+	ImageURLs   []string     `json:"imageURLs,omitempty"`
+	WebLinks    []PromptLink `json:"webLinks,omitempty"`
+}
+
+type ImportPreview struct {
+	Creates   []ImportPrompt `json:"creates"`
+	Conflicts []ImportPrompt `json:"conflicts"`
+}
+
 func NewStorage(root string) *Storage {
 	return &Storage{root: filepath.Clean(root)}
 }
@@ -417,27 +431,66 @@ func marshalExportBundle(items []*Prompt) ([]byte, error) {
 }
 
 func (s *Storage) ImportJSON(data []byte) (int, error) {
-	bundle, err := parseImportJSON(data)
+	preview, err := s.PreviewImportJSON(data)
 	if err != nil {
 		return 0, err
 	}
-	count := 0
+	overwriteNames := make([]string, 0, len(preview.Conflicts))
+	for _, item := range preview.Conflicts {
+		overwriteNames = append(overwriteNames, item.Name)
+	}
+	return s.ApplyImportPreview(preview, overwriteNames)
+}
+
+func (s *Storage) PreviewImportJSON(data []byte) (*ImportPreview, error) {
+	bundle, err := parseImportJSON(data)
+	if err != nil {
+		return nil, err
+	}
+	preview := &ImportPreview{
+		Creates:   make([]ImportPrompt, 0, len(bundle.Prompts)),
+		Conflicts: make([]ImportPrompt, 0, len(bundle.Prompts)),
+	}
 	for _, item := range bundle.Prompts {
-		if strings.TrimSpace(item.Name) == "" {
-			return count, fmt.Errorf("import prompt missing name")
+		importItem, err := normalizeImportPrompt(item)
+		if err != nil {
+			return nil, err
 		}
-		if strings.TrimSpace(item.Content) == "" {
-			return count, fmt.Errorf("import prompt %s missing content", item.Name)
-		}
-		if _, err := s.Get(item.Name); err == nil {
-			if _, err := s.Update(item.Name, item.Name, item.Description, item.Category, item.Content, item.ImageURLs, item.WebLinks); err != nil {
-				return count, err
-			}
+		if _, err := s.Get(importItem.Name); err == nil {
+			preview.Conflicts = append(preview.Conflicts, importItem)
 		} else if errors.Is(err, ErrPromptNotFound) {
-			if _, err := s.Create(item.Name, item.Description, item.Category, item.Content, item.ImageURLs, item.WebLinks); err != nil {
-				return count, err
-			}
+			preview.Creates = append(preview.Creates, importItem)
 		} else {
+			return nil, err
+		}
+	}
+	return preview, nil
+}
+
+func (s *Storage) ApplyImportPreview(preview *ImportPreview, overwriteNames []string) (int, error) {
+	if preview == nil {
+		return 0, fmt.Errorf("import preview is nil")
+	}
+	count := 0
+	for _, item := range preview.Creates {
+		if _, err := s.Create(item.Name, item.Description, item.Category, item.Content, item.ImageURLs, item.WebLinks); err != nil {
+			return count, err
+		}
+		count++
+	}
+	overwriteSet := make(map[string]struct{}, len(overwriteNames))
+	for _, rawName := range overwriteNames {
+		name, err := normalizePromptName(rawName)
+		if err != nil {
+			return count, err
+		}
+		overwriteSet[name] = struct{}{}
+	}
+	for _, item := range preview.Conflicts {
+		if _, ok := overwriteSet[item.Name]; !ok {
+			continue
+		}
+		if _, err := s.Update(item.Name, item.Name, item.Description, item.Category, item.Content, item.ImageURLs, item.WebLinks); err != nil {
 			return count, err
 		}
 		count++
@@ -455,6 +508,39 @@ func parseImportJSON(data []byte) (*exportBundle, error) {
 		return &exportBundle{Version: exportVersion, ExportedAt: time.Now(), Prompts: items}, nil
 	}
 	return nil, fmt.Errorf("invalid prompt import file")
+}
+
+func normalizeImportPrompt(item exportPrompt) (ImportPrompt, error) {
+	if strings.TrimSpace(item.Name) == "" {
+		return ImportPrompt{}, fmt.Errorf("import prompt missing name")
+	}
+	if strings.TrimSpace(item.Content) == "" {
+		return ImportPrompt{}, fmt.Errorf("import prompt %s missing content", item.Name)
+	}
+	name, err := normalizePromptName(item.Name)
+	if err != nil {
+		return ImportPrompt{}, err
+	}
+	category, err := normalizeCategoryName(item.Category)
+	if err != nil {
+		return ImportPrompt{}, err
+	}
+	imageURLs, err := normalizePromptImageURLs(item.ImageURLs)
+	if err != nil {
+		return ImportPrompt{}, err
+	}
+	webLinks, err := normalizePromptLinks(item.WebLinks)
+	if err != nil {
+		return ImportPrompt{}, err
+	}
+	return ImportPrompt{
+		Name:        name,
+		Description: strings.TrimSpace(item.Description),
+		Category:    category,
+		Content:     item.Content,
+		ImageURLs:   imageURLs,
+		WebLinks:    webLinks,
+	}, nil
 }
 
 func (s *Storage) migrateLegacyLayout() error {
