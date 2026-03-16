@@ -853,9 +853,13 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ### Import / Export
 
-- Toolbar **Import** reads a JSON prompt library file and creates or updates prompts by name, including optional image URLs and web links.
-- Toolbar **Export** writes the full prompt library, including optional image URLs and web links, to a JSON file selected by the user.
+- Toolbar **Import** reads a JSON prompt library file, preserves the imported category for each prompt, and when a prompt name already exists locally it asks whether to **Skip** or **Overwrite** before writing anything.
+- The import conflict dialog includes **Apply the same action to the remaining {count} conflicts**, so one decision can be reused for the rest of the current import run without turning it into a saved global preference.
+- Toolbar **Export** now expands an inline export bar instead of exporting immediately.
+- The export bar supports **All**, the currently selected left-sidebar category, and **Pick**.
+- **Pick** supports multi-select export within the current left-sidebar scope. When the sidebar is on **All**, selection spans the whole prompt library; when the sidebar is on a concrete category, selection is limited to that category.
+- Exported JSON still preserves each prompt's own category, image URLs, and web links.
 
 ---
 
-*Last updated: 2026-03-15*
+*Last updated: 2026-03-17*
