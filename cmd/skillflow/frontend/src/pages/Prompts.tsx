@@ -3,7 +3,7 @@ import { Check, Copy, Download, FileText, Plus, Trash2, Upload } from 'lucide-re
 import {
   CreatePrompt,
   DeletePrompt,
-  ExportPrompts,
+  ExportPromptsByNames,
   ImportPrompts,
   ListPromptCategories,
   ListPrompts,
@@ -16,6 +16,7 @@ import AnimatedDialog from '../components/ui/AnimatedDialog'
 import SkillListControls from '../components/SkillListControls'
 import { useLanguage } from '../contexts/LanguageContext'
 import { copyTextToClipboard } from '../lib/clipboard'
+import { buildPromptExportActions, canExportPromptSelection, listPromptExportCandidates, resolvePromptExportNames, type PromptExportMode } from '../lib/promptExport'
 import { buildPromptLinksMarkdown, normalizePromptImageURLs, type PromptWebLink } from '../lib/promptRichContent'
 import { SkillSortOrder } from '../lib/skillList'
 import { matchesKeywordExpression } from '../lib/search'
@@ -74,6 +75,9 @@ export default function Prompts() {
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [exportBarOpen, setExportBarOpen] = useState(false)
+  const [exportMode, setExportMode] = useState<PromptExportMode>('all')
+  const [selectedExportNames, setSelectedExportNames] = useState<Set<string>>(new Set())
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create')
   const [draft, setDraft] = useState<PromptDraft>(createEmptyDraft())
@@ -103,6 +107,11 @@ export default function Prompts() {
     load()
   }, [])
 
+  const sortPromptItems = (items: PromptItem[]) => [...items].sort((left, right) => {
+    const result = collator.compare(left.name.trim(), right.name.trim())
+    return sortOrder === 'asc' ? result : -result
+  })
+
   const filteredPrompts = useMemo(() => {
     const items = prompts.filter((item) => selectedCat === null || item.category === selectedCat)
     const searched = search.trim()
@@ -113,16 +122,28 @@ export default function Prompts() {
         (item.webLinks ?? []).map(link => `${link.label} ${link.url}`).join('\n'),
       ].join('\n')))
       : items
-    return [...searched].sort((left, right) => {
-      const result = collator.compare(left.name.trim(), right.name.trim())
-      return sortOrder === 'asc' ? result : -result
-    })
+    return sortPromptItems(searched)
   }, [prompts, search, selectedCat, sortOrder])
+
+  const exportScopePrompts = useMemo(() => sortPromptItems(listPromptExportCandidates(prompts, selectedCat)), [prompts, selectedCat, sortOrder])
+
+  const exportActions = useMemo(() => buildPromptExportActions(selectedCat, {
+    all: t('category.all'),
+    selected: t('prompts.exportSpecified'),
+  }), [selectedCat, t])
 
   const promptCounts = useMemo(() => prompts.reduce<Record<string, number>>((counts, item) => {
     counts[item.category] = (counts[item.category] ?? 0) + 1
     return counts
   }, {}), [prompts])
+
+  useEffect(() => {
+    setSelectedExportNames((current) => {
+      if (current.size === 0) return current
+      const next = new Set(exportScopePrompts.filter((item) => current.has(item.name)).map((item) => item.name))
+      return next.size === current.size ? current : next
+    })
+  }, [exportScopePrompts])
 
   const formatPromptError = (message: unknown) => {
     const raw = String((message as any)?.message ?? message ?? '').trim()
@@ -226,12 +247,33 @@ export default function Prompts() {
   }
 
   const handleExport = async () => {
+    setStatus(null)
+    if (exportBarOpen) {
+      closeExportBar()
+      return
+    }
+    setExportBarOpen(true)
+  }
+
+  const closeExportBar = () => {
+    setExportBarOpen(false)
+    setExportMode('all')
+    setSelectedExportNames(new Set())
+  }
+
+  const runExport = async (mode: PromptExportMode) => {
+    if (!canExportPromptSelection(mode, selectedExportNames)) {
+      setStatus({ type: 'error', message: t('prompts.exportSelectAtLeastOne') })
+      return
+    }
     setExporting(true)
     setStatus(null)
     try {
-      const path = await ExportPrompts()
+      const names = resolvePromptExportNames(mode, prompts, selectedCat, selectedExportNames)
+      const path = await ExportPromptsByNames(mode === 'all' ? [] : names)
       if (path) {
         setStatus({ type: 'success', message: t('prompts.exportedTo', { path }) })
+        closeExportBar()
       }
     } catch (error) {
       setStatus({ type: 'error', message: formatPromptError(error) })
@@ -289,6 +331,80 @@ export default function Prompts() {
             placeholder={t('prompts.searchPlaceholder')}
             resultLabel={t('prompts.showingNPrompts', { count: filteredPrompts.length })}
           />
+
+          {exportBarOpen && (
+            <div className="rounded-2xl px-3 py-3 flex flex-col gap-3" style={{ border: '1px solid var(--border-base)', background: 'var(--bg-base)' }}>
+              <div className="flex flex-wrap items-center gap-2">
+                {exportActions.map((action) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    disabled={exporting}
+                    onClick={() => {
+                      if (action.key === 'selected') {
+                        setExportMode('selected')
+                        return
+                      }
+                      void runExport(action.key)
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
+                    style={exportMode === action.key
+                      ? { background: 'var(--active-surface)', color: 'var(--active-text)', border: '1px solid var(--active-border)' }
+                      : { color: 'var(--text-muted)', border: '1px solid var(--border-base)' }}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+                <div className="flex-1" />
+                <button type="button" onClick={closeExportBar} disabled={exporting} className="btn-secondary text-sm">
+                  {t('common.cancel')}
+                </button>
+              </div>
+
+              {exportMode === 'selected' && (
+                <>
+                  <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {t('prompts.exportSelectedCount', { count: selectedExportNames.size })}
+                  </div>
+                  <div className="max-h-44 overflow-y-auto rounded-xl" style={{ border: '1px solid var(--border-base)' }}>
+                    {exportScopePrompts.map((item) => {
+                      const checked = selectedExportNames.has(item.name)
+                      return (
+                        <label
+                          key={item.name}
+                          className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer"
+                          style={{ color: 'var(--text-primary)', borderBottom: '1px solid var(--border-base)' }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const next = new Set(selectedExportNames)
+                              if (event.target.checked) next.add(item.name)
+                              else next.delete(item.name)
+                              setSelectedExportNames(next)
+                            }}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                          <span className="shrink-0 text-[11px]" style={{ color: 'var(--text-muted)' }}>{item.category}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void runExport('selected')}
+                      disabled={exporting || !canExportPromptSelection('selected', selectedExportNames)}
+                      className="btn-primary text-sm disabled:opacity-50"
+                    >
+                      {exporting ? t('prompts.exporting') : t('prompts.export')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {status && (
             <div
