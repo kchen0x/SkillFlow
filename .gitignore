@@ -19,6 +19,7 @@
 /cmd/skillflow/frontend/package.json.md5
 
 .worktree
+.worktrees/
 .gocache/
 
 # Local-only runtime metadata overlays (not synced)
