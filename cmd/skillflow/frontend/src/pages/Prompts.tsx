@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Download, FileText, Plus, Trash2, Upload } from 'lucide-react'
 import {
+  CancelImportPrompts,
+  CompleteImportPrompts,
   CreatePrompt,
   DeletePrompt,
   ExportPromptsByNames,
-  ImportPrompts,
   ListPromptCategories,
   ListPrompts,
   MovePromptCategory,
+  PrepareImportPrompts,
   UpdatePrompt,
 } from '../../wailsjs/go/main/App'
 import PromptEditorDialog, { type PromptDraft } from '../components/PromptEditorDialog'
 import PromptCategoryPanel from '../components/PromptCategoryPanel'
+import ConflictDialog from '../components/ConflictDialog'
 import AnimatedDialog from '../components/ui/AnimatedDialog'
 import SkillListControls from '../components/SkillListControls'
 import { useLanguage } from '../contexts/LanguageContext'
 import { copyTextToClipboard } from '../lib/clipboard'
+import { applyPromptImportDecision } from '../lib/promptImportConflicts'
 import { buildPromptExportActions, canExportPromptSelection, listPromptExportCandidates, resolvePromptExportNames, type PromptExportMode } from '../lib/promptExport'
 import { buildPromptLinksMarkdown, normalizePromptImageURLs, type PromptWebLink } from '../lib/promptRichContent'
 import { SkillSortOrder } from '../lib/skillList'
@@ -32,6 +36,15 @@ type PromptItem = {
   webLinks?: PromptWebLink[]
   createdAt?: string
   updatedAt?: string
+}
+
+type ImportPromptItem = {
+  name: string
+  description?: string
+  category: string
+  content: string
+  imageURLs?: string[]
+  webLinks?: PromptWebLink[]
 }
 
 type StatusState = {
@@ -78,6 +91,10 @@ export default function Prompts() {
   const [exportBarOpen, setExportBarOpen] = useState(false)
   const [exportMode, setExportMode] = useState<PromptExportMode>('all')
   const [selectedExportNames, setSelectedExportNames] = useState<Set<string>>(new Set())
+  const [importSessionID, setImportSessionID] = useState('')
+  const [importConflicts, setImportConflicts] = useState<ImportPromptItem[]>([])
+  const [importOverwriteNames, setImportOverwriteNames] = useState<string[]>([])
+  const [importApplyToRemaining, setImportApplyToRemaining] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create')
   const [draft, setDraft] = useState<PromptDraft>(createEmptyDraft())
@@ -234,11 +251,23 @@ export default function Prompts() {
     setImporting(true)
     setStatus(null)
     try {
-      const count = await ImportPrompts()
-      if (count > 0) {
-        await load()
-        setStatus({ type: 'success', message: t('prompts.importedN', { count }) })
+      const result = await PrepareImportPrompts()
+      if (!result?.sessionId) {
+        return
       }
+      const conflicts = (result.conflicts ?? []) as ImportPromptItem[]
+      if (conflicts.length === 0) {
+        const count = await CompleteImportPrompts(result.sessionId, [])
+        if (count > 0) {
+          await load()
+        }
+        setStatus({ type: 'success', message: t('prompts.importedN', { count }) })
+        return
+      }
+      setImportSessionID(result.sessionId)
+      setImportConflicts(conflicts)
+      setImportOverwriteNames([])
+      setImportApplyToRemaining(false)
     } catch (error) {
       setStatus({ type: 'error', message: formatPromptError(error) })
     } finally {
@@ -280,6 +309,54 @@ export default function Prompts() {
     } finally {
       setExporting(false)
     }
+  }
+
+  const resetImportConflictState = () => {
+    setImportSessionID('')
+    setImportConflicts([])
+    setImportOverwriteNames([])
+    setImportApplyToRemaining(false)
+  }
+
+  const finalizeImport = async (sessionID: string, overwriteNames: string[]) => {
+    setImporting(true)
+    try {
+      const count = await CompleteImportPrompts(sessionID, overwriteNames)
+      if (count > 0) {
+        await load()
+      }
+      setStatus({ type: 'success', message: t('prompts.importedN', { count }) })
+      resetImportConflictState()
+    } catch (error) {
+      setStatus({ type: 'error', message: formatPromptError(error) })
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const cancelImportConflictReview = async () => {
+    const sessionID = importSessionID
+    resetImportConflictState()
+    if (!sessionID) {
+      return
+    }
+    try {
+      await CancelImportPrompts(sessionID)
+    } catch (error) {
+      setStatus({ type: 'error', message: formatPromptError(error) })
+    }
+  }
+
+  const handleImportConflictDecision = async (decision: 'skip' | 'overwrite') => {
+    if (!importSessionID) return
+    const next = applyPromptImportDecision(importConflicts, importOverwriteNames, decision, importApplyToRemaining)
+    if (next.remainingConflicts.length === 0) {
+      await finalizeImport(importSessionID, next.overwriteNames)
+      return
+    }
+    setImportOverwriteNames(next.overwriteNames)
+    setImportConflicts(next.remainingConflicts)
+    setImportApplyToRemaining(false)
   }
 
   return (
@@ -488,6 +565,20 @@ export default function Prompts() {
           </button>
         </div>
       </AnimatedDialog>
+
+      <ConflictDialog
+        conflicts={importConflicts}
+        onOverwrite={() => { void handleImportConflictDecision('overwrite') }}
+        onSkip={() => { void handleImportConflictDecision('skip') }}
+        onCancel={() => { void cancelImportConflictReview() }}
+        onDone={resetImportConflictState}
+        labelForConflict={(conflict) => conflict.name}
+        applyToRemainingLabel={importConflicts.length > 1
+          ? t('prompts.importConflictApplyToRemaining', { count: importConflicts.length - 1 })
+          : undefined}
+        applyToRemainingChecked={importApplyToRemaining}
+        onApplyToRemainingChange={importConflicts.length > 1 ? setImportApplyToRemaining : undefined}
+      />
     </div>
   )
 }

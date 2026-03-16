@@ -191,6 +191,7 @@ export const en = {
   'prompts.exportSpecified': 'Pick',
   'prompts.exporting': 'Exporting...',
   'prompts.importedN': 'Imported {count} prompts',
+  'prompts.importConflictApplyToRemaining': 'Apply the same action to the remaining {count} conflicts',
   'prompts.exportedTo': 'Exported prompts to {path}',
   'prompts.exportSelectedCount': '{count} selected',
   'prompts.exportSelectAtLeastOne': 'Select at least one prompt.',

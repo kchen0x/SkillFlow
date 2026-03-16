@@ -191,6 +191,7 @@ export const zh = {
   'prompts.exportSpecified': '指定',
   'prompts.exporting': '导出中...',
   'prompts.importedN': '已导入 {count} 个提示词',
+  'prompts.importConflictApplyToRemaining': '对剩余 {count} 个冲突执行相同操作',
   'prompts.exportedTo': '已导出到 {path}',
   'prompts.exportSelectedCount': '已选 {count} 项',
   'prompts.exportSelectAtLeastOne': '请至少选择一个提示词。',
