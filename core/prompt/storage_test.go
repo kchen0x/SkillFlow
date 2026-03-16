@@ -11,6 +11,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type exportBundleFixture struct {
+	Version int                   `json:"version"`
+	Prompts []exportPromptFixture `json:"prompts"`
+}
+
+type exportPromptFixture struct {
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	Category    string              `json:"category"`
+	Content     string              `json:"content"`
+	ImageURLs   []string            `json:"imageURLs"`
+	WebLinks    []prompt.PromptLink `json:"webLinks"`
+}
+
 func TestStorageCreateUpdateMoveDelete(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)
@@ -123,6 +137,66 @@ func TestStorageExportImportJSON(t *testing.T) {
 		Label: "Repo",
 		URL:   "https://github.com/example/prompt-a",
 	}}, items[0].WebLinks)
+}
+
+func TestStorageExportJSONByNamesReturnsAllWhenEmpty(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Prompt A", "Desc A", "Default", "Content A", []string{"https://cdn.example.com/a.png"}, []prompt.PromptLink{{
+		Label: "Doc A",
+		URL:   "https://docs.example.com/a",
+	}})
+	require.NoError(t, err)
+	_, err = store.Create("Prompt B", "Desc B", "Writing", "Content B", nil, []prompt.PromptLink{{
+		Label: "Doc B",
+		URL:   "https://docs.example.com/b",
+	}})
+	require.NoError(t, err)
+
+	data, err := store.ExportJSONByNames(nil)
+	require.NoError(t, err)
+
+	var bundle exportBundleFixture
+	require.NoError(t, json.Unmarshal(data, &bundle))
+	require.Len(t, bundle.Prompts, 2)
+	assert.ElementsMatch(t, []string{"Prompt A", "Prompt B"}, []string{bundle.Prompts[0].Name, bundle.Prompts[1].Name})
+}
+
+func TestStorageExportJSONByNamesFiltersPromptSubset(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Prompt A", "Desc A", "Default", "Content A", []string{"https://cdn.example.com/a.png"}, []prompt.PromptLink{{
+		Label: "Doc A",
+		URL:   "https://docs.example.com/a",
+	}})
+	require.NoError(t, err)
+	_, err = store.Create("Prompt B", "Desc B", "Writing", "Content B", []string{"https://cdn.example.com/b.png"}, []prompt.PromptLink{{
+		Label: "Doc B",
+		URL:   "https://docs.example.com/b",
+	}})
+	require.NoError(t, err)
+	_, err = store.Create("Prompt C", "Desc C", "Research", "Content C", nil, nil)
+	require.NoError(t, err)
+
+	data, err := store.ExportJSONByNames([]string{"Prompt B"})
+	require.NoError(t, err)
+
+	var bundle exportBundleFixture
+	require.NoError(t, json.Unmarshal(data, &bundle))
+	require.Len(t, bundle.Prompts, 1)
+	assert.Equal(t, exportPromptFixture{
+		Name:        "Prompt B",
+		Description: "Desc B",
+		Category:    "Writing",
+		Content:     "Content B",
+		ImageURLs:   []string{"https://cdn.example.com/b.png"},
+		WebLinks: []prompt.PromptLink{{
+			Label: "Doc B",
+			URL:   "https://docs.example.com/b",
+		}},
+	}, bundle.Prompts[0])
 }
 
 func TestStorageImportArrayPayloadUpdatesExistingPrompt(t *testing.T) {

@@ -369,10 +369,35 @@ func (s *Storage) MoveCategory(name, category string) error {
 }
 
 func (s *Storage) ExportJSON() ([]byte, error) {
+	return s.ExportJSONByNames(nil)
+}
+
+func (s *Storage) ExportJSONByNames(names []string) ([]byte, error) {
 	items, err := s.ListAll()
 	if err != nil {
 		return nil, err
 	}
+	if len(names) > 0 {
+		allowed := make(map[string]struct{}, len(names))
+		for _, rawName := range names {
+			name, err := normalizePromptName(rawName)
+			if err != nil {
+				return nil, err
+			}
+			allowed[name] = struct{}{}
+		}
+		filtered := make([]*Prompt, 0, len(allowed))
+		for _, item := range items {
+			if _, ok := allowed[item.Name]; ok {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
+	return marshalExportBundle(items)
+}
+
+func marshalExportBundle(items []*Prompt) ([]byte, error) {
 	bundle := exportBundle{
 		Version:    exportVersion,
 		ExportedAt: time.Now(),
