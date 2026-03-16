@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/shinerio/skillflow/core/prompt"
@@ -183,10 +184,21 @@ func (a *App) DeletePromptCategory(name string) error {
 }
 
 func (a *App) ImportPrompts() (int, error) {
+	result, err := a.PrepareImportPrompts()
+	if err != nil {
+		return 0, err
+	}
+	if result == nil || result.SessionID == "" {
+		return 0, nil
+	}
+	return a.CompleteImportPrompts(result.SessionID, promptImportNames(result.Conflicts))
+}
+
+func (a *App) PrepareImportPrompts() (*PromptImportPrepareResult, error) {
 	store, root, err := a.promptStorage()
 	if err != nil {
-		a.logErrorf("prompt import failed: load storage failed: %v", err)
-		return 0, err
+		a.logErrorf("prompt import prepare failed: load storage failed: %v", err)
+		return nil, err
 	}
 	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "导入提示词",
@@ -197,29 +209,69 @@ func (a *App) ImportPrompts() (int, error) {
 		}},
 	})
 	if err != nil {
-		a.logErrorf("prompt import failed: open dialog err=%v", err)
-		return 0, err
+		a.logErrorf("prompt import prepare failed: open dialog err=%v", err)
+		return nil, err
 	}
 	if filePath == "" {
-		return 0, nil
+		return &PromptImportPrepareResult{}, nil
 	}
-	a.logInfof("prompt import started: file=%s", filePath)
+	a.logInfof("prompt import prepare started: file=%s", filePath)
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		a.logErrorf("prompt import failed: file=%s err=%v", filePath, err)
-		return 0, err
+		a.logErrorf("prompt import prepare failed: file=%s err=%v", filePath, err)
+		return nil, err
 	}
-	count, err := store.ImportJSON(data)
+	preview, err := store.PreviewImportJSON(data)
 	if err != nil {
-		a.logErrorf("prompt import failed: file=%s err=%v", filePath, err)
+		a.logErrorf("prompt import prepare failed: file=%s err=%v", filePath, err)
+		return nil, err
+	}
+	sessionID := a.promptImports.Create(filePath, preview)
+	a.logInfof("prompt import prepare completed: file=%s session=%s creates=%d conflicts=%d", filePath, sessionID, len(preview.Creates), len(preview.Conflicts))
+	return &PromptImportPrepareResult{
+		SessionID: sessionID,
+		Creates:   preview.Creates,
+		Conflicts: preview.Conflicts,
+	}, nil
+}
+
+func (a *App) CompleteImportPrompts(sessionID string, overwriteNames []string) (int, error) {
+	store, root, err := a.promptStorage()
+	if err != nil {
+		a.logErrorf("prompt import complete failed: session=%s load storage failed: %v", sessionID, err)
 		return 0, err
 	}
-	a.logInfof("prompt import completed: file=%s count=%d", filePath, count)
+	session, ok := a.promptImports.Take(sessionID)
+	if !ok {
+		err := fmt.Errorf("prompt import session not found")
+		a.logErrorf("prompt import complete failed: session=%s root=%s err=%v", sessionID, root, err)
+		return 0, err
+	}
+	a.logInfof("prompt import complete started: session=%s file=%s creates=%d conflicts=%d overwrites=%d root=%s", sessionID, session.FilePath, len(session.Preview.Creates), len(session.Preview.Conflicts), len(overwriteNames), root)
+	count, err := store.ApplyImportPreview(session.Preview, overwriteNames)
+	if err != nil {
+		a.logErrorf("prompt import complete failed: session=%s file=%s root=%s err=%v", sessionID, session.FilePath, root, err)
+		return 0, err
+	}
+	a.logInfof("prompt import complete completed: session=%s file=%s count=%d", sessionID, session.FilePath, count)
 	a.scheduleAutoBackup()
 	return count, nil
 }
 
+func (a *App) CancelImportPrompts(sessionID string) error {
+	if strings.TrimSpace(sessionID) == "" {
+		return nil
+	}
+	a.promptImports.Delete(sessionID)
+	a.logInfof("prompt import cancel completed: session=%s", sessionID)
+	return nil
+}
+
 func (a *App) ExportPrompts() (string, error) {
+	return a.ExportPromptsByNames(nil)
+}
+
+func (a *App) ExportPromptsByNames(names []string) (string, error) {
 	store, root, err := a.promptStorage()
 	if err != nil {
 		a.logErrorf("prompt export failed: load storage failed: %v", err)
@@ -242,8 +294,8 @@ func (a *App) ExportPrompts() (string, error) {
 	if filePath == "" {
 		return "", nil
 	}
-	a.logInfof("prompt export started: file=%s", filePath)
-	data, err := store.ExportJSON()
+	a.logInfof("prompt export started: file=%s promptCount=%d", filePath, len(names))
+	data, err := store.ExportJSONByNames(names)
 	if err != nil {
 		a.logErrorf("prompt export failed: file=%s err=%v", filePath, err)
 		return "", err
@@ -252,7 +304,7 @@ func (a *App) ExportPrompts() (string, error) {
 		a.logErrorf("prompt export failed: file=%s err=%v", filePath, err)
 		return "", err
 	}
-	a.logInfof("prompt export completed: file=%s", filePath)
+	a.logInfof("prompt export completed: file=%s promptCount=%d", filePath, len(names))
 	return filePath, nil
 }
 
@@ -262,4 +314,12 @@ func (a *App) PromptRootDir() (string, error) {
 		return "", fmt.Errorf("load prompt root failed: %w", err)
 	}
 	return root, nil
+}
+
+func promptImportNames(items []prompt.ImportPrompt) []string {
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		names = append(names, item.Name)
+	}
+	return names
 }
