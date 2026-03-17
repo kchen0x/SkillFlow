@@ -275,6 +275,49 @@ func TestStoragePreviewImportJSONSeparatesCreatesAndConflicts(t *testing.T) {
 	assert.Equal(t, "Prompt A", items[0].Name)
 }
 
+func TestStoragePreviewImportJSONDeduplicatesCreatesWithinImportFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	payload, err := json.Marshal(exportBundleFixture{
+		Version: 2,
+		Prompts: []exportPromptFixture{
+			{
+				Name:        "Prompt A",
+				Description: "First import",
+				Category:    "Default",
+				Content:     "First content",
+			},
+			{
+				Name:        "Prompt A",
+				Description: "Second import",
+				Category:    "Writing",
+				Content:     "Second content",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	preview, err := store.PreviewImportJSON(payload)
+	require.NoError(t, err)
+	require.Len(t, preview.Creates, 1)
+	require.Empty(t, preview.Conflicts)
+	assert.Equal(t, "Prompt A", preview.Creates[0].Name)
+	assert.Equal(t, "Second import", preview.Creates[0].Description)
+	assert.Equal(t, "Writing", preview.Creates[0].Category)
+	assert.Equal(t, "Second content", preview.Creates[0].Content)
+
+	count, err := store.ApplyImportPreview(preview, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	item, err := store.Get("Prompt A")
+	require.NoError(t, err)
+	assert.Equal(t, "Second import", item.Description)
+	assert.Equal(t, "Writing", item.Category)
+	assert.Equal(t, "Second content", item.Content)
+}
+
 func TestStorageApplyImportSkipsConflicts(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)

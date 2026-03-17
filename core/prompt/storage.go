@@ -451,14 +451,20 @@ func (s *Storage) PreviewImportJSON(data []byte) (*ImportPreview, error) {
 		Creates:   make([]ImportPrompt, 0, len(bundle.Prompts)),
 		Conflicts: make([]ImportPrompt, 0, len(bundle.Prompts)),
 	}
+	createIndexByName := make(map[string]int, len(bundle.Prompts))
 	for _, item := range bundle.Prompts {
 		importItem, err := normalizeImportPrompt(item)
 		if err != nil {
 			return nil, err
 		}
+		if index, ok := createIndexByName[importItem.Name]; ok {
+			preview.Creates[index] = importItem
+			continue
+		}
 		if _, err := s.Get(importItem.Name); err == nil {
 			preview.Conflicts = append(preview.Conflicts, importItem)
 		} else if errors.Is(err, ErrPromptNotFound) {
+			createIndexByName[importItem.Name] = len(preview.Creates)
 			preview.Creates = append(preview.Creates, importItem)
 		} else {
 			return nil, err

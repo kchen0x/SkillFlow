@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import AnimatedDialog from './ui/AnimatedDialog'
 
@@ -26,12 +26,16 @@ export default function ConflictDialog<T>({
   onApplyToRemainingChange,
 }: Props<T>) {
   const { t } = useLanguage()
+  const hadConflictsRef = useRef(conflicts.length > 0)
 
   useEffect(() => {
-    if (conflicts.length === 0) {
+    const hasConflicts = conflicts.length > 0
+    const hadConflicts = hadConflictsRef.current
+    if (hadConflicts && !hasConflicts) {
       onDone()
     }
-  }, [conflicts, onDone])
+    hadConflictsRef.current = hasConflicts
+  }, [conflicts.length, onDone])
 
   if (conflicts.length === 0) {
     return null

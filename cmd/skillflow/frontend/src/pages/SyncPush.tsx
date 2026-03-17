@@ -341,20 +341,18 @@ export default function SyncPush() {
         </div>
       </div>
 
-      {conflicts.length > 0 && (
-        <ConflictDialog
-          conflicts={conflicts}
-          labelForConflict={(conflict) => `${conflict.skillName} → ${conflict.agentName}`}
-          onOverwrite={async (conflict) => {
-            if (conflict.skillId) {
-              await PushToAgentsForce([conflict.skillId], [conflict.agentName])
-            }
-            setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))
-          }}
-          onSkip={(conflict) => setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))}
-          onDone={() => setDone(true)}
-        />
-      )}
+      <ConflictDialog
+        conflicts={conflicts}
+        labelForConflict={(conflict) => `${conflict.skillName} → ${conflict.agentName}`}
+        onOverwrite={async (conflict) => {
+          if (conflict.skillId) {
+            await PushToAgentsForce([conflict.skillId], [conflict.agentName])
+          }
+          setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))
+        }}
+        onSkip={(conflict) => setConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))}
+        onDone={() => setDone(true)}
+      />
 
       <AnimatedDialog open={pendingPush} width="w-[460px]" zIndex={50}>
         <div className="flex justify-between items-center mb-1">
