@@ -67,3 +67,24 @@ func TestCheckerSupportsSSHSourceURL(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "/repos/user/repo/commits", gotPath)
 }
+
+func TestCheckerReturnsGitHubStatusError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"message": "API rate limit exceeded",
+		}))
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skill.Skill{
+		Source:        skill.SourceGitHub,
+		SourceURL:     "https://github.com/user/repo",
+		SourceSubPath: "skills/skill-a",
+	}
+	_, err := checker.Check(context.Background(), sk)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "github status 403")
+	assert.Contains(t, err.Error(), "API rate limit exceeded")
+}

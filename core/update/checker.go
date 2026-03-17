@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -49,8 +50,11 @@ func (c *Checker) Check(ctx context.Context, sk *skill.Skill) (CheckResult, erro
 	var commits []struct {
 		SHA string `json:"sha"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&commits); err != nil || len(commits) == 0 {
+	if err := decodeGitHubJSONResponse(resp, &commits); err != nil {
 		return CheckResult{}, err
+	}
+	if len(commits) == 0 {
+		return CheckResult{}, fmt.Errorf("github returned no commits for %s/%s path=%s", owner, repo, subPath)
 	}
 	latestSHA := commits[0].SHA
 	return CheckResult{
@@ -72,4 +76,28 @@ func parseSourceURL(sourceURL, subPath string) (owner, repo, path string) {
 	owner = parts[0]
 	repo = parts[1]
 	return owner, repo, subPath
+}
+
+func decodeGitHubJSONResponse(resp *http.Response, target any) error {
+	if resp.StatusCode != http.StatusOK {
+		return githubStatusError(resp)
+	}
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+func githubStatusError(resp *http.Response) error {
+	var payload struct {
+		Message string `json:"message"`
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	msg := strings.TrimSpace(string(body))
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &payload); err == nil && strings.TrimSpace(payload.Message) != "" {
+			msg = strings.TrimSpace(payload.Message)
+		}
+	}
+	if msg == "" {
+		return fmt.Errorf("github status %d", resp.StatusCode)
+	}
+	return fmt.Errorf("github status %d: %s", resp.StatusCode, msg)
 }

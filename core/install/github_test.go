@@ -63,3 +63,19 @@ func TestGitHubInstallerScanSSHURI(t *testing.T) {
 	assert.Len(t, candidates, 1)
 	assert.Equal(t, "skill-a", candidates[0].Name)
 }
+
+func TestGitHubInstallerGetLatestSHAReturnsGitHubStatusError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"message": "API rate limit exceeded",
+		}))
+	}))
+	defer srv.Close()
+
+	installer := install.NewGitHubInstaller(srv.URL, nil)
+	_, err := installer.GetLatestSHA(context.Background(), "https://github.com/user/repo.git", "skills/skill-a")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "github status 403")
+	assert.Contains(t, err.Error(), "API rate limit exceeded")
+}

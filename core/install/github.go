@@ -84,7 +84,7 @@ func (g *GitHubInstaller) listContents(ctx context.Context, owner, repo, path st
 	}
 	defer resp.Body.Close()
 	var items []githubContent
-	return items, json.NewDecoder(resp.Body).Decode(&items)
+	return items, decodeGitHubJSONResponse(resp, &items)
 }
 
 func (g *GitHubInstaller) fileExists(ctx context.Context, owner, repo, path string) bool {
@@ -202,8 +202,11 @@ func (g *GitHubInstaller) GetLatestSHA(ctx context.Context, repoURL, subPath str
 	var commits []struct {
 		SHA string `json:"sha"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&commits); err != nil || len(commits) == 0 {
+	if err := decodeGitHubJSONResponse(resp, &commits); err != nil {
 		return "", err
+	}
+	if len(commits) == 0 {
+		return "", fmt.Errorf("github returned no commits for %s/%s path=%s", owner, repo, subPath)
 	}
 	return commits[0].SHA, nil
 }
@@ -218,4 +221,28 @@ func parseGitHubURI(uri string) (owner, repo string, err error) {
 		return "", "", fmt.Errorf("invalid remote git URI: %s", uri)
 	}
 	return parts[0], parts[1], nil
+}
+
+func decodeGitHubJSONResponse(resp *http.Response, target any) error {
+	if resp.StatusCode != http.StatusOK {
+		return githubStatusError(resp)
+	}
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+func githubStatusError(resp *http.Response) error {
+	var payload struct {
+		Message string `json:"message"`
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	msg := strings.TrimSpace(string(body))
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &payload); err == nil && strings.TrimSpace(payload.Message) != "" {
+			msg = strings.TrimSpace(payload.Message)
+		}
+	}
+	if msg == "" {
+		return fmt.Errorf("github status %d", resp.StatusCode)
+	}
+	return fmt.Errorf("github status %d: %s", resp.StatusCode, msg)
 }

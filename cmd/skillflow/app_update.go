@@ -53,10 +53,6 @@ func (a *App) CheckAppUpdate() (*AppUpdateInfo, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		a.logErrorf("check app update failed: github status %d", resp.StatusCode)
-		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
-	}
 
 	var release struct {
 		TagName string `json:"tag_name"`
@@ -67,7 +63,7 @@ func (a *App) CheckAppUpdate() (*AppUpdateInfo, error) {
 			BrowserDownloadURL string `json:"browser_download_url"`
 		} `json:"assets"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := decodeGitHubJSONResponse(resp, &release); err != nil {
 		a.logErrorf("check app update failed: %v", err)
 		return nil, err
 	}
@@ -109,6 +105,30 @@ func (a *App) CheckAppUpdate() (*AppUpdateInfo, error) {
 	}
 	a.logDebugf("check app update completed (hasUpdate=%v latest=%s)", info.HasUpdate, info.LatestVersion)
 	return info, nil
+}
+
+func decodeGitHubJSONResponse(resp *http.Response, target any) error {
+	if resp.StatusCode != http.StatusOK {
+		return githubStatusError(resp)
+	}
+	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+func githubStatusError(resp *http.Response) error {
+	var payload struct {
+		Message string `json:"message"`
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	msg := strings.TrimSpace(string(body))
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &payload); err == nil && strings.TrimSpace(payload.Message) != "" {
+			msg = strings.TrimSpace(payload.Message)
+		}
+	}
+	if msg == "" {
+		return fmt.Errorf("github status %d", resp.StatusCode)
+	}
+	return fmt.Errorf("github status %d: %s", resp.StatusCode, msg)
 }
 
 // DownloadAppUpdate downloads the new version to a temp file and emits progress events.
