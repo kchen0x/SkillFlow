@@ -295,6 +295,9 @@ func (p *GitProvider) ensureRepo(localDir string) error {
 	if out, err := p.run(localDir, "config", "user.name", "SkillFlow"); err != nil {
 		return fmt.Errorf("git config user.name 失败: %s", out)
 	}
+	if out, err := p.run(localDir, "config", "commit.gpgsign", "false"); err != nil {
+		return fmt.Errorf("git config commit.gpgsign 失败: %s", out)
+	}
 	for _, dir := range excludedDirs {
 		if err := ensureIgnoredPath(localDir, dir+"/"); err != nil {
 			return fmt.Errorf("写入 .gitignore 失败: %w", err)

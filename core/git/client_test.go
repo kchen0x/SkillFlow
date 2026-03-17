@@ -3,7 +3,9 @@ package git
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -152,6 +154,50 @@ func TestCloneOrUpdateForceOverwrite(t *testing.T) {
 	}
 	if string(data) != "hello" {
 		t.Errorf("expected README.md = %q after reset, got %q", "hello", string(data))
+	}
+}
+
+func TestCloneOrUpdateResyncsOriginURLForExistingRepo(t *testing.T) {
+	if err := CheckGitInstalled(); err != nil {
+		t.Skip("git not installed")
+	}
+
+	srcPrimary := t.TempDir()
+	makeLocalRepo(t, srcPrimary)
+	srcSecondary := t.TempDir()
+	makeLocalRepo(t, srcSecondary)
+
+	if err := os.WriteFile(filepath.Join(srcPrimary, "PRIMARY.md"), []byte("primary"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "."}, {"commit", "-m", "add primary marker"}} {
+		if err := runGit(context.Background(), srcPrimary, "", args...); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+	}
+
+	dst := filepath.Join(t.TempDir(), "clone")
+	if err := CloneOrUpdate(context.Background(), srcPrimary, dst, ""); err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+
+	if err := runGit(context.Background(), dst, "", "remote", "set-url", "origin", srcSecondary); err != nil {
+		t.Fatalf("git remote set-url: %v", err)
+	}
+
+	if err := CloneOrUpdate(context.Background(), srcPrimary, dst, ""); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	out, err := exec.Command("git", "-C", dst, "remote", "get-url", "origin").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git remote get-url failed: %v, output: %s", err, string(out))
+	}
+	if got := strings.TrimSpace(string(out)); got != srcPrimary {
+		t.Fatalf("unexpected origin after update: got %q want %q", got, srcPrimary)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "PRIMARY.md")); err != nil {
+		t.Fatalf("PRIMARY.md missing after update: %v", err)
 	}
 }
 

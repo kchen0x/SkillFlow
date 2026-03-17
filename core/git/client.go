@@ -178,6 +178,9 @@ func CloneOrUpdate(ctx context.Context, repoURL, dir, proxyURL string) error {
 		return err
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		if err := syncOriginURL(ctx, dir, proxyURL, repoURL); err != nil {
+			return err
+		}
 		// already cloned — force-pull (handles force-push on remote)
 		if err := runGit(ctx, dir, proxyURL, "fetch", "origin"); err != nil {
 			return fmt.Errorf("git fetch: %w", err)
@@ -188,6 +191,23 @@ func CloneOrUpdate(ctx context.Context, repoURL, dir, proxyURL string) error {
 		return err
 	}
 	return runGit(ctx, "", proxyURL, "clone", repoURL, dir)
+}
+
+func syncOriginURL(ctx context.Context, dir, proxyURL, repoURL string) error {
+	out, err := runGitWithOutput(ctx, dir, proxyURL, "remote", "get-url", "origin")
+	if err != nil {
+		if err := runGit(ctx, dir, proxyURL, "remote", "add", "origin", repoURL); err != nil {
+			return fmt.Errorf("git remote add origin: %w", err)
+		}
+		return nil
+	}
+	if strings.TrimSpace(out) == strings.TrimSpace(repoURL) {
+		return nil
+	}
+	if err := runGit(ctx, dir, proxyURL, "remote", "set-url", "origin", repoURL); err != nil {
+		return fmt.Errorf("git remote set-url origin: %w", err)
+	}
+	return nil
 }
 
 // GetSubPathSHA returns the latest commit SHA for a path within a local git repo.
@@ -247,6 +267,11 @@ func CloneOrUpdateWithCreds(ctx context.Context, repoURL, dir, proxyURL, usernam
 }
 
 func runGit(ctx context.Context, dir, proxyURL string, args ...string) error {
+	_, err := runGitWithOutput(ctx, dir, proxyURL, args...)
+	return err
+}
+
+func runGitWithOutput(ctx context.Context, dir, proxyURL string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	hideConsole(cmd)
@@ -262,7 +287,7 @@ func runGit(ctx context.Context, dir, proxyURL string, args ...string) error {
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 	}
-	return nil
+	return string(out), nil
 }

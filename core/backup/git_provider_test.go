@@ -142,6 +142,43 @@ func TestGitProviderSyncAddsOriginForExistingRepo(t *testing.T) {
 	}
 }
 
+func TestGitProviderSyncDisablesCommitSigningLocally(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+
+	base := t.TempDir()
+	remoteDir := filepath.Join(base, "remote.git")
+	runGit(t, "", "init", "--bare", remoteDir)
+
+	localDir := filepath.Join(base, "skills")
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		t.Fatalf("mkdir localDir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "skill.md"), []byte("# test"), 0644); err != nil {
+		t.Fatalf("write skill.md: %v", err)
+	}
+
+	p := NewGitProvider()
+	if err := p.Init(map[string]string{
+		"repo_url": remoteDir,
+		"branch":   "main",
+	}); err != nil {
+		t.Fatalf("init provider: %v", err)
+	}
+	if err := p.Sync(context.Background(), localDir, "", "", func(string) {}); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+
+	out, err := runGitWithError(localDir, "config", "--local", "--get", "commit.gpgsign")
+	if err != nil {
+		t.Fatalf("expected commit.gpgsign to be configured locally: %v, output: %s", err, out)
+	}
+	if strings.TrimSpace(out) != "false" {
+		t.Fatalf("unexpected local commit.gpgsign: got %q want %q", strings.TrimSpace(out), "false")
+	}
+}
+
 func TestGitProviderSyncRemovesTrackedExcludedRuntimeDir(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
