@@ -11,6 +11,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type exportBundleFixture struct {
+	Version int                   `json:"version"`
+	Prompts []exportPromptFixture `json:"prompts"`
+}
+
+type exportPromptFixture struct {
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	Category    string              `json:"category"`
+	Content     string              `json:"content"`
+	ImageURLs   []string            `json:"imageURLs"`
+	WebLinks    []prompt.PromptLink `json:"webLinks"`
+}
+
 func TestStorageCreateUpdateMoveDelete(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)
@@ -125,6 +139,66 @@ func TestStorageExportImportJSON(t *testing.T) {
 	}}, items[0].WebLinks)
 }
 
+func TestStorageExportJSONByNamesReturnsAllWhenEmpty(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Prompt A", "Desc A", "Default", "Content A", []string{"https://cdn.example.com/a.png"}, []prompt.PromptLink{{
+		Label: "Doc A",
+		URL:   "https://docs.example.com/a",
+	}})
+	require.NoError(t, err)
+	_, err = store.Create("Prompt B", "Desc B", "Writing", "Content B", nil, []prompt.PromptLink{{
+		Label: "Doc B",
+		URL:   "https://docs.example.com/b",
+	}})
+	require.NoError(t, err)
+
+	data, err := store.ExportJSONByNames(nil)
+	require.NoError(t, err)
+
+	var bundle exportBundleFixture
+	require.NoError(t, json.Unmarshal(data, &bundle))
+	require.Len(t, bundle.Prompts, 2)
+	assert.ElementsMatch(t, []string{"Prompt A", "Prompt B"}, []string{bundle.Prompts[0].Name, bundle.Prompts[1].Name})
+}
+
+func TestStorageExportJSONByNamesFiltersPromptSubset(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Prompt A", "Desc A", "Default", "Content A", []string{"https://cdn.example.com/a.png"}, []prompt.PromptLink{{
+		Label: "Doc A",
+		URL:   "https://docs.example.com/a",
+	}})
+	require.NoError(t, err)
+	_, err = store.Create("Prompt B", "Desc B", "Writing", "Content B", []string{"https://cdn.example.com/b.png"}, []prompt.PromptLink{{
+		Label: "Doc B",
+		URL:   "https://docs.example.com/b",
+	}})
+	require.NoError(t, err)
+	_, err = store.Create("Prompt C", "Desc C", "Research", "Content C", nil, nil)
+	require.NoError(t, err)
+
+	data, err := store.ExportJSONByNames([]string{"Prompt B"})
+	require.NoError(t, err)
+
+	var bundle exportBundleFixture
+	require.NoError(t, json.Unmarshal(data, &bundle))
+	require.Len(t, bundle.Prompts, 1)
+	assert.Equal(t, exportPromptFixture{
+		Name:        "Prompt B",
+		Description: "Desc B",
+		Category:    "Writing",
+		Content:     "Content B",
+		ImageURLs:   []string{"https://cdn.example.com/b.png"},
+		WebLinks: []prompt.PromptLink{{
+			Label: "Doc B",
+			URL:   "https://docs.example.com/b",
+		}},
+	}, bundle.Prompts[0])
+}
+
 func TestStorageImportArrayPayloadUpdatesExistingPrompt(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "prompts")
 	store := prompt.NewStorage(root)
@@ -157,6 +231,181 @@ func TestStorageImportArrayPayloadUpdatesExistingPrompt(t *testing.T) {
 	assert.Equal(t, []prompt.PromptLink{{
 		Label: "Spec",
 		URL:   "https://docs.example.com/spec",
+	}}, item.WebLinks)
+}
+
+func TestStoragePreviewImportJSONSeparatesCreatesAndConflicts(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Prompt A", "Existing", "Default", "Existing content", nil, nil)
+	require.NoError(t, err)
+
+	payload, err := json.Marshal(exportBundleFixture{
+		Version: 2,
+		Prompts: []exportPromptFixture{
+			{
+				Name:        "Prompt A",
+				Description: "Imported existing",
+				Category:    "Writing",
+				Content:     "Imported content",
+			},
+			{
+				Name:        "Prompt B",
+				Description: "Imported new",
+				Category:    "Research",
+				Content:     "New content",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	preview, err := store.PreviewImportJSON(payload)
+	require.NoError(t, err)
+	require.Len(t, preview.Creates, 1)
+	require.Len(t, preview.Conflicts, 1)
+	assert.Equal(t, "Prompt B", preview.Creates[0].Name)
+	assert.Equal(t, "Research", preview.Creates[0].Category)
+	assert.Equal(t, "Prompt A", preview.Conflicts[0].Name)
+	assert.Equal(t, "Writing", preview.Conflicts[0].Category)
+
+	items, err := store.ListAll()
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "Prompt A", items[0].Name)
+}
+
+func TestStoragePreviewImportJSONDeduplicatesCreatesWithinImportFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	payload, err := json.Marshal(exportBundleFixture{
+		Version: 2,
+		Prompts: []exportPromptFixture{
+			{
+				Name:        "Prompt A",
+				Description: "First import",
+				Category:    "Default",
+				Content:     "First content",
+			},
+			{
+				Name:        "Prompt A",
+				Description: "Second import",
+				Category:    "Writing",
+				Content:     "Second content",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	preview, err := store.PreviewImportJSON(payload)
+	require.NoError(t, err)
+	require.Len(t, preview.Creates, 1)
+	require.Empty(t, preview.Conflicts)
+	assert.Equal(t, "Prompt A", preview.Creates[0].Name)
+	assert.Equal(t, "Second import", preview.Creates[0].Description)
+	assert.Equal(t, "Writing", preview.Creates[0].Category)
+	assert.Equal(t, "Second content", preview.Creates[0].Content)
+
+	count, err := store.ApplyImportPreview(preview, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	item, err := store.Get("Prompt A")
+	require.NoError(t, err)
+	assert.Equal(t, "Second import", item.Description)
+	assert.Equal(t, "Writing", item.Category)
+	assert.Equal(t, "Second content", item.Content)
+}
+
+func TestStorageApplyImportSkipsConflicts(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Prompt A", "Existing", "Default", "Existing content", nil, nil)
+	require.NoError(t, err)
+
+	payload, err := json.Marshal(exportBundleFixture{
+		Version: 2,
+		Prompts: []exportPromptFixture{
+			{
+				Name:        "Prompt A",
+				Description: "Imported existing",
+				Category:    "Writing",
+				Content:     "Imported content",
+			},
+			{
+				Name:        "Prompt B",
+				Description: "Imported new",
+				Category:    "Research",
+				Content:     "New content",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	preview, err := store.PreviewImportJSON(payload)
+	require.NoError(t, err)
+
+	count, err := store.ApplyImportPreview(preview, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	existing, err := store.Get("Prompt A")
+	require.NoError(t, err)
+	assert.Equal(t, "Default", existing.Category)
+	assert.Equal(t, "Existing", existing.Description)
+	assert.Equal(t, "Existing content", existing.Content)
+
+	created, err := store.Get("Prompt B")
+	require.NoError(t, err)
+	assert.Equal(t, "Research", created.Category)
+	assert.Equal(t, "Imported new", created.Description)
+	assert.Equal(t, "New content", created.Content)
+}
+
+func TestStorageApplyImportOverwritesConflictAndCategory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "prompts")
+	store := prompt.NewStorage(root)
+
+	_, err := store.Create("Prompt A", "Existing", "Default", "Existing content", []string{"https://cdn.example.com/existing.png"}, []prompt.PromptLink{{
+		Label: "Old",
+		URL:   "https://docs.example.com/old",
+	}})
+	require.NoError(t, err)
+
+	payload, err := json.Marshal(exportBundleFixture{
+		Version: 2,
+		Prompts: []exportPromptFixture{{
+			Name:        "Prompt A",
+			Description: "Imported existing",
+			Category:    "Writing",
+			Content:     "Imported content",
+			ImageURLs:   []string{"https://cdn.example.com/imported.png"},
+			WebLinks: []prompt.PromptLink{{
+				Label: "New",
+				URL:   "https://docs.example.com/new",
+			}},
+		}},
+	})
+	require.NoError(t, err)
+
+	preview, err := store.PreviewImportJSON(payload)
+	require.NoError(t, err)
+
+	count, err := store.ApplyImportPreview(preview, []string{"Prompt A"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	item, err := store.Get("Prompt A")
+	require.NoError(t, err)
+	assert.Equal(t, "Writing", item.Category)
+	assert.Equal(t, "Imported existing", item.Description)
+	assert.Equal(t, "Imported content", item.Content)
+	assert.Equal(t, []string{"https://cdn.example.com/imported.png"}, item.ImageURLs)
+	assert.Equal(t, []prompt.PromptLink{{
+		Label: "New",
+		URL:   "https://docs.example.com/new",
 	}}, item.WebLinks)
 }
 

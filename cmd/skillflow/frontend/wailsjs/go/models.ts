@@ -398,6 +398,40 @@ export namespace main {
 	        this.pushedAgents = source["pushedAgents"];
 	    }
 	}
+	export class PromptImportPrepareResult {
+	    sessionId: string;
+	    creates: prompt.ImportPrompt[];
+	    conflicts: prompt.ImportPrompt[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PromptImportPrepareResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.creates = this.convertValues(source["creates"], prompt.ImportPrompt);
+	        this.conflicts = this.convertValues(source["conflicts"], prompt.ImportPrompt);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class PushConflict {
 	    skillId?: string;
 	    skillName: string;
@@ -436,6 +470,46 @@ export namespace prompt {
 	        this.label = source["label"];
 	        this.url = source["url"];
 	    }
+	}
+	export class ImportPrompt {
+	    name: string;
+	    description?: string;
+	    category: string;
+	    content: string;
+	    imageURLs?: string[];
+	    webLinks?: PromptLink[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPrompt(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.category = source["category"];
+	        this.content = source["content"];
+	        this.imageURLs = source["imageURLs"];
+	        this.webLinks = this.convertValues(source["webLinks"], PromptLink);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class Prompt {
 	    name: string;

@@ -306,18 +306,16 @@ export default function SyncPull() {
         )}
       </div>
 
-      {conflicts.length > 0 && (
-        <ConflictDialog
-          conflicts={conflicts}
-          labelForConflict={(path) => scanned.find((item: any) => item.path === path)?.name ?? path}
-          onOverwrite={async (path) => {
-            await PullFromAgentForce(selectedAgent, [path], targetCategory)
-            setConflicts(prev => prev.filter(c => c !== path))
-          }}
-          onSkip={(path) => setConflicts(prev => prev.filter(c => c !== path))}
-          onDone={() => setDone(true)}
-        />
-      )}
+      <ConflictDialog
+        conflicts={conflicts}
+        labelForConflict={(path) => scanned.find((item: any) => item.path === path)?.name ?? path}
+        onOverwrite={async (path) => {
+          await PullFromAgentForce(selectedAgent, [path], targetCategory)
+          setConflicts(prev => prev.filter(c => c !== path))
+        }}
+        onSkip={(path) => setConflicts(prev => prev.filter(c => c !== path))}
+        onDone={() => setDone(true)}
+      />
     </div>
   )
 }

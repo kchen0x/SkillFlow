@@ -160,7 +160,7 @@ Important storage rules:
 | `core/install` | GitHub and local install flows |
 | `core/notify` | Buffered backend event hub and typed payloads |
 | `core/pathutil` | Cross-platform path normalization and relative-path persistence helpers |
-| `core/prompt` | Prompt library storage and import/export |
+| `core/prompt` | Prompt library storage, scoped export, and prepared import preview/apply |
 | `core/registry` | Global agent-adapter and cloud-provider registries |
 | `core/skill` | Skill model, storage, validation, installed-skill indexing |
 | `core/skillkey` | Stable logical-key derivation for git and content-based skills |
@@ -180,7 +180,7 @@ The Wails app package must remain flat, so responsibilities are grouped by file 
 | `main.go`, `version.go` | entrypoint and build-time version |
 | `app.go` | main `App` struct and most frontend-callable methods |
 | `app_viewstate.go`, `app_perf.go` | local snapshot caching, fingerprints, and lightweight performance timing helpers |
-| `app_prompt.go` | prompt CRUD and prompt import/export |
+| `app_prompt.go` | prompt CRUD, scoped export, and prompt import session orchestration |
 | `app_update.go` | app release update check, download, apply, skip-version behavior |
 | `app_log.go` | logger initialization and runtime/file log bridging |
 | `app_restore.go`, `app_backup.go` | restore compensation, Git-backup helpers |

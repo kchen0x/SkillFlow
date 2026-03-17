@@ -18,6 +18,8 @@ export function ApplyAppUpdate():Promise<void>;
 
 export function BackupNow():Promise<void>;
 
+export function CancelImportPrompts(arg1:string):Promise<void>;
+
 export function CheckAppUpdate():Promise<main.AppUpdateInfo>;
 
 export function CheckAppUpdateAndNotify():Promise<main.AppUpdateInfo>;
@@ -25,6 +27,8 @@ export function CheckAppUpdateAndNotify():Promise<main.AppUpdateInfo>;
 export function CheckMissingAgentPushDirs(arg1:Array<string>):Promise<Array<Record<string, string>>>;
 
 export function CheckUpdates():Promise<void>;
+
+export function CompleteImportPrompts(arg1:string,arg2:Array<string>):Promise<number>;
 
 export function CreateCategory(arg1:string):Promise<void>;
 
@@ -47,6 +51,8 @@ export function DeleteSkills(arg1:Array<string>):Promise<void>;
 export function DownloadAppUpdate(arg1:string):Promise<void>;
 
 export function ExportPrompts():Promise<string>;
+
+export function ExportPromptsByNames(arg1:Array<string>):Promise<string>;
 
 export function GetAppVersion():Promise<string>;
 
@@ -111,6 +117,8 @@ export function OpenLogDir():Promise<void>;
 export function OpenPath(arg1:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
+
+export function PrepareImportPrompts():Promise<main.PromptImportPrepareResult>;
 
 export function PromptRootDir():Promise<string>;
 

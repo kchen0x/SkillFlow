@@ -46,6 +46,7 @@ type App struct {
 	starStorage        *coregit.StarStorage
 	cacheDir           string
 	viewCache          *viewstate.Manager
+	promptImports      *promptImportSessionStore
 	startupOnce        sync.Once
 	initialWindowState config.WindowState
 	autostartFactory   func() (launchAtLoginController, error)
@@ -95,6 +96,7 @@ func normalizeCategoryName(name string) string {
 func NewApp() *App {
 	return &App{
 		hub: notify.NewHub(),
+		promptImports: newPromptImportSessionStore(),
 		ghDownloader: func(client *http.Client) githubSkillDownloader {
 			return install.NewGitHubInstaller("", client)
 		},

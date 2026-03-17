@@ -160,7 +160,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 | `core/install` | GitHub 安装和本地导入流程 |
 | `core/notify` | 缓冲事件总线与事件载荷类型 |
 | `core/pathutil` | 跨平台路径归一化与相对路径持久化辅助 |
-| `core/prompt` | 提示词库存储与导入导出 |
+| `core/prompt` | 提示词库存储、范围导出，以及导入预检查/应用 |
 | `core/registry` | 智能体适配器和云服务商的全局注册表 |
 | `core/skill` | Skill 模型、存储、校验、已安装索引 |
 | `core/skillkey` | Git Skill 与内容型 Skill 的稳定逻辑主键生成 |
@@ -180,7 +180,7 @@ Wails 应用包必须保持扁平，因此通过文件名前缀划分职责：
 | `main.go`、`version.go` | 入口与构建时版本号 |
 | `app.go` | 主 `App` 结构体及大部分前端可调用方法 |
 | `app_viewstate.go`、`app_perf.go` | 本地快照缓存、fingerprint 计算和轻量性能计时辅助 |
-| `app_prompt.go` | 提示词 CRUD 与提示词导入导出 |
+| `app_prompt.go` | 提示词 CRUD、范围导出与提示词导入 session 编排 |
 | `app_update.go` | 应用版本检测、下载、应用更新、跳过版本逻辑 |
 | `app_log.go` | 日志初始化与 Wails runtime 日志桥接 |
 | `app_restore.go`、`app_backup.go` | 恢复补偿逻辑、Git 备份辅助 |

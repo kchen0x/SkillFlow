@@ -35,7 +35,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | Feature | Description |
 |---------|-------------|
 | **Skill Library** | Manage a local library of skills with categories, search, sorting, drag-and-drop organization, batch delete, smoother startup/page re-entry through local derived snapshots, and adaptive large-list motion. |
-| **My Prompts** | Store reusable prompts as synced prompt cards with import/export, one-click copy, related image previews, and markdown-style web links. |
+| **My Prompts** | Store reusable prompts as synced prompt cards with scoped export, conflict-aware import, one-click copy, related image previews, and markdown-style web links. |
 | **GitHub Install** | Clone any repo, recursively discover nested skill candidates, and install selected ones into your library. |
 | **Cross-agent Sync** | Push or pull skills across Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, and custom agents. |
 | **Starred Repos** | Watch Git repos, browse their skills, and import or push them without installing everything into My Skills first. |

@@ -22,6 +22,10 @@ export function BackupNow() {
   return window['go']['main']['App']['BackupNow']();
 }
 
+export function CancelImportPrompts(arg1) {
+  return window['go']['main']['App']['CancelImportPrompts'](arg1);
+}
+
 export function CheckAppUpdate() {
   return window['go']['main']['App']['CheckAppUpdate']();
 }
@@ -36,6 +40,10 @@ export function CheckMissingAgentPushDirs(arg1) {
 
 export function CheckUpdates() {
   return window['go']['main']['App']['CheckUpdates']();
+}
+
+export function CompleteImportPrompts(arg1, arg2) {
+  return window['go']['main']['App']['CompleteImportPrompts'](arg1, arg2);
 }
 
 export function CreateCategory(arg1) {
@@ -80,6 +88,10 @@ export function DownloadAppUpdate(arg1) {
 
 export function ExportPrompts() {
   return window['go']['main']['App']['ExportPrompts']();
+}
+
+export function ExportPromptsByNames(arg1) {
+  return window['go']['main']['App']['ExportPromptsByNames'](arg1);
 }
 
 export function GetAppVersion() {
@@ -208,6 +220,10 @@ export function OpenPath(arg1) {
 
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
+}
+
+export function PrepareImportPrompts() {
+  return window['go']['main']['App']['PrepareImportPrompts']();
 }
 
 export function PromptRootDir() {
