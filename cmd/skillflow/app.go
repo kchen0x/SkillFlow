@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,6 +67,7 @@ type App struct {
 }
 
 const defaultCategoryName = "Default"
+const proxyResponseHeaderTimeout = 10 * time.Second
 
 var builtinStarredRepoURLs = []string{
 	"https://github.com/anthropics/skills.git",
@@ -145,27 +145,18 @@ func (a *App) startup(ctx context.Context) {
 }
 
 // proxyHTTPClient builds an *http.Client configured according to the saved proxy settings.
-// Falls back to http.DefaultClient on any error.
+// It preserves Go's default transport behavior and bounds header waits so proxy/network
+// stalls do not hang forever.
 func (a *App) proxyHTTPClient() *http.Client {
+	if a.config == nil {
+		return proxyHTTPClientWithConfig(config.ProxyConfig{Mode: config.ProxyModeSystem})
+	}
+
 	cfg, err := a.config.Load()
 	if err != nil {
-		return http.DefaultClient
+		return proxyHTTPClientWithConfig(config.ProxyConfig{Mode: config.ProxyModeSystem})
 	}
-	switch cfg.Proxy.Mode {
-	case config.ProxyModeSystem:
-		return &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}}
-	case config.ProxyModeManual:
-		if cfg.Proxy.URL == "" {
-			return http.DefaultClient
-		}
-		proxyURL, err := url.Parse(cfg.Proxy.URL)
-		if err != nil {
-			return http.DefaultClient
-		}
-		return &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
-	default: // ProxyModeNone or empty
-		return &http.Client{Transport: &http.Transport{Proxy: nil}}
-	}
+	return proxyHTTPClientWithConfig(cfg.Proxy)
 }
 
 func (a *App) domReady(ctx context.Context) {
