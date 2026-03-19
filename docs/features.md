@@ -254,6 +254,7 @@ Imports skills from external agent directories into your library.
 Browse and import skills directly from watched Git repositories without installing them into your library first.
 
 - Repo scanning is recursive across the full clone, so nested skill folders such as `plugins/<plugin>/skills/<name>` are included; `skill.md` matching is case-insensitive.
+- Repos whose root directory itself contains `SKILL.md` / `skill.md` are also treated as a single skill candidate.
 - Recursive repo scanning is bounded by the configurable **Remote Repo Recursive Scan Depth** setting in **Settings → General** (default `5`, saved range `1-20`).
 
 ### View Modes
@@ -664,6 +665,7 @@ Opened from Dashboard toolbar.
 
 - Info text: "First scan clones the repo; subsequent scans auto-pull."
 - Candidate discovery is recursive across the cloned repo, so nested layouts such as `plugins/<plugin>/skills/<name>` are also listed; `skill.md` matching is case-insensitive.
+- Repos whose root directory itself contains `SKILL.md` / `skill.md` are also treated as a single candidate, using the repo root as the install source.
 - Recursive candidate discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - Already-installed badges are resolved from normalized repo source + subpath instead of `Name`, and checkbox state is tracked by candidate path so same-name candidates remain independent.
 - Candidate rows can show imported / update-available / pushed-agent state according to the **Settings → General → Card status visibility** policy for GitHub Install, and display the candidate subpath so same-name entries stay distinguishable in the dialog.
@@ -868,4 +870,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-19*

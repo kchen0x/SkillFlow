@@ -78,6 +78,27 @@ func TestScanSkillsRootFallback(t *testing.T) {
 	}
 }
 
+func TestScanSkillsRepoRootSkill(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("# repo-root"), 0644); err != nil {
+		t.Fatalf("write repo root skill: %v", err)
+	}
+
+	skills, err := ScanSkills(dir, "https://github.com/a/root-skill", "a/root-skill", "github.com/a/root-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("expected 1, got %d: %+v", len(skills), skills)
+	}
+	if skills[0].Name != filepath.Base(dir) {
+		t.Fatalf("expected repo root name %q, got %+v", filepath.Base(dir), skills[0])
+	}
+	if skills[0].SubPath != "." {
+		t.Fatalf("expected repo root subpath '.', got %+v", skills[0])
+	}
+}
+
 func TestScanSkillsNestedPluginSkills(t *testing.T) {
 	dir := t.TempDir()
 	pluginSkillDir := filepath.Join(dir, "plugins", "shinerio-note-plugin", "skills", "embed-mindmap")

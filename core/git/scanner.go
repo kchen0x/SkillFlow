@@ -90,6 +90,9 @@ func ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source string, maxDepth 
 		}
 		return nil, err
 	}
+	if hasSkillMd(entries) {
+		return scanTree(repoDir, repoDir, repoURL, repoName, source, 0, maxDepth)
+	}
 
 	var roots []string
 	skillsRoot := filepath.Join(repoDir, "skills")

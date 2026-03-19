@@ -68,6 +68,29 @@ func TestCheckerSupportsSSHSourceURL(t *testing.T) {
 	assert.Equal(t, "/repos/user/repo/commits", gotPath)
 }
 
+func TestCheckerOmitsPathFilterForRepoRootSkill(t *testing.T) {
+	var gotPath string
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		json.NewEncoder(w).Encode([]map[string]any{{"sha": "newsha123"}})
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skill.Skill{
+		Source:        skill.SourceGitHub,
+		SourceURL:     "https://github.com/user/repo",
+		SourceSubPath: ".",
+		SourceSHA:     "oldsha",
+	}
+	_, err := checker.Check(context.Background(), sk)
+	require.NoError(t, err)
+	assert.Equal(t, "/repos/user/repo/commits", gotPath)
+	assert.Equal(t, "per_page=1", gotQuery)
+}
+
 func TestCheckerReturnsGitHubStatusError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
