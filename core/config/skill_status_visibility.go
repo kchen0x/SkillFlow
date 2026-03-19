@@ -3,9 +3,9 @@ package config
 import "strings"
 
 const (
-	SkillStatusImported      = "imported"
-	SkillStatusUpdatable     = "updatable"
-	SkillStatusPushedAgents  = "pushedAgents"
+	SkillStatusImported     = "imported"
+	SkillStatusUpdatable    = "updatable"
+	SkillStatusPushedAgents = "pushedAgents"
 )
 
 var allSkillStatusKeys = []string{
@@ -20,7 +20,6 @@ type SkillStatusVisibilityConfig struct {
 	PushToAgent   []string `json:"pushToAgent"`
 	PullFromAgent []string `json:"pullFromAgent"`
 	StarredRepos  []string `json:"starredRepos"`
-	GitHubInstall []string `json:"githubInstall"`
 }
 
 func DefaultSkillStatusVisibility() SkillStatusVisibilityConfig {
@@ -30,7 +29,6 @@ func DefaultSkillStatusVisibility() SkillStatusVisibilityConfig {
 		PushToAgent:   []string{SkillStatusPushedAgents},
 		PullFromAgent: []string{SkillStatusImported},
 		StarredRepos:  []string{SkillStatusImported, SkillStatusPushedAgents},
-		GitHubInstall: []string{SkillStatusImported, SkillStatusUpdatable, SkillStatusPushedAgents},
 	}
 }
 
@@ -42,7 +40,6 @@ func NormalizeSkillStatusVisibility(cfg SkillStatusVisibilityConfig) SkillStatus
 		PushToAgent:   normalizeSkillStatusKeys(cfg.PushToAgent, defaults.PushToAgent),
 		PullFromAgent: normalizeSkillStatusKeys(cfg.PullFromAgent, defaults.PullFromAgent),
 		StarredRepos:  normalizeSkillStatusKeys(cfg.StarredRepos, defaults.StarredRepos),
-		GitHubInstall: normalizeSkillStatusKeys(cfg.GitHubInstall, defaults.GitHubInstall),
 	}
 }
 

@@ -2,24 +2,16 @@ package registry
 
 import (
 	"github.com/shinerio/skillflow/core/backup"
-	"github.com/shinerio/skillflow/core/install"
 	skillsync "github.com/shinerio/skillflow/core/sync"
 )
 
 var (
-	installers     = map[string]install.Installer{}
 	adapters       = map[string]skillsync.AgentAdapter{}
 	cloudProviders = map[string]backup.CloudProvider{}
 )
 
-func RegisterInstaller(i install.Installer)       { installers[i.Type()] = i }
-func RegisterAdapter(a skillsync.AgentAdapter)    { adapters[a.Name()] = a }
+func RegisterAdapter(a skillsync.AgentAdapter)     { adapters[a.Name()] = a }
 func RegisterCloudProvider(p backup.CloudProvider) { cloudProviders[p.Name()] = p }
-
-func GetInstaller(t string) (install.Installer, bool) {
-	i, ok := installers[t]
-	return i, ok
-}
 
 func GetAdapter(name string) (skillsync.AgentAdapter, bool) {
 	a, ok := adapters[name]

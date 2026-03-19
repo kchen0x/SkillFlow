@@ -17,8 +17,8 @@ func scheduleStartupBackgroundTasks(tasks []startupBackgroundTask, schedule func
 func (a *App) startupBackgroundTaskPlan() []startupBackgroundTask {
 	return []startupBackgroundTask{
 		{name: "git.pull", delay: 750 * time.Millisecond, run: a.gitPullOnStartup},
-		{name: "skills.check_updates", delay: 3 * time.Second, run: a.checkUpdatesOnStartup},
-		{name: "starred.refresh", delay: 5250 * time.Millisecond, run: a.updateStarredReposOnStartup},
+		{name: "starred.refresh", delay: 3 * time.Second, run: a.updateStarredReposOnStartup},
+		{name: "skills.check_updates", delay: 5250 * time.Millisecond, run: a.checkUpdatesOnStartup},
 		{name: "app.check_update", delay: 8 * time.Second, run: a.checkAppUpdateOnStartup},
 	}
 }

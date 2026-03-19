@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHI-57 自动更新与远程安装下线对话导出</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel-user: #eef6ff;
+      --panel-assistant: #ffffff;
+      --border: #d7deea;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --skill-border: #c91414;
+      --skill-bg: #fff1f1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px 20px 48px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .meta {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .message {
+      margin: 0 0 14px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+      white-space: pre-wrap;
+      line-height: 1.7;
+    }
+
+    .user {
+      background: var(--panel-user);
+    }
+
+    .assistant {
+      background: var(--panel-assistant);
+    }
+
+    .skill-call {
+      background: var(--skill-bg);
+      border: 3px solid var(--skill-border);
+      font-weight: 700;
+    }
+
+    .label {
+      display: inline-block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SHI-57 自动更新与远程安装下线对话导出</h1>
+    <p class="meta">导出日期：2026-03-20。每段对话使用独立文本框展示，skill 调用使用红色粗边框高亮。文件按要求保存在 <code>chats/</code> 目录下，命名格式为“对话主题_YY_MM_DD.html”。</p>
+
+    <div class="message user"><span class="label">User</span>实现这个SHI-57功能</div>
+    <div class="message assistant"><span class="label">Assistant</span>我先确认一个行为边界，避免把 SHI-57 做偏：
+
+你希望“自动更新 Skill”是哪一种？
+
+A. 不加新开关。只要本地 repo cache 在启动或手动刷新 Starred Repo 后拉到新版本，就自动更新对应的 `My Skills`；已勾选自动同步的 agent 立即跟进，未勾选的继续显示“可更新”并可手动同步。我倾向这个，最贴合现有架构。
+
+B. 加一个新的“自动更新”设置。只有开启后才会后台自动更新，默认关闭。
+
+C. 其他触发时机或范围。请直接写清楚。</div>
+
+    <div class="message user"><span class="label">User</span>B，在我的skill页面提供配置能力</div>
+    <div class="message assistant"><span class="label">Assistant</span>自动更新开启后，你要它在哪些时机触发？
+
+我建议默认是这两个都触发：
+1. 启动时，后台把 starred repo cache 拉新后，自动更新 `My Skills`
+2. 用户在「收藏仓库」里手动点单个仓库更新或全部更新后，也自动更新对应的 `My Skills`
+
+这样语义最一致，也复用现有 repo-cache 流程。你如果只想要启动时自动更新，也可以。</div>
+
+    <div class="message user"><span class="label">User</span>都触发</div>
+    <div class="message assistant"><span class="label">Assistant</span>我建议在 `Dashboard` 里加本地开关 `AutoUpdateSkills`，写入 `config_local.json`。触发点就是启动后的 starred repo refresh，以及手动单仓 / 全量 refresh；自动更新复用现有 `UpdateSkill()`，并只自动覆盖已勾选自动同步的 agent，其他 agent 保持“可更新”路径。</div>
+
+    <div class="message user"><span class="label">User</span>认可</div>
+    <div class="message user"><span class="label">User</span>认可</div>
+
+    <div class="message assistant skill-call"><span class="label">Assistant Skill Call</span>brainstorming, test-driven-development, writing-plans</div>
+
+    <div class="message assistant"><span class="label">Assistant</span>我已经把 SHI-57 主体实现和前后端联通做完了，现在在补最后一层验证。全量 `go test ./...` 暴露了一个看起来与本需求无关的 `core/git` 既有失败，我先确认它是不是基线问题，再决定是否顺手修掉。</div>
+
+    <div class="message assistant skill-call"><span class="label">Assistant Skill Call</span>systematic-debugging</div>
+
+    <div class="message assistant"><span class="label">Assistant</span>失败点已经定位了：`core/git.ScanSkillsWithMaxDepth()` 根本没把 repo 根目录当成候选 skill 目录扫描，所以 `repo 根有 SKILL.md` 这个测试永远过不了。我先做一个最小修复，把扫描入口统一到 repo 根，再跑全量验证。</div>
+    <div class="message assistant"><span class="label">Assistant</span>`core/git` 这一层已经恢复正常。我再做一次收尾验证：全量 Go 测试，以及前端单测和构建，确保这次提交在仓库当前状态下是闭合的。</div>
+    <div class="message assistant"><span class="label">Assistant</span>验证已经闭合了，Go 全量测试也通过。最后我再快速检查一下差异范围和关键落点，确保给你的结论里带上准确文件引用。</div>
+    <div class="message assistant"><span class="label">Assistant</span>SHI-57 已实现。`My Skills` 页面新增本地 `Auto Update` 开关；启动或手动刷新收藏仓库后，会自动更新匹配的 git-backed skills，并把更新通过 `skills.updated` 事件反馈到页面。未开启自动同步的 agent 仍然保留“可更新”状态。相关文档和验证也已经补齐。</div>
+
+    <div class="message user"><span class="label">User</span>删除我的skill页面的从github安装这个入口及所有相关功能代码，只保留手动导入，或者从git repo安装的能力。将自动更新skill的能力放到要被删除的“远程安装”这个按钮上，并沿用现在的按钮风格</div>
+    <div class="message assistant"><span class="label">Assistant</span>这次改动会收掉 `My Skills` 页里的 GitHub 安装入口，并把现有“自动更新”能力复用到那个按钮位置。我先梳理前端入口、对应安装对话框，以及后端导出的远程安装方法，确认哪些代码可以删、哪些要保留为 git repo 安装能力。</div>
+    <div class="message assistant"><span class="label">Assistant</span>我已经定位到当前入口就是 `Dashboard.tsx` 里的 `GitHubInstallDialog`，后端对应是 `ScanGitHub` / `InstallFromGitHub`。先确认一个边界：你说“保留从 git repo 安装”，这里指的是继续保留「收藏仓库 / Starred Repos」页里扫描并导入 skill 的这条链路，对吗？</div>
+
+    <div class="message user"><span class="label">User</span>是的</div>
+    <div class="message assistant"><span class="label">Assistant</span>方案我建议选这个最小版本：
+
+1. 删掉 `My Skills` 页里的 GitHub 远程安装入口、对话框和对应后端导出方法，只保留手动导入，以及 `Starred Repos` 页现有的 git repo 扫描/导入能力。把“自动更新”改成工具栏按钮，直接占用原来“远程安装 / GitHub”那个位置，并沿用现在那种小号按钮样式。
+2. 备选：前端入口删掉，但后端 `ScanGitHub` / `InstallFromGitHub` 先保留不删。
+3. 备选：把自动更新做成点击后弹窗或二次确认。
+
+我建议方案 1。</div>
+
+    <div class="message user"><span class="label">User</span>采用方案1，彻底删除我的skill面板直接从远程安装的一切功能及文档说明</div>
+
+    <div class="message assistant skill-call"><span class="label">Assistant Skill Call</span>writing-plans, test-driven-development</div>
+
+    <div class="message assistant"><span class="label">Assistant</span>范围比入口再大一点：设置页里还有一组 `githubInstall` 状态显示配置。如果按“彻底删除”执行，这一组也该一起拿掉；这会触到持久化配置 schema，所以我会在 `core/upgrade` 里补 startup cutover，把旧 `config.json` 里的 `skillStatusVisibility.githubInstall` 在启动时清理掉。</div>
+    <div class="message assistant"><span class="label">Assistant</span>我开始写失败约束了：一是升级测试要求移除 `githubInstall`，二是 `My Skills` 工具栏动作集合里不再包含远程安装，只剩自动更新占那个位置。</div>
+    <div class="message assistant"><span class="label">Assistant</span>我在落代码前把删除边界再确认了一遍：除了 `Dashboard` 入口和对话框，我会一并删掉 `settings` 里的 `githubInstall` 状态页、对应 i18n、后端 exported 方法和 Wails 绑定。`Starred Repos` 的 git repo 扫描/导入链路不动。</div>
+    <div class="message assistant"><span class="label">Assistant</span>代码已经切到删除后的新结构了，我先做格式化和最小验证。先跑升级测试、Dashboard 纯函数测试和启动迁移测试，确保 schema cutover 与新按钮布局都对，再跑全量。</div>
+    <div class="message assistant"><span class="label">Assistant</span>`wails generate` 把一个遗漏打出来了：`app.go` 里别的路径还在用 `skillkey`，刚才清接口时把 import 一起删掉了。我先补回 import，再重跑生成和验证。</div>
+    <div class="message assistant"><span class="label">Assistant</span>核心验证已经过了，前端构建和 Go 全量测试都绿了。最后我只再做一次残留扫描和差异确认，确保没有把旧的远程安装术语或绑定漏在仓库里。</div>
+
+    <div class="message assistant skill-call"><span class="label">Assistant Skill Call</span>verification-before-completion</div>
+
+    <div class="message assistant"><span class="label">Assistant</span>`My Skills` 里的远程安装入口已经删掉了。工具栏现在用原来那个按钮位置承载自动更新开关，设置页也移除了 `githubInstall` 这组状态显示配置；启动迁移会把旧 `config.json` 里的 `skillStatusVisibility.githubInstall` 自动清掉。对应的远程安装对话框、后端 `ScanGitHub` / `InstallFromGitHub`、Wails 绑定，以及已经没有入口的 `core/install` 包都删掉了；`Starred Repos` 的 git repo 扫描/导入链路保留。用户文档也同步改了。</div>
+
+    <div class="message user"><span class="label">User</span>1. 将本次对话内容导出为html格式文件，要求如下：
+  a. skill调用（使用红色边框）
+  b. 存放到chats目录下，文件命名格式为"对话主题_YY_MM_DD.html"
+2. 执行 git diff HEAD 获取当前所有未提交的文件变更内容，生成修改内容摘要{{generated_summary}}，和一句简单的修改主题{{generated_title}}。
+3. 按以下格式追加到changelog文件末尾。changelog备份地址为changelog/change_YYYYMM.md（每个月生成一个change log）。如果文件不存在，则按命名要求创建。
+## {{generated_title}}
+date: YYYY-MM-DD
+{{generated_summary}}
+4. 按新增changelog相同格式用作git commit的message
+ - 执行 git add -A
+ - 执行 git commit -m 
+ - 然后执行 git push 推送到远程仓库</div>
+
+    <div class="message assistant"><span class="label">Assistant</span>我先做三件事：确认 `changelog` 和 `chats` 目标路径、抓取 `git diff HEAD` 生成摘要与标题、然后把本次对话导出成 HTML。随后我会落 `changelog`、提交并按你的要求推送。</div>
+    <div class="message assistant"><span class="label">Assistant</span>我先参照现有 `chats/*.html` 的风格补文件，避免新导出格式在目录里太突兀。然后我会把本次变更摘要落到 `change_202603.md` 末尾。</div>
+    <div class="message assistant"><span class="label">Assistant</span>我现在把对话导出和 changelog 一次性写入。写完后会先检查新增条目和 HTML 文件内容，再执行 `git add -A` / `git commit` / `git push`。</div>
+  </div>
+</body>
+</html>

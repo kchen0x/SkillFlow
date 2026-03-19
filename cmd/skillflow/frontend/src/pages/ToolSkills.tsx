@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GetEnabledAgents, ListAgentSkills, DeleteAgentSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { ToolIcon } from '../config/toolIcons'
 import SkillTooltip from '../components/SkillTooltip'
 import SkillStatusStrip from '../components/SkillStatusStrip'
 import SkillListControls from '../components/SkillListControls'
 import { copyTextToClipboard } from '../lib/clipboard'
+import { createToolSkillsEventSubscriptions } from '../lib/dashboardSkillSettings'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
+import { subscribeToEvents } from '../lib/wailsEvents'
 import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
@@ -22,6 +25,16 @@ export default function ToolSkills() {
   const [deleting, setDeleting] = useState(false)
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
+
+  const loadSkills = useCallback(async (agentName: string) => {
+    setLoading(true)
+    try {
+      const s = await ListAgentSkills(agentName)
+      setSkills(s ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -56,17 +69,12 @@ export default function ToolSkills() {
     return () => {
       active = false
     }
-  }, [])
+  }, [loadSkills])
 
-  const loadSkills = async (agentName: string) => {
-    setLoading(true)
-    try {
-      const s = await ListAgentSkills(agentName)
-      setSkills(s ?? [])
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    if (!selectedAgent) return
+    return subscribeToEvents(EventsOn, createToolSkillsEventSubscriptions(() => { void loadSkills(selectedAgent) }))
+  }, [loadSkills, selectedAgent])
 
   const selectAgent = (agentName: string) => {
     setSelectedAgent(agentName)

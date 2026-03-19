@@ -13,6 +13,7 @@ type CorrelationStatus struct {
 	Installed     bool                   `json:"installed"`
 	Imported      bool                   `json:"imported"`
 	Updatable     bool                   `json:"updatable"`
+	ContentKeys   []string               `json:"-"`
 }
 
 type InstalledIndex struct {
@@ -140,6 +141,7 @@ func (g *installedGroup) status(logicalKey string, matchStrength skillkey.MatchS
 		Source:        g.source(),
 		Installed:     true,
 		Imported:      true,
+		ContentKeys:   g.contentKeys(),
 	}
 	for _, sk := range g.Skills {
 		if sk != nil && sk.HasUpdate() {
@@ -160,6 +162,30 @@ func (g *installedGroup) source() string {
 		}
 	}
 	return ""
+}
+
+func (g *installedGroup) contentKeys() []string {
+	var keys []string
+	for _, sk := range g.Skills {
+		if sk == nil || strings.TrimSpace(sk.Path) == "" {
+			continue
+		}
+		contentKey, err := skillkey.ContentFromDir(sk.Path)
+		if err != nil || strings.TrimSpace(contentKey) == "" {
+			continue
+		}
+		keys = appendUniqueContentKey(keys, contentKey)
+	}
+	return keys
+}
+
+func appendUniqueContentKey(keys []string, key string) []string {
+	for _, existing := range keys {
+		if existing == key {
+			return keys
+		}
+	}
+	return append(keys, key)
 }
 
 func normalizedName(name string) string {

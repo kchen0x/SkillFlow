@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ListSkills, ListCategories, MoveSkillCategory,
@@ -9,12 +9,22 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 import CategoryPanel from '../components/CategoryPanel'
 import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
-import GitHubInstallDialog from '../components/GitHubInstallDialog'
-import { Github, FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine, AlertCircle, CheckCircle2, X } from 'lucide-react'
-import { gridContainerVariants, cardVariants, shouldAnimateSkillCards } from '../lib/motionVariants'
+import { FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine, AlertCircle, CheckCircle2, X } from 'lucide-react'
+import {
+  gridContainerVariants,
+  cardVariants,
+  shouldAnimateSkillCards,
+  shouldAnimateSkillGridIntro,
+} from '../lib/motionVariants'
 import SkillListControls from '../components/SkillListControls'
 import { getListLoadState } from '../lib/listLoadState'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
+import {
+  createDashboardSkillEventSubscriptions,
+  listDashboardToolbarActionKeys,
+  readDashboardSkillSettings,
+  toggleDashboardAutoPushAgent,
+} from '../lib/dashboardSkillSettings'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { ToolIcon } from '../config/toolIcons'
@@ -33,7 +43,6 @@ export default function Dashboard() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
-  const [showGitHub, setShowGitHub] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [draggingSkillID, setDraggingSkillID] = useState<string | null>(null)
   const [categoryDragActive, setCategoryDragActive] = useState(false)
@@ -41,6 +50,7 @@ export default function Dashboard() {
   const [selectedIDs, setSelectedIDs] = useState<Set<string>>(new Set())
   const [agentOptions, setAgentOptions] = useState<any[]>([])
   const [autoPushAgents, setAutoPushAgents] = useState<Set<string>>(new Set())
+  const [autoUpdateSkills, setAutoUpdateSkills] = useState(false)
   const [dashboardCfg, setDashboardCfg] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingAutoPush, setSavingAutoPush] = useState(false)
@@ -52,6 +62,15 @@ export default function Dashboard() {
   const [hoveredMeta, setHoveredMeta] = useState<any | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasRenderedSkillGrid = useRef(false)
+
+  const syncDashboardConfigState = useCallback((cfg: any) => {
+    const settings = readDashboardSkillSettings(cfg)
+    setDashboardCfg(cfg)
+    setAgentOptions((cfg?.agents ?? []).filter((agent: any) => agent.enabled))
+    setAutoPushAgents(new Set(settings.autoPushAgents))
+    setAutoUpdateSkills(settings.autoUpdateSkills)
+  }, [])
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true)
@@ -59,20 +78,16 @@ export default function Dashboard() {
       const [s, c, cfg] = await Promise.all([ListSkills(), ListCategories(), GetConfig()])
       setSkills(s ?? [])
       setCategories(c ?? [])
-      setDashboardCfg(cfg)
-      setAgentOptions((cfg?.agents ?? []).filter((agent: any) => agent.enabled))
-      setAutoPushAgents(new Set(cfg?.autoPushAgents ?? []))
+      syncDashboardConfigState(cfg)
     } finally {
       if (!options?.silent) setLoading(false)
     }
-  }, [])
+  }, [syncDashboardConfigState])
 
   useEffect(() => {
     load()
 
-    return subscribeToEvents(EventsOn, [
-      ['update.available', load],
-    ])
+    return subscribeToEvents(EventsOn, createDashboardSkillEventSubscriptions(load))
   }, [load])
 
   useEffect(() => {
@@ -104,6 +119,14 @@ export default function Dashboard() {
   )
   const listState = getListLoadState({ isLoading: loading, itemCount: filtered.length })
   const animateCards = shouldAnimateSkillCards(filtered.length)
+  const animateGridIntro = shouldAnimateSkillGridIntro(filtered.length, hasRenderedSkillGrid.current)
+
+  useEffect(() => {
+    if (listState !== 'loading') {
+      // Only play the staggered card intro on the first settled render.
+      hasRenderedSkillGrid.current = true
+    }
+  }, [listState])
 
   const skillCounts = skills.reduce((acc, sk) => {
     const category = sk.category || 'Default'
@@ -147,7 +170,7 @@ export default function Dashboard() {
     }
   }
 
-  const handleImportButton = async () => {
+  const handleImportButton = async (): Promise<void> => {
     const dir = await OpenFolderDialog('')
     if (dir) { await ImportLocal(dir, selectedCat ?? ''); load() }
   }
@@ -199,19 +222,66 @@ export default function Dashboard() {
 
   const allSelected = filtered.length > 0 && filtered.every(sk => selectedIDs.has(sk.id))
 
+  const toolbarButtons = useMemo(() => listDashboardToolbarActionKeys().map((key) => {
+    switch (key) {
+      case 'update':
+        return {
+          key,
+          icon: <RefreshCw size={14} />,
+          label: t('dashboard.update'),
+          onClick: async (): Promise<void> => { await CheckUpdates(); load() },
+          disabled: false,
+          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          style: { color: 'var(--text-muted)' },
+          title: undefined as string | undefined,
+        }
+      case 'batchDelete':
+        return {
+          key,
+          icon: <CheckSquare size={14} />,
+          label: t('dashboard.batchDelete'),
+          onClick: toggleSelectMode,
+          disabled: false,
+          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          style: { color: 'var(--text-muted)' },
+          title: undefined as string | undefined,
+        }
+      case 'import':
+        return {
+          key,
+          icon: <FolderOpen size={14} />,
+          label: t('dashboard.import'),
+          onClick: handleImportButton,
+          disabled: false,
+          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          style: { color: 'var(--text-muted)' },
+          title: undefined as string | undefined,
+        }
+      case 'autoUpdate':
+        return {
+          key,
+          icon: <RefreshCw size={14} className={autoUpdateSkills ? '' : 'opacity-80'} />,
+          label: t('dashboard.autoUpdateTitle'),
+          onClick: (): void => { void toggleAutoUpdateSetting() },
+          disabled: savingAutoPush,
+          className: `btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-all disabled:cursor-not-allowed disabled:opacity-60 ${autoUpdateSkills ? '' : 'opacity-70'}`,
+          style: undefined as CSSProperties | undefined,
+          title: t('dashboard.autoUpdateDesc'),
+        }
+    }
+  }), [autoUpdateSkills, load, savingAutoPush, t])
+
   const toggleAutoPushAgent = async (name: string) => {
     if (!dashboardCfg || savingAutoPush) return
 
-    const nextSet = new Set(autoPushAgents)
-    if (nextSet.has(name)) nextSet.delete(name)
-    else nextSet.add(name)
+    const nextAgents = toggleDashboardAutoPushAgent(Array.from(autoPushAgents), name)
 
     const nextCfg = {
       ...dashboardCfg,
-      autoPushAgents: Array.from(nextSet),
+      autoPushAgents: nextAgents,
     }
 
-    setAutoPushAgents(new Set(nextSet))
+    setAutoPushAgents(new Set(nextAgents))
     setDashboardCfg(nextCfg)
     setSavingAutoPush(true)
 
@@ -221,9 +291,31 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Save auto push agents failed:', error)
       const latestCfg = await GetConfig()
-      setDashboardCfg(latestCfg)
-      setAgentOptions((latestCfg?.agents ?? []).filter((agent: any) => agent.enabled))
-      setAutoPushAgents(new Set(latestCfg?.autoPushAgents ?? []))
+      syncDashboardConfigState(latestCfg)
+    } finally {
+      setSavingAutoPush(false)
+    }
+  }
+
+  const toggleAutoUpdateSetting = async () => {
+    if (!dashboardCfg || savingAutoPush) return
+
+    const nextCfg = {
+      ...dashboardCfg,
+      autoUpdateSkills: !autoUpdateSkills,
+    }
+
+    setAutoUpdateSkills(!autoUpdateSkills)
+    setDashboardCfg(nextCfg)
+    setSavingAutoPush(true)
+
+    try {
+      await SaveConfig(nextCfg)
+      await load()
+    } catch (error) {
+      console.error('Save auto update skills failed:', error)
+      const latestCfg = await GetConfig()
+      syncDashboardConfigState(latestCfg)
     } finally {
       setSavingAutoPush(false)
     }
@@ -370,28 +462,20 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 min-w-0">
-              {[
-                { icon: <RefreshCw size={14} />, label: t('dashboard.update'), onClick: async () => { await CheckUpdates(); load() } },
-                { icon: <CheckSquare size={14} />, label: t('dashboard.batchDelete'), onClick: toggleSelectMode },
-                { icon: <FolderOpen size={14} />, label: t('dashboard.import'), onClick: handleImportButton },
-              ].map(btn => (
+              {toolbarButtons.map(btn => (
                 <button
-                  key={btn.label}
+                  key={btn.key}
                   onClick={btn.onClick}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
-                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                  disabled={btn.disabled}
+                  className={btn.className}
+                  style={btn.style}
+                  title={btn.title}
+                  onMouseEnter={btn.style ? e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' } : undefined}
+                  onMouseLeave={btn.style ? e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' } : undefined}
                 >
                   {btn.icon} {btn.label}
                 </button>
               ))}
-              <button
-                onClick={() => setShowGitHub(true)}
-                className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap"
-              >
-                <Github size={14} /> {t('dashboard.remoteInstall')}
-              </button>
             </div>
           )}
         </div>
@@ -456,56 +540,58 @@ export default function Dashboard() {
         </AnimatePresence>
 
         <div
-          className="px-6 py-3 flex flex-wrap items-center gap-3"
+          className="px-6 py-3 flex flex-col gap-3"
           style={{
             borderBottom: '1px solid var(--border-base)',
             background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-glow) 42%, transparent) 0%, color-mix(in srgb, var(--bg-elevated) 94%, transparent) 100%)',
           }}
         >
-          {loading ? (
-            <p className="text-sm flex-1" style={{ color: 'var(--text-muted)' }}>
-              {t('common.loading')}
-            </p>
-          ) : agentOptions.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
-              {agentOptions.map(agent => {
-                const active = autoPushAgents.has(agent.name)
-                return (
-                  <button
-                    key={agent.name}
-                    onClick={() => void toggleAutoPushAgent(agent.name)}
-                    disabled={savingAutoPush}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${active ? 'font-semibold -translate-y-px' : ''}`}
-                    style={active ? {
-                      background: 'var(--active-surface)',
-                      color: 'var(--active-text)',
-                      border: '1px solid var(--active-border)',
-                      boxShadow: 'var(--active-shadow)',
-                    } : {
-                      background: 'var(--bg-elevated)',
-                      color: 'var(--text-secondary)',
-                      border: '1px solid var(--border-base)',
-                    }}
-                  >
-                    <ToolIcon name={agent.name} size={20} />
-                    <span>{agent.name}</span>
-                  </button>
-                )
-              })}
-              {savingAutoPush && (
-                <span className="text-xs whitespace-nowrap ml-1" style={{ color: 'var(--text-muted)' }}>
-                  {t('common.saving')}
-                </span>
-              )}
+          <div className="flex flex-wrap items-center gap-3">
+            {loading ? (
+              <p className="text-sm flex-1" style={{ color: 'var(--text-muted)' }}>
+                {t('common.loading')}
+              </p>
+            ) : agentOptions.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                {agentOptions.map(agent => {
+                  const active = autoPushAgents.has(agent.name)
+                  return (
+                    <button
+                      key={agent.name}
+                      onClick={() => void toggleAutoPushAgent(agent.name)}
+                      disabled={savingAutoPush}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${active ? 'font-semibold -translate-y-px' : ''}`}
+                      style={active ? {
+                        background: 'var(--active-surface)',
+                        color: 'var(--active-text)',
+                        border: '1px solid var(--active-border)',
+                        boxShadow: 'var(--active-shadow)',
+                      } : {
+                        background: 'var(--bg-elevated)',
+                        color: 'var(--text-secondary)',
+                        border: '1px solid var(--border-base)',
+                      }}
+                    >
+                      <ToolIcon name={agent.name} size={20} />
+                      <span>{agent.name}</span>
+                    </button>
+                  )
+                })}
+                {savingAutoPush && (
+                  <span className="text-xs whitespace-nowrap ml-1" style={{ color: 'var(--text-muted)' }}>
+                    {t('common.saving')}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm flex-1" style={{ color: 'var(--text-muted)' }}>
+                {t('dashboard.autoPushEmpty')}
+              </p>
+            )}
+            <div className="flex items-center gap-2 shrink-0 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              <ArrowUpFromLine size={15} />
+              {t('dashboard.autoPushTitle')}
             </div>
-          ) : (
-            <p className="text-sm flex-1" style={{ color: 'var(--text-muted)' }}>
-              {t('dashboard.autoPushEmpty')}
-            </p>
-          )}
-          <div className="flex items-center gap-2 shrink-0 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            <ArrowUpFromLine size={15} />
-            {t('dashboard.autoPushTitle')}
           </div>
         </div>
 
@@ -524,11 +610,15 @@ export default function Dashboard() {
             <motion.div
               className="grid grid-cols-3 xl:grid-cols-4 gap-4"
               variants={containerVariants}
-              initial="initial"
+              initial={animateGridIntro ? 'initial' : false}
               animate="animate"
             >
               {filtered.map(sk => (
-                <motion.div key={sk.id} variants={animateCards ? cardVariants : undefined}>
+                <motion.div
+                  key={sk.id}
+                  variants={animateCards ? cardVariants : undefined}
+                  initial={animateGridIntro ? 'initial' : false}
+                >
                   <SkillCard
                     skill={{
                       id: sk.id,
@@ -572,12 +662,6 @@ export default function Dashboard() {
           anchorRect={hoveredSkill.rect}
         />
       )}
-
-      <AnimatePresence>
-        {showGitHub && (
-          <GitHubInstallDialog onClose={() => setShowGitHub(false)} onDone={() => { setShowGitHub(false); load() }} />
-        )}
-      </AnimatePresence>
     </div>
   )
 }

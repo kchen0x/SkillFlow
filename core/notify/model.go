@@ -11,6 +11,7 @@ const (
 	EventBackupFailed     EventType = "backup.failed"
 	EventSyncCompleted    EventType = "sync.completed"
 	EventUpdateAvailable  EventType = "update.available"
+	EventSkillsUpdated    EventType = "skills.updated"
 	EventSkillConflict    EventType = "skill.conflict"
 	EventStarSyncProgress EventType = "star.sync.progress" // one repo finished syncing
 	EventStarSyncDone     EventType = "star.sync.done"     // all repos finished
@@ -20,9 +21,9 @@ const (
 	EventGitSyncFailed    EventType = "git.sync.failed"
 	EventGitConflict      EventType = "git.conflict" // local ↔ remote conflict requires user decision
 
-	EventAppUpdateAvailable    EventType = "app.update.available"
-	EventAppUpdateDownloadDone EventType = "app.update.download.done"
-	EventAppUpdateDownloadFail EventType = "app.update.download.fail"
+	EventAppUpdateAvailable         EventType = "app.update.available"
+	EventAppUpdateDownloadDone      EventType = "app.update.download.done"
+	EventAppUpdateDownloadFail      EventType = "app.update.download.fail"
 	EventAppWindowVisibilityChanged EventType = "app.window.visibility.changed"
 )
 

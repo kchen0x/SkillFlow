@@ -6,7 +6,6 @@ import {prompt} from '../models';
 import {config} from '../models';
 import {backup} from '../models';
 import {skill} from '../models';
-import {install} from '../models';
 
 export function AddCustomAgent(arg1:string,arg2:string):Promise<void>;
 
@@ -82,8 +81,6 @@ export function ImportPrompts():Promise<number>;
 
 export function ImportStarSkills(arg1:Array<string>,arg2:string,arg3:string):Promise<void>;
 
-export function InstallFromGitHub(arg1:string,arg2:Array<install.SkillCandidate>,arg3:string):Promise<void>;
-
 export function ListAgentSkills(arg1:string):Promise<Array<main.AgentSkillEntry>>;
 
 export function ListAllStarSkills():Promise<Array<git.StarSkill>>;
@@ -151,8 +148,6 @@ export function RestoreFromCloud():Promise<void>;
 export function SaveConfig(arg1:config.AppConfig):Promise<void>;
 
 export function ScanAgentSkills(arg1:string):Promise<Array<main.AgentSkillCandidate>>;
-
-export function ScanGitHub(arg1:string):Promise<Array<install.SkillCandidate>>;
 
 export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 

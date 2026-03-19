@@ -79,6 +79,10 @@ func migrateVisibilityConfig(payload map[string]any) (bool, error) {
 	changed = renameKey(payload, "myTools", "myAgents") || changed
 	changed = renameKey(payload, "pushToTool", "pushToAgent") || changed
 	changed = renameKey(payload, "pullFromTool", "pullFromAgent") || changed
+	if _, ok := payload["githubInstall"]; ok {
+		delete(payload, "githubInstall")
+		changed = true
+	}
 
 	for key, value := range payload {
 		items, ok := value.([]any)

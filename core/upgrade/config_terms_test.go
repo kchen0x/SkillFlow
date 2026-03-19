@@ -60,6 +60,7 @@ func TestRunMigratesToolTerminologyInConfigFiles(t *testing.T) {
 	require.Contains(t, visibility, "myAgents")
 	require.Contains(t, visibility, "pushToAgent")
 	require.Contains(t, visibility, "pullFromAgent")
+	require.NotContains(t, visibility, "githubInstall")
 	require.NotContains(t, visibility, "myTools")
 	require.NotContains(t, visibility, "pushToTool")
 	require.NotContains(t, visibility, "pullFromTool")
@@ -92,8 +93,7 @@ func TestRunIsNoOpForAlreadyUpgradedConfigFiles(t *testing.T) {
     "myAgents": ["imported", "updatable", "pushedAgents"],
     "pushToAgent": ["pushedAgents"],
     "pullFromAgent": ["imported"],
-    "starredRepos": ["imported", "pushedAgents"],
-    "githubInstall": ["imported", "updatable", "pushedAgents"]
+    "starredRepos": ["imported", "pushedAgents"]
   },
   "agents": [
     { "name": "codex", "enabled": true }
@@ -129,6 +129,28 @@ func TestRunIsNoOpForAlreadyUpgradedConfigFiles(t *testing.T) {
 
 	assert.Equal(t, string(beforeShared), string(afterShared))
 	assert.Equal(t, string(beforeLocal), string(afterLocal))
+}
+
+func TestRunRemovesGitHubInstallVisibilityFromExistingSharedConfig(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{
+  "defaultCategory": "Default",
+  "skillStatusVisibility": {
+    "mySkills": ["updatable", "pushedAgents"],
+    "myAgents": ["imported", "updatable", "pushedAgents"],
+    "pushToAgent": ["pushedAgents"],
+    "pullFromAgent": ["imported"],
+    "starredRepos": ["imported", "pushedAgents"],
+    "githubInstall": ["imported", "updatable", "pushedAgents"]
+  }
+}`), 0o644))
+
+	require.NoError(t, upgrade.Run(dir))
+
+	shared := readJSONMap(t, filepath.Join(dir, "config.json"))
+	visibility := requireJSONMap(t, shared["skillStatusVisibility"])
+	require.NotContains(t, visibility, "githubInstall")
 }
 
 func TestRunMigratesLegacyToolsWhenAgentsArrayAlreadyExistsButIsEmpty(t *testing.T) {

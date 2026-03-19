@@ -139,7 +139,7 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 重要规则：
 
 - `config.json` 只保存跨设备可同步的安全配置。
-- `config_local.json` 保存机器相关路径、自动推送目标、开机自启、代理、窗口状态、自定义智能体路径配置，以及敏感云凭据。
+- `config_local.json` 保存机器相关路径、主面板自动更新开关、自动推送目标、开机自启、代理、窗口状态、自定义智能体路径配置，以及敏感云凭据。
 - `meta/*.json`、`star_repos.json` 等可同步文件中的本地路径，在目标位于同步根目录内时必须以 **正斜杠相对路径** 形式持久化。
 - 如果 `SkillsStorageDir` 被移出默认应用数据目录，同步根目录会变成 `skills/` 与 `meta/` 的共同父目录。
 - 日志文件固定为 **两个**，每个 **1MB** 上限：`skillflow.log` 与 `skillflow.log.1`。
@@ -157,7 +157,6 @@ SkillFlow 是一个基于 **Wails v2** 的桌面应用，后端使用 **Go 1.23*
 | `core/backup` | 备份快照、服务商接口、Git provider、对象存储 provider |
 | `core/config` | 共享/本地配置拆分持久化、默认值、状态显示策略归一化 |
 | `core/git` | Git clone/pull/push 辅助、收藏仓库扫描、收藏仓库存储 |
-| `core/install` | GitHub 安装和本地导入流程 |
 | `core/notify` | 缓冲事件总线与事件载荷类型 |
 | `core/pathutil` | 跨平台路径归一化与相对路径持久化辅助 |
 | `core/prompt` | 提示词库存储、范围导出，以及导入预检查/应用 |
@@ -232,7 +231,7 @@ type Skill struct {
 
 - `ID` 是已安装实例的 UUID。
 - `Path` 运行时为绝对路径；若写入可同步元数据，应尽量保存为可移植的相对路径。
-- `SourceURL + SourceSubPath` 共同标识 GitHub 安装 Skill 的逻辑来源。
+- `SourceURL + SourceSubPath` 共同标识 Git 来源已安装 Skill 的逻辑来源。
 
 ### Prompt（`core/prompt/storage.go`）
 
@@ -365,7 +364,7 @@ SkillFlow 区分两类身份：
 |-------------|----------|----------------|
 | Dashboard / 我的 Skills | 已安装 `Skill` | 实例操作用 `Skill.ID`；跨模块关联用逻辑主键 |
 | Sync Push | 已安装 `Skill` | 选择用 `Skill.ID`；推送状态解析用逻辑主键 |
-| GitHub 扫描/安装 | 远端候选项 | 用 repo source + subpath 派生的逻辑主键 |
+| 仓库收藏 | 仓库 skill 候选项 | 用 repo source + subpath 派生的逻辑主键 |
 | Starred Repos | `StarSkill` | 用 repo source + subpath 派生的逻辑主键 |
 | Agent Skills | 智能体侧候选项 / 聚合项 | 去重与状态用逻辑主键；智能体内打开/删除才用 path |
 | Sync Pull | 智能体侧候选项 | 导入与冲突检测用逻辑主键 |
@@ -376,7 +375,7 @@ SkillFlow 区分两类身份：
 - **imported**：外部来源页面对 `installed` 的文案别名
 - **pushed**：该逻辑 Skill 已存在于某智能体配置的 `PushDir`
 - **seenInAgentScan**：该逻辑 Skill 已出现在某智能体配置的 `ScanDirs`；这 **不代表** SkillFlow 已经推送过它
-- **updatable**：至少有一个已安装 Git Skill 实例在本地缓存仓库中的 SHA 比本地 `SourceSHA` 更新
+- **updatable**：要么至少有一个已安装 Git Skill 实例在本地缓存仓库中的 SHA 比本地 `SourceSHA` 更新，要么某个智能体副本已经落后于它所关联的 **我的skills** 已安装副本
 
 ### 状态与去重规则
 
@@ -392,6 +391,7 @@ SkillFlow 区分两类身份：
 - 缓存查询与已安装实例关联必须使用同一逻辑 Git 主键。
 - `CheckUpdates()` 会把已安装 Skill 的 `SourceSHA` 与本地缓存仓库中同一 `SourceSubPath` 的最新提交 SHA 做比较，不会直接调用 GitHub Commits API。
 - `UpdateSkill()` 会把该缓存仓库子目录的文件复制到已安装库目录中，然后再基于更新后的已安装副本刷新已推送到智能体目录的副本。
+- 当仅本地生效的 `AutoUpdateSkills` 开关开启时，收藏仓库刷新成功后会对这些已刷新的仓库里匹配的已安装 Git Skill 自动复用 `UpdateSkill()`。
 - 当最新检查确认本地已是最新时，应清空 `LatestSHA`。
 - 每次完成检查后都应更新 `LastCheckedAt`，并将其写入仅本地持久化的 `meta_local/<skill-id>.local.json`（不参与同步）。
 
@@ -400,7 +400,7 @@ SkillFlow 区分两类身份：
 - 跨模块关联由后端统一负责，并将归一化状态返回给前端。
 - 前端页面不应仅基于 `Name` 或 `Path` 自行判断“是否同一个 Skill”“是否已导入”“是否已推送”。
 - `core/skillkey` 负责生成逻辑主键。
-- `core/skill.BuildInstalledIndex` 负责把 GitHub 扫描、收藏仓库、智能体扫描结果关联回已安装状态。
+- `core/skill.BuildInstalledIndex` 负责把收藏仓库和智能体扫描结果关联回已安装状态。
 
 ---
 
@@ -419,7 +419,7 @@ SkillFlow 使用 `core/notify.Hub` 作为缓冲事件总线：
 主要事件分组：
 
 - 备份：`backup.started`、`backup.progress`、`backup.completed`、`backup.failed`
-- 同步/更新：`sync.completed`、`update.available`、`skill.conflict`
+- 同步/更新：`sync.completed`、`update.available`、`skills.updated`、`skill.conflict`
 - 收藏仓库：`star.sync.progress`、`star.sync.done`
 - Git 备份：`git.sync.started`、`git.sync.completed`、`git.sync.failed`、`git.conflict`
 - 应用更新：`app.update.available`、`app.update.download.done`、`app.update.download.fail`

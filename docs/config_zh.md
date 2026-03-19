@@ -71,8 +71,7 @@
     "myAgents": ["imported", "updatable", "pushedAgents"],
     "pushToAgent": ["pushedAgents"],
     "pullFromAgent": ["imported"],
-    "starredRepos": ["imported", "pushedAgents"],
-    "githubInstall": ["imported", "updatable", "pushedAgents"]
+    "starredRepos": ["imported", "pushedAgents"]
   },
   "agents": [
     { "name": "claude-code", "enabled": true },
@@ -119,7 +118,6 @@
 | `skillStatusVisibility.pushToAgent` | string[] | “推送到智能体” 页面显示哪些状态徽标。该页允许的值是 `pushedAgents`。 |
 | `skillStatusVisibility.pullFromAgent` | string[] | “从智能体拉取” 页面显示哪些状态徽标。该页允许的值是 `imported`。 |
 | `skillStatusVisibility.starredRepos` | string[] | 收藏仓库页面显示哪些状态徽标。该页允许的值是 `imported`、`pushedAgents`。 |
-| `skillStatusVisibility.githubInstall` | string[] | GitHub 安装流程显示哪些状态徽标。该页允许的值是 `imported`、`updatable`、`pushedAgents`。 |
 | `agents` | object[] | 只保存内置智能体的启用/停用状态。路径相关设置保存在 `config_local.json`。 |
 | `agents[].name` | string | 内置智能体名，例如 `claude-code`、`codex`、`gemini-cli`、`opencode`、`openclaw`。 |
 | `agents[].enabled` | boolean | 该内置智能体是否在界面与扫描/推送流程中启用。 |
@@ -160,6 +158,7 @@
 ```json
 {
   "skillsStorageDir": "/Users/demo/Library/Application Support/SkillFlow/skills",
+  "autoUpdateSkills": true,
   "autoPushAgents": ["codex", "gemini-cli"],
   "launchAtLogin": true,
   "agents": [
@@ -209,6 +208,7 @@
 | 键 | 类型 | 作用 |
 |----|------|------|
 | `skillsStorageDir` | string | 已安装 `skills/` 目录的本机绝对路径。 |
+| `autoUpdateSkills` | boolean | 当前设备在刷新收藏仓库后，是否应自动把匹配的已安装 Git Skill 更新到 **我的skills**。 |
 | `autoPushAgents` | string[] | 在导入/更新后自动推送到哪些智能体。保存前会去空格并去重。 |
 | `launchAtLogin` | boolean | 当前设备上是否把 SkillFlow 注册为开机/登录自启动项。 |
 | `agents` | object[] | 智能体路径配置，既包含内置智能体，也包含自定义智能体。 |

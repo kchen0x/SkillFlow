@@ -6,6 +6,10 @@ export function shouldAnimateSkillCards(itemCount: number) {
   return itemCount <= CARD_ANIMATION_THRESHOLD
 }
 
+export function shouldAnimateSkillGridIntro(itemCount: number, hasRenderedBefore: boolean) {
+  return !hasRenderedBefore && shouldAnimateSkillCards(itemCount)
+}
+
 export const pageVariants: Variants = {
   initial: { opacity: 0 },
   animate: { opacity: 1, transition: { duration: 0.16, ease: 'easeOut' } },

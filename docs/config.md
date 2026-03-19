@@ -73,8 +73,7 @@ Before config is loaded, SkillFlow runs the one-time terminology cutover in `cor
     "myAgents": ["imported", "updatable", "pushedAgents"],
     "pushToAgent": ["pushedAgents"],
     "pullFromAgent": ["imported"],
-    "starredRepos": ["imported", "pushedAgents"],
-    "githubInstall": ["imported", "updatable", "pushedAgents"]
+    "starredRepos": ["imported", "pushedAgents"]
   },
   "agents": [
     { "name": "claude-code", "enabled": true },
@@ -121,7 +120,6 @@ Before config is loaded, SkillFlow runs the one-time terminology cutover in `cor
 | `skillStatusVisibility.pushToAgent` | string[] | Status badges shown on the "Push to Agent" page. Allowed value there is `pushedAgents`. |
 | `skillStatusVisibility.pullFromAgent` | string[] | Status badges shown on the "Pull from Agent" page. Allowed value there is `imported`. |
 | `skillStatusVisibility.starredRepos` | string[] | Status badges shown on the starred-repos page. Allowed values there are `imported` and `pushedAgents`. |
-| `skillStatusVisibility.githubInstall` | string[] | Status badges shown in the GitHub install flow. Allowed values there are `imported`, `updatable`, and `pushedAgents`. |
 | `agents` | object[] | Built-in agent enable/disable state only. Path-related agent settings are stored in `config_local.json`. |
 | `agents[].name` | string | Built-in agent name such as `claude-code`, `codex`, `gemini-cli`, `opencode`, or `openclaw`. |
 | `agents[].enabled` | boolean | Whether this built-in agent is enabled in the UI and scanning/push flows. |
@@ -162,6 +160,7 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
 ```json
 {
   "skillsStorageDir": "/Users/demo/Library/Application Support/SkillFlow/skills",
+  "autoUpdateSkills": true,
   "autoPushAgents": ["codex", "gemini-cli"],
   "launchAtLogin": true,
   "agents": [
@@ -211,6 +210,7 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
 | Key | Type | Meaning |
 |-----|------|---------|
 | `skillsStorageDir` | string | Absolute local path of the installed `skills/` directory. |
+| `autoUpdateSkills` | boolean | Whether starred-repo refresh on this device should automatically update matching installed git-backed skills in **My Skills**. |
 | `autoPushAgents` | string[] | Agent names that should receive auto-push after import/update flows. Values are trimmed and deduplicated. |
 | `launchAtLogin` | boolean | Whether SkillFlow should register itself as a login/startup item on the current machine. |
 | `agents` | object[] | Agent path configuration. This includes built-in agents and all custom agents. |
