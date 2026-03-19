@@ -69,9 +69,12 @@ jobs:
           TMP_DMG="$WORK_DIR/SkillFlow-${{ matrix.name }}-rw.dmg"
           FINAL_DMG="build/bin/SkillFlow-${{ matrix.name }}.dmg"
           MOUNT_POINT=""
+          MOUNT_DEVICE=""
 
           cleanup() {
-            if [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
+            if [ -n "$MOUNT_DEVICE" ]; then
+              hdiutil detach "$MOUNT_DEVICE" || hdiutil detach -force "$MOUNT_DEVICE" || true
+            elif [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
               hdiutil detach "$MOUNT_POINT" || hdiutil detach -force "$MOUNT_POINT" || true
             fi
             rm -rf "$WORK_DIR"
@@ -108,22 +111,36 @@ jobs:
           done
 
           # Mount the writable DMG
-          MOUNT_POINT="$(hdiutil attach -readwrite -noverify -noautoopen "$TMP_DMG" | grep '/Volumes/' | awk '{print $NF}')"
+          ATTACH_OUTPUT="$(hdiutil attach -readwrite -noverify -noautoopen "$TMP_DMG")"
+          MOUNT_DEVICE="$(printf '%s\n' "$ATTACH_OUTPUT" | awk '/\/Volumes\//{print $1; exit}')"
+          MOUNT_POINT="$(printf '%s\n' "$ATTACH_OUTPUT" | awk '/\/Volumes\//{print $NF; exit}')"
+          if [ -z "$MOUNT_DEVICE" ] || [ -z "$MOUNT_POINT" ]; then
+            echo "::error::Failed to capture mounted DMG device or path"
+            printf '%s\n' "$ATTACH_OUTPUT"
+            exit 1
+          fi
           sleep 2
           sync
 
           # Detach with retry and force fallback
+          DETACH_OK=0
           for i in 1 2 3; do
-            if hdiutil detach "$MOUNT_POINT"; then
+            if hdiutil detach "$MOUNT_DEVICE"; then
+              DETACH_OK=1
+              MOUNT_DEVICE=""
               MOUNT_POINT=""
               break
             fi
             echo "Detach attempt $i failed, retrying in 5s..."
             sleep 5
-          done || {
-            hdiutil detach -force "$MOUNT_POINT"
+          done
+          if [ "$DETACH_OK" -ne 1 ]; then
+            hdiutil detach -force "$MOUNT_DEVICE"
+            MOUNT_DEVICE=""
             MOUNT_POINT=""
-          }
+          fi
+          sync
+          sleep 2
 
           # Convert to compressed read-only DMG
           hdiutil convert -ov "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$FINAL_DMG"
@@ -151,14 +168,24 @@ jobs:
           DMG_PATH="build/bin/SkillFlow-${{ matrix.name }}.dmg"
           EXPECTED_ARCH="${{ matrix.arch == 'arm64' && 'arm64' || 'x86_64' }}"
           MOUNT_POINT=""
+          MOUNT_DEVICE=""
           cleanup() {
-            if [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
+            if [ -n "$MOUNT_DEVICE" ]; then
+              hdiutil detach "$MOUNT_DEVICE" || hdiutil detach -force "$MOUNT_DEVICE" || true
+            elif [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
               hdiutil detach "$MOUNT_POINT" || hdiutil detach -force "$MOUNT_POINT" || true
             fi
           }
           trap cleanup EXIT
 
-          MOUNT_POINT="$(hdiutil attach -readonly -noverify -noautoopen "$DMG_PATH" | awk '/\/Volumes\//{print $3; exit}')"
+          ATTACH_OUTPUT="$(hdiutil attach -readonly -noverify -noautoopen "$DMG_PATH")"
+          MOUNT_DEVICE="$(printf '%s\n' "$ATTACH_OUTPUT" | awk '/\/Volumes\//{print $1; exit}')"
+          MOUNT_POINT="$(printf '%s\n' "$ATTACH_OUTPUT" | awk '/\/Volumes\//{print $3; exit}')"
+          if [ -z "$MOUNT_DEVICE" ] || [ -z "$MOUNT_POINT" ]; then
+            echo "::error::Failed to capture mounted DMG device or path"
+            printf '%s\n' "$ATTACH_OUTPUT"
+            exit 1
+          fi
           APP_PATH="$MOUNT_POINT/SkillFlow.app"
 
           [ -d "$APP_PATH" ] || { echo "::error::App not found in mounted DMG"; exit 1; }
@@ -291,14 +318,24 @@ jobs:
         run: |
           set -euo pipefail
           MOUNT_POINT=""
+          MOUNT_DEVICE=""
           cleanup() {
-            if [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
+            if [ -n "$MOUNT_DEVICE" ]; then
+              hdiutil detach "$MOUNT_DEVICE" || hdiutil detach -force "$MOUNT_DEVICE" || true
+            elif [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
               hdiutil detach "$MOUNT_POINT" || hdiutil detach -force "$MOUNT_POINT" || true
             fi
           }
           trap cleanup EXIT
 
-          MOUNT_POINT="$(hdiutil attach -readonly -noverify -noautoopen "release-assets/SkillFlow-${{ matrix.name }}.dmg" | awk '/\/Volumes\//{print $3; exit}')"
+          ATTACH_OUTPUT="$(hdiutil attach -readonly -noverify -noautoopen "release-assets/SkillFlow-${{ matrix.name }}.dmg")"
+          MOUNT_DEVICE="$(printf '%s\n' "$ATTACH_OUTPUT" | awk '/\/Volumes\//{print $1; exit}')"
+          MOUNT_POINT="$(printf '%s\n' "$ATTACH_OUTPUT" | awk '/\/Volumes\//{print $3; exit}')"
+          if [ -z "$MOUNT_DEVICE" ] || [ -z "$MOUNT_POINT" ]; then
+            echo "::error::Failed to capture mounted DMG device or path"
+            printf '%s\n' "$ATTACH_OUTPUT"
+            exit 1
+          fi
           APP_PATH="$MOUNT_POINT/SkillFlow.app"
 
           [ -d "$APP_PATH" ] || { echo "::error::App not found in release DMG"; exit 1; }
