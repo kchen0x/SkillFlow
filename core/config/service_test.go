@@ -17,6 +17,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, cfg.SkillsStorageDir)
 	assert.Equal(t, "Default", cfg.DefaultCategory)
+	assert.False(t, cfg.AutoUpdateSkills)
 	assert.Equal(t, config.DefaultLogLevel, cfg.LogLevel)
 	assert.Equal(t, config.DefaultRepoScanMaxDepth, cfg.RepoScanMaxDepth)
 	assert.Equal(t, config.DefaultSkillStatusVisibility(), cfg.SkillStatusVisibility)
@@ -28,6 +29,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
 	cfg.DefaultCategory = "MyCategory"
+	cfg.AutoUpdateSkills = true
 	cfg.AutoPushAgents = []string{"codex", "gemini-cli"}
 	cfg.RepoScanMaxDepth = 7
 	cfg.Proxy = config.ProxyConfig{
@@ -41,10 +43,32 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	loaded, err := svc.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "MyCategory", loaded.DefaultCategory)
+	assert.True(t, loaded.AutoUpdateSkills)
 	assert.Equal(t, []string{"codex", "gemini-cli"}, loaded.AutoPushAgents)
 	assert.Equal(t, 7, loaded.RepoScanMaxDepth)
 	assert.Equal(t, cfg.Proxy, loaded.Proxy)
 	assert.Equal(t, "v1.2.3", loaded.SkippedUpdateVersion)
+}
+
+func TestAutoUpdateSkillsStoredOnlyInLocalConfig(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.AutoUpdateSkills = true
+
+	require.NoError(t, svc.Save(cfg))
+
+	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(sharedData), "autoUpdateSkills")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"autoUpdateSkills": true`)
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	assert.True(t, loaded.AutoUpdateSkills)
 }
 
 func TestAutoPushAgentsStoredOnlyInLocalConfig(t *testing.T) {

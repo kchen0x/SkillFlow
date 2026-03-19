@@ -49,6 +49,7 @@ type WindowState struct {
 
 type AppConfig struct {
 	SkillsStorageDir      string                         `json:"skillsStorageDir"`
+	AutoUpdateSkills      bool                           `json:"autoUpdateSkills"`
 	AutoPushAgents        []string                       `json:"autoPushAgents"`
 	LaunchAtLogin         bool                           `json:"launchAtLogin"`
 	DefaultCategory       string                         `json:"defaultCategory"`

@@ -139,7 +139,7 @@ By default, SkillFlow stores app data under `config.AppDataDir()`:
 Important storage rules:
 
 - `config.json` contains only settings that are safe to sync across devices.
-- `config_local.json` stores machine-specific paths, auto-push targets, launch-at-login state, proxy settings, window state, custom-agent path config, and sensitive cloud credentials.
+- `config_local.json` stores machine-specific paths, the Dashboard auto-update toggle, auto-push targets, launch-at-login state, proxy settings, window state, custom-agent path config, and sensitive cloud credentials.
 - Synced files such as `meta/*.json` and `star_repos.json` persist local paths as **forward-slash relative paths** whenever the target is inside the synchronized root.
 - If `SkillsStorageDir` is moved outside the default app data directory, the synchronized root becomes the shared parent of `skills/` and `meta/`.
 - Logs are bounded to **two files** (`skillflow.log`, `skillflow.log.1`) at **1MB each**.
@@ -157,7 +157,6 @@ Important storage rules:
 | `core/backup` | Backup snapshot logic, provider interfaces, Git provider, object-storage providers |
 | `core/config` | Split shared/local config persistence, defaults, status-visibility normalization |
 | `core/git` | Git clone/pull/push helpers, starred repo scanning, starred repo storage |
-| `core/install` | GitHub and local install flows |
 | `core/notify` | Buffered backend event hub and typed payloads |
 | `core/pathutil` | Cross-platform path normalization and relative-path persistence helpers |
 | `core/prompt` | Prompt library storage, scoped export, and prepared import preview/apply |
@@ -232,7 +231,7 @@ Notes:
 
 - `ID` is the installed-instance UUID.
 - `Path` is a runtime absolute path; when persisted inside synced metadata it should be stored as a portable relative path whenever possible.
-- `SourceURL + SourceSubPath` identify the logical git source for GitHub-installed skills.
+- `SourceURL + SourceSubPath` identify the logical git source for git-backed installed skills.
 
 ### Prompt (`core/prompt/storage.go`)
 
@@ -365,7 +364,7 @@ SkillFlow distinguishes two identities:
 |---------------|----------------|-------------------------------|
 | Dashboard / My Skills | installed `Skill` | `Skill.ID` for instance actions; logical key for cross-module correlation |
 | Sync Push | installed `Skill` | `Skill.ID` for selection; logical key for pushed-state resolution |
-| GitHub scan/install | remote candidate | logical key from repo source + subpath |
+| Starred Repos | repo skill candidate | logical key from repo source + subpath |
 | Starred Repos | `StarSkill` | logical key from repo source + subpath |
 | Agent Skills | agent-local candidate / aggregate | logical key for dedupe and status; path only for agent-local open/delete |
 | Sync Pull | agent-local candidate | logical key for import and conflict detection |
@@ -376,7 +375,7 @@ SkillFlow distinguishes two identities:
 - **imported** — wording alias for `installed` on external-source pages
 - **pushed** — the logical skill exists in an agent's configured `PushDir`
 - **seenInAgentScan** — the logical skill exists in an agent's configured `ScanDirs`; this does **not** imply SkillFlow pushed it
-- **updatable** — at least one installed git-backed instance has a newer cached-repo SHA than its installed `SourceSHA`
+- **updatable** — either at least one installed git-backed instance has a newer cached-repo SHA than its installed `SourceSHA`, or an agent copy has fallen behind the installed **My Skills** copy it correlates to
 
 ### Status and dedupe rules
 
@@ -392,6 +391,7 @@ SkillFlow distinguishes two identities:
 - Cache lookup and installed-instance correlation must use the same logical git key.
 - `CheckUpdates()` compares installed `SourceSHA` against the latest commit SHA for that same `SourceSubPath` inside the local cached repo clone; it does not call the GitHub Commits API directly.
 - `UpdateSkill()` copies files from that cached repo subdirectory into the installed library directory, then refreshes any existing pushed agent copies from the updated installed instance.
+- When the local-only `AutoUpdateSkills` toggle is enabled, successful starred-repo refresh automatically reuses `UpdateSkill()` for matching installed git-backed skills from the refreshed repos.
 - `LatestSHA` is cleared when a fresh check confirms the installed copy is already current.
 - `LastCheckedAt` is updated on every completed check attempt and persisted in local-only `meta_local/<skill-id>.local.json` (not synced).
 
@@ -400,7 +400,7 @@ SkillFlow distinguishes two identities:
 - Backend code owns cross-module correlation and should return normalized status data to the frontend.
 - Frontend pages should not infer "same skill", "already imported", or "already pushed" from `Name` or `Path` alone.
 - `core/skillkey` derives logical keys.
-- `core/skill.BuildInstalledIndex` correlates installed state across GitHub scan results, starred repo entries, and agent-scan entries.
+- `core/skill.BuildInstalledIndex` correlates installed state across starred repo entries and agent-scan entries.
 
 ---
 
@@ -419,7 +419,7 @@ The hub currently uses a buffer of **32** entries with drop-oldest behavior for 
 Important event groups:
 
 - backup: `backup.started`, `backup.progress`, `backup.completed`, `backup.failed`
-- sync/update: `sync.completed`, `update.available`, `skill.conflict`
+- sync/update: `sync.completed`, `update.available`, `skills.updated`, `skill.conflict`
 - starred repos: `star.sync.progress`, `star.sync.done`
 - Git backup: `git.sync.started`, `git.sync.completed`, `git.sync.failed`, `git.conflict`
 - app update: `app.update.available`, `app.update.download.done`, `app.update.download.fail`

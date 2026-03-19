@@ -41,6 +41,7 @@ type sharedAgentConfig struct {
 // It holds all file system paths and sensitive cloud credentials.
 type localConfig struct {
 	SkillsStorageDir           string                       `json:"skillsStorageDir"`
+	AutoUpdateSkills           bool                         `json:"autoUpdateSkills"`
 	AutoPushAgents             []string                     `json:"autoPushAgents"`
 	LaunchAtLogin              bool                         `json:"launchAtLogin"`
 	Agents                     []localAgentConfig           `json:"agents"`
@@ -388,6 +389,7 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
 		SkillsStorageDir:      local.SkillsStorageDir,
+		AutoUpdateSkills:      local.AutoUpdateSkills,
 		AutoPushAgents:        NormalizeAgentNameList(local.AutoPushAgents),
 		LaunchAtLogin:         local.LaunchAtLogin,
 		DefaultCategory:       shared.DefaultCategory,
@@ -438,6 +440,7 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return localConfig{
 		SkillsStorageDir:           cfg.SkillsStorageDir,
+		AutoUpdateSkills:           cfg.AutoUpdateSkills,
 		AutoPushAgents:             NormalizeAgentNameList(cfg.AutoPushAgents),
 		LaunchAtLogin:              cfg.LaunchAtLogin,
 		Agents:                     agents,

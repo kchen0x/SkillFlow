@@ -150,10 +150,6 @@ export function ImportStarSkills(arg1, arg2, arg3) {
   return window['go']['main']['App']['ImportStarSkills'](arg1, arg2, arg3);
 }
 
-export function InstallFromGitHub(arg1, arg2, arg3) {
-  return window['go']['main']['App']['InstallFromGitHub'](arg1, arg2, arg3);
-}
-
 export function ListAgentSkills(arg1) {
   return window['go']['main']['App']['ListAgentSkills'](arg1);
 }
@@ -288,10 +284,6 @@ export function SaveConfig(arg1) {
 
 export function ScanAgentSkills(arg1) {
   return window['go']['main']['App']['ScanAgentSkills'](arg1);
-}
-
-export function ScanGitHub(arg1) {
-  return window['go']['main']['App']['ScanGitHub'](arg1);
 }
 
 export function SetSkippedUpdateVersion(arg1) {

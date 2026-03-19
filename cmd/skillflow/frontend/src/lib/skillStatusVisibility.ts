@@ -5,7 +5,6 @@ export type SkillStatusPageKey =
   | 'pushToAgent'
   | 'pullFromAgent'
   | 'starredRepos'
-  | 'githubInstall'
 
 export type SkillStatusVisibilityConfig = Record<SkillStatusPageKey, SkillStatusKey[]>
 
@@ -16,7 +15,6 @@ export const SKILL_STATUS_PAGE_ORDER: SkillStatusPageKey[] = [
   'pushToAgent',
   'pullFromAgent',
   'starredRepos',
-  'githubInstall',
 ]
 
 export const DEFAULT_SKILL_STATUS_VISIBILITY: SkillStatusVisibilityConfig = {
@@ -25,7 +23,6 @@ export const DEFAULT_SKILL_STATUS_VISIBILITY: SkillStatusVisibilityConfig = {
   pushToAgent: ['pushedAgents'],
   pullFromAgent: ['imported'],
   starredRepos: ['imported', 'pushedAgents'],
-  githubInstall: ['imported', 'updatable', 'pushedAgents'],
 }
 
 function isSkillStatusKey(value: unknown): value is SkillStatusKey {

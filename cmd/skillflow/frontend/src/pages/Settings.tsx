@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { GetConfig, SaveConfig, ListCloudProviders, AddCustomAgent, RemoveCustomAgent, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir, TestProxyConnection } from '../../wailsjs/go/main/App'
-import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star, Github } from 'lucide-react'
+import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
 import { useSkillStatusVisibilityContext } from '../contexts/SkillStatusVisibilityContext'
@@ -115,7 +115,6 @@ const STATUS_PAGE_OPTIONS: StatusPageOption[] = [
   { key: 'pushToAgent', label: 'settings.statusPagePushToTool', description: 'settings.statusPagePushToToolDesc', icon: <ArrowUpFromLine size={14} /> },
   { key: 'pullFromAgent', label: 'settings.statusPagePullFromTool', description: 'settings.statusPagePullFromToolDesc', icon: <ArrowDownToLine size={14} /> },
   { key: 'starredRepos', label: 'settings.statusPageStarredRepos', description: 'settings.statusPageStarredReposDesc', icon: <Star size={14} /> },
-  { key: 'githubInstall', label: 'settings.statusPageGitHubInstall', description: 'settings.statusPageGitHubInstallDesc', icon: <Github size={14} /> },
 ]
 const STATUS_OPTIONS: StatusOption[] = [
   { key: 'imported', label: 'settings.statusImported' },

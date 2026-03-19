@@ -70,16 +70,17 @@ Central library for managing your skill collection.
 | **Update** (RefreshCw) | Calls backend `CheckUpdates()`; groups installed Git-backed skills by normalized repo source + subpath, compares installed `SourceSHA` against the same subpath inside the local repo cache, refreshes `LatestSHA` (synced) and `LastCheckedAt` (local-only), marks updatable cards with a red dot and Update action, and clears stale markers when an installed instance is already current. This checks only — it does not overwrite local files by itself |
 | **Batch Delete** (CheckSquare) | Toggles multi-select mode |
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
-| **Remote Install** (Github) | Opens the GitHub Install dialog |
+| **Auto Update** (RefreshCw) | Toggles local-only automatic updates for matching installed git-backed skills after startup or manual starred-repo refresh; uses the same toolbar button slot and primary styling that previously opened remote install |
 
 ### Auto Push Targets
 
 - A compact single-row strip under the toolbar shows the **Auto Push Targets** title and agent chips together, using the same icon-chip selection style as **Push to Agents**.
 - The selection is persisted locally on the current device and reused for future imports into **My Skills**.
+- The toolbar **Auto Update** toggle is also persisted locally on the current device, alongside the auto-push target selection.
 - Turning an agent on here immediately backfills the current library to that agent, so existing My Skills entries are pushed right away instead of waiting for the next import.
-- Any newly added skill in **My Skills** is automatically copied to the selected agents after the library import succeeds. This applies to local folder import, GitHub install, Pull from Agents, and Starred Repo import.
+- Any newly added skill in **My Skills** is automatically copied to the selected agents after the library import succeeds. This applies to local folder import, Pull from Agents, and Starred Repo import.
 - If a cloud restore brings skills onto the current device, SkillFlow auto-pushes any newly restored or newly updated library skills to the selected agents on this device.
-- Import/install auto-push remains non-destructive: if a selected agent already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
+- Import auto-push remains non-destructive: if a selected agent already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
 - Turning an agent off in this strip does not delete anything that was already pushed earlier; removing agent copies still requires manual deletion from **My Agents** or the agent directory.
 
 ### Select Mode (activated by "Batch Delete")
@@ -117,6 +118,8 @@ Central library for managing your skill collection.
 
 - Toolbar **Update** compares installed Git-backed skills against their locally cached repo clones and only marks cards as updatable.
 - Card-level **Update** is the action that copies the latest files from the local repo cache, overwrites the installed copy in **My Skills**, refreshes any same-skill copies that already exist in agent `PushDir`s, and force-updates all agents currently selected in **Auto Push Targets** (creating missing copies and overwriting existing copies there).
+- When **Auto Update** is enabled on the Dashboard, the same installed-skill update flow runs automatically after startup starred-repo refresh and after manual single-repo or refresh-all actions in **Starred Repos**.
+- Automatic updates still only create or overwrite agent copies for the agents selected in **Auto Push Targets**. Other agents keep their existing copies and surface **Updatable** when those copies fall behind the installed library version.
 - While a card update is running, that card keeps the Update action visible, disables repeat clicks, and spins the Refresh icon until the request finishes.
 - The Dashboard also shows a temporary top-of-page status banner for skill update progress, success, or failure so users can tell whether the click really triggered work.
 - Cache-based checks are grouped by the same logical git key used elsewhere in the app: normalized repo source + repo subpath.
@@ -197,7 +200,7 @@ If a skill already exists in the target directory, a conflict dialog appears for
 ### Skill Grid
 
 - Library cards surface only push-relevant state on this page: which agents already contain that logical skill in their `PushDir`.
-- Cards also keep the installed-source badge from My Skills so users can still distinguish manual imports from GitHub installs while deciding what to push.
+- Cards also keep the installed-source badge from My Skills so users can still distinguish manual imports from git-backed installs while deciding what to push.
 - The pushed-agent indicator uses compact agent icons with ellipsis overflow and hover-to-reveal full lists.
 
 ### Bottom Bar
@@ -235,7 +238,7 @@ Imports skills from external agent directories into your library.
 - Appears after a successful scan.
 - Search field filters the scanned skill list by name in real time.
 - Two-button sort toggle switches between **A-Z** and **Z-A** ordering by skill name.
-- When a scanned item correlates to an already installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from GitHub installs at a glance.
+- When a scanned item correlates to an already installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from git-backed installs at a glance.
 - Cards still show the pull-specific imported state; newly discovered scan items that do not correlate to an installed entry keep the source badge empty instead of guessing.
 - After each scan, all skills start unchecked by default.
 - Select individual skills, use "Select All / Deselect All" for the currently visible list, or use the matching square-style "Select Not Imported" toggle to bulk-select only visible skills that are not yet imported.
@@ -514,9 +517,9 @@ For each built-in or custom agent:
 |---------|-------------|
 | **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
 | **Appearance theme** | Three visual presets shown as preview cards: **Young** (default, a softened paper-blue evolution of the previous sky-blue Light palette), **Dark** (refined graphite with muted mist-blue accents), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
-| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed agents; **My Agents** = imported + updatable + pushed agents; **Push to Agent** = pushed agents; **Pull from Agent** = imported; **Starred Repos** = imported + pushed agents; **GitHub Install** = imported + updatable + pushed agents |
+| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed agents; **My Agents** = imported + updatable + pushed agents; **Push to Agent** = pushed agents; **Pull from Agent** = imported; **Starred Repos** = imported + pushed agents |
 | **Skills storage directory** | Root path where all skills are stored on disk; manual text entry + folder-picker button that opens at the current path or nearest existing parent |
-| **Skill recursive scan depth** | Maximum recursion depth used when scanning local agent directories, starred repos, and GitHub-install repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
+| **Skill recursive scan depth** | Maximum recursion depth used when scanning local agent directories and starred repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
 | **Default category** | Fixed system fallback category `Default` (read-only), used when pulling/importing without specifying a category |
 | **Log level buttons** | Toggle runtime log level between `debug`, `info`, and `error` (default: `error`); takes effect after saving settings |
 | **Launch at login toggle** | Enables/disables OS login-item registration so SkillFlow auto-starts after sign-in on the current device; stored only in local `config_local.json`. Reconcile runs on startup and Settings save: already-missing disabled entries are treated as a no-op, while the enabled path is refreshed to the current executable so moved or updated app installs keep working on macOS and Windows |
@@ -529,7 +532,7 @@ Log files are stored under the app log directory, with rolling limits:
 
 ### Proxy Tab
 
-Proxy settings for all remote operations (repo scan, GitHub install, repo-cache sync):
+Proxy settings for all remote operations (repo scan, repo-cache sync):
 
 | Mode | Description |
 |------|-------------|
@@ -651,27 +654,7 @@ Shown one conflict at a time during push or pull when a skill already exists at 
 - **"Overwrite"** — calls the `*Force` variant, replaces only the exact conflicting skill-target pair.
 - Auto-closes when the conflict queue is empty.
 
-### 10.2 GitHub Install Dialog
-
-Opened from Dashboard toolbar.
-
-| Control | Action |
-|---------|--------|
-| **URL input** | Git repo URL (HTTPS or SSH); Enter triggers scan |
-| **"Scan"** button | `ScanGitHub(url)` — clones or pulls the repo, lists skill candidates |
-| **Candidate checkboxes** | Select which skills to install; already-installed skills show a badge |
-| **Category dropdown** | Destination category |
-| **"Install n Skills"** button | `InstallFromGitHub(url, selected, category)` |
-
-- Info text: "First scan clones the repo; subsequent scans auto-pull."
-- Candidate discovery is recursive across the cloned repo, so nested layouts such as `plugins/<plugin>/skills/<name>` are also listed; `skill.md` matching is case-insensitive.
-- Repos whose root directory itself contains `SKILL.md` / `skill.md` are also treated as a single candidate, using the repo root as the install source.
-- Recursive candidate discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
-- Already-installed badges are resolved from normalized repo source + subpath instead of `Name`, and checkbox state is tracked by candidate path so same-name candidates remain independent.
-- Candidate rows can show imported / update-available / pushed-agent state according to the **Settings → General → Card status visibility** policy for GitHub Install, and display the candidate subpath so same-name entries stay distinguishable in the dialog.
-- Separate error alerts for scan errors and install errors.
-
-### 10.3 Missing Directory Dialog
+### 10.2 Missing Directory Dialog
 
 Appears before any push when target directories do not exist.
 
@@ -802,7 +785,7 @@ Browse the skills currently present inside each enabled agent.
 - Shows deletable agent-local skills under the configured push directory.
 - Push-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
 - In select mode, **Select All / Deselect All** applies to the currently visible filtered Push Path cards only.
-- When a agent-local skill correlates to an installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from GitHub installs.
+- When a agent-local skill correlates to an installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from git-backed installs.
 - Cards continue showing imported, update-available, and "pushed to other agents" states. The current agent is excluded from the pushed-agent icon list so the card only surfaces cross-agent distribution that adds information.
 
 ### Scan Path Section

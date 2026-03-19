@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -117,6 +118,83 @@ func TestUpdateSkillFailsWhenLocalCacheMissing(t *testing.T) {
 	assert.Contains(t, err.Error(), "local cache missing")
 }
 
+func TestUpdateStarredRepoAutoUpdatesMatchingInstalledSkillsWhenEnabled(t *testing.T) {
+	app, codexPushDir, _, dataDir := newUpdateSkillTestApp(t)
+	setAutoUpdateSkills(t, app, true)
+
+	fixture := setupStarredRepoAutoUpdateFixture(t, app, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n")
+	newSHA := commitLocalRemoteSkillRepoUpdate(t, fixture.remoteRepoDir, fixture.skillSubPath, "# Demo\nNew\n")
+	stubCloneOrUpdateRepo(t, fixture.repoURL, fixture.remoteRepoDir)
+
+	require.NoError(t, app.UpdateStarredRepo(fixture.repoURL))
+
+	assertFileContentEquals(t, filepath.Join(fixture.skill.Path, "skill.md"), "# Demo\nNew\n")
+	assertFileContentEquals(t, filepath.Join(codexPushDir, "demo-skill", "skill.md"), "# Demo\nNew\n")
+
+	updated, err := app.storage.Get(fixture.skill.ID)
+	require.NoError(t, err)
+	assert.Equal(t, newSHA, updated.SourceSHA)
+	assert.Empty(t, updated.LatestSHA)
+}
+
+func TestUpdateStarredRepoDoesNotAutoUpdateWhenDisabled(t *testing.T) {
+	app, codexPushDir, _, dataDir := newUpdateSkillTestApp(t)
+	setAutoUpdateSkills(t, app, false)
+
+	fixture := setupStarredRepoAutoUpdateFixture(t, app, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n")
+	commitLocalRemoteSkillRepoUpdate(t, fixture.remoteRepoDir, fixture.skillSubPath, "# Demo\nNew\n")
+	stubCloneOrUpdateRepo(t, fixture.repoURL, fixture.remoteRepoDir)
+
+	require.NoError(t, app.UpdateStarredRepo(fixture.repoURL))
+
+	assertFileContentEquals(t, filepath.Join(fixture.skill.Path, "skill.md"), "# Demo\nOld\n")
+	_, err := os.Stat(filepath.Join(codexPushDir, "demo-skill"))
+	assert.True(t, os.IsNotExist(err))
+
+	updated, err := app.storage.Get(fixture.skill.ID)
+	require.NoError(t, err)
+	assert.Equal(t, fixture.oldSHA, updated.SourceSHA)
+}
+
+func TestUpdateAllStarredReposAutoUpdatesOnlySuccessfulRepos(t *testing.T) {
+	app, _, _, dataDir := newUpdateSkillTestApp(t)
+	setAutoUpdateSkills(t, app, true)
+
+	good := setupStarredRepoAutoUpdateFixture(t, app, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n")
+	bad := setupStarredRepoAutoUpdateFixture(t, app, dataDir, "https://github.com/octo/other", "skills/other-skill", "# Other\nOld\n")
+
+	goodNewSHA := commitLocalRemoteSkillRepoUpdate(t, good.remoteRepoDir, good.skillSubPath, "# Demo\nNew\n")
+	commitLocalRemoteSkillRepoUpdate(t, bad.remoteRepoDir, bad.skillSubPath, "# Other\nNew\n")
+
+	prevCloneOrUpdateRepo := cloneOrUpdateRepo
+	cloneOrUpdateRepo = func(ctx context.Context, repoURL, dir, proxyURL string) error {
+		switch {
+		case coregit.SameRepo(repoURL, good.repoURL):
+			return coregit.CloneOrUpdate(ctx, good.remoteRepoDir, dir, proxyURL)
+		case coregit.SameRepo(repoURL, bad.repoURL):
+			return fmt.Errorf("forced sync failure for %s", repoURL)
+		default:
+			return fmt.Errorf("unexpected repo url: %s", repoURL)
+		}
+	}
+	t.Cleanup(func() {
+		cloneOrUpdateRepo = prevCloneOrUpdateRepo
+	})
+
+	require.NoError(t, app.UpdateAllStarredRepos())
+
+	assertFileContentEquals(t, filepath.Join(good.skill.Path, "skill.md"), "# Demo\nNew\n")
+	assertFileContentEquals(t, filepath.Join(bad.skill.Path, "skill.md"), "# Other\nOld\n")
+
+	goodUpdated, err := app.storage.Get(good.skill.ID)
+	require.NoError(t, err)
+	assert.Equal(t, goodNewSHA, goodUpdated.SourceSHA)
+
+	badUpdated, err := app.storage.Get(bad.skill.ID)
+	require.NoError(t, err)
+	assert.Equal(t, bad.oldSHA, badUpdated.SourceSHA)
+}
+
 func newUpdateSkillTestApp(t *testing.T) (*App, string, string, string) {
 	t.Helper()
 
@@ -152,6 +230,61 @@ func newUpdateSkillTestApp(t *testing.T) (*App, string, string, string) {
 	return app, codexPushDir, claudePushDir, dataDir
 }
 
+type starredRepoAutoUpdateFixture struct {
+	repoURL       string
+	skillSubPath  string
+	remoteRepoDir string
+	skill         *skill.Skill
+	oldSHA        string
+}
+
+func setAutoUpdateSkills(t *testing.T, app *App, enabled bool) {
+	t.Helper()
+
+	cfg, err := app.config.Load()
+	require.NoError(t, err)
+	cfg.AutoUpdateSkills = enabled
+	require.NoError(t, app.config.Save(cfg))
+}
+
+func setupStarredRepoAutoUpdateFixture(t *testing.T, app *App, dataDir, repoURL, skillSubPath, oldContent string) starredRepoAutoUpdateFixture {
+	t.Helper()
+
+	remoteRepoDir := t.TempDir()
+	oldSHA := seedLocalRemoteSkillRepo(t, remoteRepoDir, skillSubPath, oldContent)
+
+	cacheDir, err := coregit.CacheDir(dataDir, repoURL)
+	require.NoError(t, err)
+	require.NoError(t, coregit.CloneOrUpdate(context.Background(), remoteRepoDir, cacheDir, ""))
+
+	sourceDir := writeTestSkillDir(t, t.TempDir(), filepath.Base(filepath.FromSlash(skillSubPath)), oldContent)
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, repoURL, skillSubPath)
+	require.NoError(t, err)
+	sk.SourceSHA = oldSHA
+	sk.LatestSHA = ""
+	require.NoError(t, app.storage.UpdateMeta(sk))
+
+	if app.starStorage == nil {
+		app.starStorage = coregit.NewStarStorage(filepath.Join(dataDir, "star_repos.json"))
+	}
+	repos, err := app.starStorage.Load()
+	require.NoError(t, err)
+	repos = append(repos, coregit.StarredRepo{
+		URL:      repoURL,
+		Name:     "octo/" + filepath.Base(filepath.FromSlash(skillSubPath)),
+		LocalDir: cacheDir,
+	})
+	require.NoError(t, app.starStorage.Save(repos))
+
+	return starredRepoAutoUpdateFixture{
+		repoURL:       repoURL,
+		skillSubPath:  skillSubPath,
+		remoteRepoDir: remoteRepoDir,
+		skill:         sk,
+		oldSHA:        oldSHA,
+	}
+}
+
 func seedCachedSkillRepo(t *testing.T, dataDir, repoURL, skillSubPath, oldContent, newContent string) (string, string, string) {
 	t.Helper()
 	requireGitAvailable(t)
@@ -177,6 +310,50 @@ func seedCachedSkillRepo(t *testing.T, dataDir, repoURL, skillSubPath, oldConten
 	require.NoError(t, err)
 
 	return repoDir, oldSHA, newSHA
+}
+
+func seedLocalRemoteSkillRepo(t *testing.T, repoDir, skillSubPath, content string) string {
+	t.Helper()
+	requireGitAvailable(t)
+
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+	runGitCmd(t, repoDir, "init")
+	runGitCmd(t, repoDir, "config", "user.name", "SkillFlow Tests")
+	runGitCmd(t, repoDir, "config", "user.email", "tests@skillflow.local")
+	writeCachedSkillFiles(t, repoDir, skillSubPath, content)
+	runGitCmd(t, repoDir, "add", ".")
+	runGitCmd(t, repoDir, "commit", "-m", "initial remote")
+
+	sha, err := coregit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
+	require.NoError(t, err)
+	return sha
+}
+
+func commitLocalRemoteSkillRepoUpdate(t *testing.T, repoDir, skillSubPath, content string) string {
+	t.Helper()
+
+	writeCachedSkillFiles(t, repoDir, skillSubPath, content)
+	runGitCmd(t, repoDir, "add", ".")
+	runGitCmd(t, repoDir, "commit", "-m", "update remote")
+
+	sha, err := coregit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
+	require.NoError(t, err)
+	return sha
+}
+
+func stubCloneOrUpdateRepo(t *testing.T, wantRepoURL, sourceRepoDir string) {
+	t.Helper()
+
+	prevCloneOrUpdateRepo := cloneOrUpdateRepo
+	cloneOrUpdateRepo = func(ctx context.Context, repoURL, dir, proxyURL string) error {
+		if !coregit.SameRepo(repoURL, wantRepoURL) {
+			return fmt.Errorf("unexpected repo url: %s", repoURL)
+		}
+		return coregit.CloneOrUpdate(ctx, sourceRepoDir, dir, proxyURL)
+	}
+	t.Cleanup(func() {
+		cloneOrUpdateRepo = prevCloneOrUpdateRepo
+	})
 }
 
 func writeCachedSkillFiles(t *testing.T, repoDir, skillSubPath, content string) {

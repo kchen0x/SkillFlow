@@ -8,7 +8,6 @@ import (
 
 	"github.com/shinerio/skillflow/core/config"
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/install"
 	"github.com/shinerio/skillflow/core/skill"
 	"github.com/shinerio/skillflow/core/skillkey"
 	agentsync "github.com/shinerio/skillflow/core/sync"
@@ -58,6 +57,7 @@ type resolvedSkillState struct {
 	Installed    bool
 	Imported     bool
 	Updatable    bool
+	ContentKeys  []string
 	Pushed       bool
 	PushedAgents []string
 }
@@ -101,20 +101,6 @@ func (a *App) buildInstalledSkillEntries(installed []*skill.Skill, presence *age
 	return entries
 }
 
-func resolveGitHubCandidates(candidates []install.SkillCandidate, idx *skill.InstalledIndex, presence *agentPresenceIndex) []install.SkillCandidate {
-	resolved := make([]install.SkillCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		state := resolveSkillState(candidate.Name, candidate.LogicalKey, idx, presence)
-		candidate.LogicalKey = coalesceLogicalKey(candidate.LogicalKey, state.LogicalKey)
-		candidate.Installed = state.Installed
-		candidate.Updatable = state.Updatable
-		candidate.Pushed = state.Pushed
-		candidate.PushedAgents = state.PushedAgents
-		resolved = append(resolved, candidate)
-	}
-	return resolved
-}
-
 func resolveStarSkills(skills []coregit.StarSkill, idx *skill.InstalledIndex, presence *agentPresenceIndex) []coregit.StarSkill {
 	resolved := make([]coregit.StarSkill, 0, len(skills))
 	for _, candidate := range skills {
@@ -148,6 +134,10 @@ func resolveAgentSkillCandidates(candidates []*skill.Skill, idx *skill.Installed
 			logicalKey = ""
 		}
 		state := resolveSkillState(candidate.Name, logicalKey, idx, presence)
+		updatable := state.Updatable
+		if state.Installed && logicalKey != "" && !containsContentKey(state.ContentKeys, logicalKey) {
+			updatable = true
+		}
 		resolved := AgentSkillCandidate{
 			Name:         candidate.Name,
 			Path:         candidate.Path,
@@ -155,7 +145,7 @@ func resolveAgentSkillCandidates(candidates []*skill.Skill, idx *skill.Installed
 			LogicalKey:   coalesceLogicalKey(state.LogicalKey, logicalKey),
 			Installed:    state.Installed,
 			Imported:     state.Imported,
-			Updatable:    state.Updatable,
+			Updatable:    updatable,
 			Pushed:       state.Pushed,
 			PushedAgents: state.PushedAgents,
 		}
@@ -336,6 +326,7 @@ func resolveSkillState(name, logicalKey string, idx *skill.InstalledIndex, prese
 		Installed:    status.Installed,
 		Imported:     status.Imported,
 		Updatable:    status.Updatable,
+		ContentKeys:  append([]string(nil), status.ContentKeys...),
 		Pushed:       len(pushedAgents) > 0,
 		PushedAgents: pushedAgents,
 	}
@@ -423,6 +414,15 @@ func compactKeys(keys ...string) []string {
 		result = append(result, key)
 	}
 	return result
+}
+
+func containsContentKey(keys []string, want string) bool {
+	for _, key := range keys {
+		if key == want {
+			return true
+		}
+	}
+	return false
 }
 
 func coalesceLogicalKey(primary, secondary string) string {

@@ -20,9 +20,9 @@ func TestStartupBackgroundTaskPlanUsesStaggeredDelays(t *testing.T) {
 	require.Len(t, tasks, 4)
 	assert.Equal(t, "git.pull", tasks[0].name)
 	assert.Equal(t, 750*time.Millisecond, tasks[0].delay)
-	assert.Equal(t, "skills.check_updates", tasks[1].name)
+	assert.Equal(t, "starred.refresh", tasks[1].name)
 	assert.Equal(t, 3*time.Second, tasks[1].delay)
-	assert.Equal(t, "starred.refresh", tasks[2].name)
+	assert.Equal(t, "skills.check_updates", tasks[2].name)
 	assert.Equal(t, 5250*time.Millisecond, tasks[2].delay)
 	assert.Equal(t, "app.check_update", tasks[3].name)
 	assert.Equal(t, 8*time.Second, tasks[3].delay)
@@ -54,8 +54,7 @@ func TestStartupRunsUpgradeBeforeConfigLoad(t *testing.T) {
     "myTools": ["imported", "updatable", "pushedTools"],
     "pushToTool": ["pushedTools"],
     "pullFromTool": ["imported"],
-    "starredRepos": ["imported", "pushedTools"],
-    "githubInstall": ["imported", "updatable", "pushedTools"]
+    "starredRepos": ["imported", "pushedTools"]
   },
   "tools": [
     { "name": "codex", "enabled": true }
@@ -113,6 +112,7 @@ func TestStartupRunsUpgradeBeforeConfigLoad(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(sharedData), `"agents"`)
 	assert.NotContains(t, string(sharedData), `"tools"`)
+	assert.NotContains(t, string(sharedData), `"githubInstall"`)
 
 	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
 	require.NoError(t, err)

@@ -85,6 +85,28 @@ func TestBuildInstalledIndexMarksGroupUpdatable(t *testing.T) {
 	assert.True(t, status.Updatable)
 }
 
+func TestBuildInstalledIndexIncludesInstalledContentKeys(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "alpha")
+	require.NoError(t, os.MkdirAll(dir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# alpha\nLine 2\n"), 0644))
+
+	idx := skill.BuildInstalledIndex([]*skill.Skill{{
+		ID:            "git-1",
+		Name:          "alpha",
+		Path:          dir,
+		Source:        skill.SourceGitHub,
+		SourceURL:     "https://github.com/acme/repo",
+		SourceSubPath: "skills/alpha",
+	}})
+
+	contentKey, err := skillkey.ContentFromDir(dir)
+	require.NoError(t, err)
+
+	status := idx.Resolve("alpha", "git:github.com/acme/repo#skills/alpha")
+	assert.Contains(t, status.ContentKeys, contentKey)
+}
+
 func TestBuildInstalledIndexResolvesGitSkillByContentKey(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "alpha")

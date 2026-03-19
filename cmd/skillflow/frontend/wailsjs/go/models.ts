@@ -101,7 +101,6 @@ export namespace config {
 	    pushToAgent: string[];
 	    pullFromAgent: string[];
 	    starredRepos: string[];
-	    githubInstall: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SkillStatusVisibilityConfig(source);
@@ -114,11 +113,11 @@ export namespace config {
 	        this.pushToAgent = source["pushToAgent"];
 	        this.pullFromAgent = source["pullFromAgent"];
 	        this.starredRepos = source["starredRepos"];
-	        this.githubInstall = source["githubInstall"];
 	    }
 	}
 	export class AppConfig {
 	    skillsStorageDir: string;
+	    autoUpdateSkills: boolean;
 	    autoPushAgents: string[];
 	    launchAtLogin: boolean;
 	    defaultCategory: string;
@@ -138,6 +137,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.skillsStorageDir = source["skillsStorageDir"];
+	        this.autoUpdateSkills = source["autoUpdateSkills"];
 	        this.autoPushAgents = source["autoPushAgents"];
 	        this.launchAtLogin = source["launchAtLogin"];
 	        this.defaultCategory = source["defaultCategory"];
@@ -251,35 +251,6 @@ export namespace git {
 		    }
 		    return a;
 		}
-	}
-
-}
-
-export namespace install {
-	
-	export class SkillCandidate {
-	    Name: string;
-	    Path: string;
-	    LogicalKey: string;
-	    Installed: boolean;
-	    Updatable: boolean;
-	    Pushed: boolean;
-	    PushedAgents: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new SkillCandidate(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Name = source["Name"];
-	        this.Path = source["Path"];
-	        this.LogicalKey = source["LogicalKey"];
-	        this.Installed = source["Installed"];
-	        this.Updatable = source["Updatable"];
-	        this.Pushed = source["Pushed"];
-	        this.PushedAgents = source["PushedAgents"];
-	    }
 	}
 
 }
