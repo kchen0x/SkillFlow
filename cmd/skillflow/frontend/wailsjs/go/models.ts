@@ -432,6 +432,26 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ProxyConnectionTestResult {
+	    targetURL: string;
+	    success: boolean;
+	    statusCode: number;
+	    elapsedMs: number;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProxyConnectionTestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.targetURL = source["targetURL"];
+	        this.success = source["success"];
+	        this.statusCode = source["statusCode"];
+	        this.elapsedMs = source["elapsedMs"];
+	        this.message = source["message"];
+	    }
+	}
 	export class PushConflict {
 	    skillId?: string;
 	    skillName: string;

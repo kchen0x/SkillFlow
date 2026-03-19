@@ -298,6 +298,10 @@ export function SetSkippedUpdateVersion(arg1) {
   return window['go']['main']['App']['SetSkippedUpdateVersion'](arg1);
 }
 
+export function TestProxyConnection(arg1, arg2) {
+  return window['go']['main']['App']['TestProxyConnection'](arg1, arg2);
+}
+
 export function UpdateAllStarredRepos() {
   return window['go']['main']['App']['UpdateAllStarredRepos']();
 }

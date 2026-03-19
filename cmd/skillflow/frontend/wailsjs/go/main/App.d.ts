@@ -156,6 +156,8 @@ export function ScanGitHub(arg1:string):Promise<Array<install.SkillCandidate>>;
 
 export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 
+export function TestProxyConnection(arg1:string,arg2:config.ProxyConfig):Promise<main.ProxyConnectionTestResult>;
+
 export function UpdateAllStarredRepos():Promise<void>;
 
 export function UpdatePrompt(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:Array<string>,arg7:string):Promise<prompt.Prompt>;

@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/shinerio/skillflow/core/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,4 +40,26 @@ func TestDecodeGitHubJSONResponseDecodesSuccessPayload(t *testing.T) {
 	}
 	require.NoError(t, decodeGitHubJSONResponse(resp, &release))
 	assert.Equal(t, "v1.2.3", release.TagName)
+}
+
+func TestProxyHTTPClientSetsResponseHeaderTimeoutForManualProxy(t *testing.T) {
+	dataDir := t.TempDir()
+	svc := config.NewService(dataDir)
+
+	cfg := config.DefaultConfig(dataDir)
+	cfg.Proxy = config.ProxyConfig{
+		Mode: config.ProxyModeManual,
+		URL:  "http://127.0.0.1:7890",
+	}
+	require.NoError(t, svc.Save(cfg))
+
+	app := NewApp()
+	app.config = svc
+
+	client := app.proxyHTTPClient()
+	require.NotNil(t, client)
+
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok)
+	assert.Greater(t, transport.ResponseHeaderTimeout, time.Duration(0))
 }
