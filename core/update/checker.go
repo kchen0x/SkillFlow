@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	coregit "github.com/shinerio/skillflow/core/git"
 	"github.com/shinerio/skillflow/core/skill"
+	"github.com/shinerio/skillflow/core/skillkey"
 )
 
 type CheckResult struct {
@@ -39,8 +41,13 @@ func (c *Checker) Check(ctx context.Context, sk *skill.Skill) (CheckResult, erro
 		return CheckResult{}, nil
 	}
 	owner, repo, subPath := parseSourceURL(sk.SourceURL, sk.SourceSubPath)
-	url := fmt.Sprintf("%s/repos/%s/%s/commits?path=%s&per_page=1", c.baseURL, owner, repo, subPath)
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	reqURL := fmt.Sprintf("%s/repos/%s/%s/commits", c.baseURL, owner, repo)
+	query := url.Values{}
+	query.Set("per_page", "1")
+	if normalized := skillkey.NormalizeRepoSubPath(subPath); normalized != "" && normalized != "." {
+		query.Set("path", normalized)
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", reqURL+"?"+query.Encode(), nil)
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return CheckResult{}, err

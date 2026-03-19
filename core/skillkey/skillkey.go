@@ -58,8 +58,8 @@ func NormalizeRepoSubPath(subPath string) string {
 		return ""
 	}
 	cleaned = strings.TrimPrefix(path.Clean("/"+cleaned), "/")
-	if cleaned == "." {
-		return ""
+	if cleaned == "" {
+		return "."
 	}
 	return cleaned
 }

@@ -16,6 +16,12 @@ func TestGitFromRepoURLNormalizesRemoteAndSubPath(t *testing.T) {
 	assert.Equal(t, "git:github.com/openai/skills#skills/my-skill", key)
 }
 
+func TestGitFromRepoURLSupportsRepoRootSkill(t *testing.T) {
+	key, err := skillkey.GitFromRepoURL("https://github.com/OpenAI/Skills", ".")
+	require.NoError(t, err)
+	assert.Equal(t, "git:github.com/openai/skills#.", key)
+}
+
 func TestContentFromDirIsStableAcrossLocations(t *testing.T) {
 	left := t.TempDir()
 	right := t.TempDir()
