@@ -55,101 +55,101 @@
 }
 
 [data-theme="young"] {
-  --bg-base: #f4f8fd;
-  --bg-surface: #edf3fb;
+  --bg-base: #f2f6fc;
+  --bg-surface: #e6eef8;
   --bg-elevated: #ffffff;
-  --bg-overlay: #e3ebf5;
-  --bg-hover: rgba(93, 130, 180, 0.055);
+  --bg-overlay: #d8e3f0;
+  --bg-hover: rgba(67, 94, 131, 0.08);
 
-  --text-primary: #28415d;
-  --text-secondary: #48617b;
-  --text-muted: #7e93ab;
-  --text-disabled: #a8b6c7;
+  --text-primary: #203854;
+  --text-secondary: #3a5574;
+  --text-muted: #586f8a;
+  --text-disabled: #7f93a9;
 
-  --accent-primary: #5d8fd6;
-  --accent-secondary: #6f93c9;
-  --accent-glow: rgba(93, 143, 214, 0.12);
-  --accent-glow-strong: rgba(93, 143, 214, 0.22);
+  --accent-primary: #4c7fc6;
+  --accent-secondary: #3f70b6;
+  --accent-glow: rgba(76, 127, 198, 0.16);
+  --accent-glow-strong: rgba(76, 127, 198, 0.28);
 
-  --btn-primary-bg: #5f87c8;
-  --btn-primary-hover: #5277b2;
+  --btn-primary-bg: #3f71bb;
+  --btn-primary-hover: #355fa0;
 
-  --border-base: rgba(74, 103, 140, 0.11);
-  --border-surface: rgba(74, 103, 140, 0.16);
-  --border-accent: rgba(93, 143, 214, 0.26);
-  --border-accent-glow: rgba(93, 143, 214, 0.56);
+  --border-base: rgba(67, 94, 131, 0.18);
+  --border-surface: rgba(67, 94, 131, 0.24);
+  --border-accent: rgba(76, 127, 198, 0.34);
+  --border-accent-glow: rgba(76, 127, 198, 0.58);
 
   --color-success: #11926f;
   --color-warning: #d48b24;
   --color-error: #d95d5d;
   --color-info: #3b6fd8;
 
-  --shadow-card: 0 14px 34px rgba(107, 132, 169, 0.11);
-  --shadow-dialog: 0 24px 52px rgba(96, 118, 149, 0.16);
+  --shadow-card: 0 14px 34px rgba(76, 101, 140, 0.14);
+  --shadow-dialog: 0 24px 52px rgba(78, 101, 137, 0.2);
 
-  --glow-accent: 0 12px 28px rgba(93, 143, 214, 0.14);
-  --glow-accent-sm: 0 8px 18px rgba(93, 143, 214, 0.12);
-  --glow-btn: 0 12px 24px rgba(95, 135, 200, 0.22);
+  --glow-accent: 0 12px 28px rgba(76, 127, 198, 0.18);
+  --glow-accent-sm: 0 8px 18px rgba(76, 127, 198, 0.15);
+  --glow-btn: 0 12px 24px rgba(63, 113, 187, 0.28);
 
-  --sidebar-border: rgba(96, 126, 171, 0.18);
-  --app-shell: radial-gradient(circle at top right, rgba(147, 197, 253, 0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(251, 191, 36, 0.08), transparent 30%), linear-gradient(180deg, #f7fbff 0%, #eef5fd 52%, #fffdf8 100%);
-  --glass-bg: rgba(255, 255, 255, 0.68);
-  --brand-color: #2c4868;
-  --brand-shadow: 0 8px 18px rgba(133, 158, 196, 0.08);
-  --shell-divider: rgba(93, 143, 214, 0.2);
-  --active-surface: rgba(93, 143, 214, 0.1);
-  --active-text: #3d669f;
-  --active-border: rgba(93, 143, 214, 0.18);
-  --active-shadow: 0 12px 24px rgba(103, 134, 176, 0.12);
+  --sidebar-border: rgba(86, 111, 138, 0.24);
+  --app-shell: radial-gradient(circle at top right, rgba(147, 197, 253, 0.22), transparent 30%), radial-gradient(circle at bottom left, rgba(251, 191, 36, 0.1), transparent 32%), linear-gradient(180deg, #f6faff 0%, #edf4fc 52%, #fffdf8 100%);
+  --glass-bg: rgba(255, 255, 255, 0.84);
+  --brand-color: #24415f;
+  --brand-shadow: 0 8px 18px rgba(118, 144, 182, 0.12);
+  --shell-divider: rgba(76, 127, 198, 0.26);
+  --active-surface: rgba(76, 127, 198, 0.18);
+  --active-text: #214c86;
+  --active-border: rgba(76, 127, 198, 0.38);
+  --active-shadow: 0 12px 24px rgba(88, 115, 157, 0.16);
 }
 
 [data-theme="light"] {
-  --bg-base: #f5f6f8;
-  --bg-surface: #eef0f3;
+  --bg-base: #f3f5f9;
+  --bg-surface: #e7ebf2;
   --bg-elevated: #ffffff;
-  --bg-overlay: #e3e8ef;
-  --bg-hover: rgba(15, 23, 42, 0.04);
+  --bg-overlay: #d8e0ea;
+  --bg-hover: rgba(15, 23, 42, 0.06);
 
-  --text-primary: #1f2937;
-  --text-secondary: #4b5563;
-  --text-muted: #7c8798;
-  --text-disabled: #a0aec0;
+  --text-primary: #172434;
+  --text-secondary: #364152;
+  --text-muted: #59687b;
+  --text-disabled: #7d8b9c;
 
-  --accent-primary: #2d6df6;
-  --accent-secondary: #1d4ed8;
-  --accent-glow: rgba(45, 109, 246, 0.12);
-  --accent-glow-strong: rgba(45, 109, 246, 0.24);
+  --accent-primary: #1f5ce0;
+  --accent-secondary: #1848b3;
+  --accent-glow: rgba(20, 85, 217, 0.16);
+  --accent-glow-strong: rgba(20, 85, 217, 0.28);
 
-  --btn-primary-bg: #1f6bff;
-  --btn-primary-hover: #1858d6;
+  --btn-primary-bg: #1455d9;
+  --btn-primary-hover: #0f48bd;
 
-  --border-base: rgba(15, 23, 42, 0.08);
-  --border-surface: rgba(15, 23, 42, 0.12);
-  --border-accent: rgba(45, 109, 246, 0.35);
-  --border-accent-glow: rgba(45, 109, 246, 0.7);
+  --border-base: rgba(15, 23, 42, 0.12);
+  --border-surface: rgba(15, 23, 42, 0.18);
+  --border-accent: rgba(20, 85, 217, 0.4);
+  --border-accent-glow: rgba(20, 85, 217, 0.68);
 
   --color-success: #0f9f75;
   --color-warning: #d97706;
   --color-error: #dc2626;
   --color-info: #2563eb;
 
-  --shadow-card: 0 12px 30px rgba(144, 154, 173, 0.16);
-  --shadow-dialog: 0 26px 60px rgba(126, 136, 158, 0.22);
+  --shadow-card: 0 12px 30px rgba(116, 129, 152, 0.18);
+  --shadow-dialog: 0 26px 60px rgba(102, 116, 141, 0.24);
 
-  --glow-accent: 0 0 16px rgba(45, 109, 246, 0.18);
-  --glow-accent-sm: 0 0 10px rgba(45, 109, 246, 0.14);
-  --glow-btn: 0 10px 24px rgba(45, 109, 246, 0.24);
+  --glow-accent: 0 0 16px rgba(20, 85, 217, 0.22);
+  --glow-accent-sm: 0 0 10px rgba(20, 85, 217, 0.18);
+  --glow-btn: 0 10px 24px rgba(20, 85, 217, 0.28);
 
-  --sidebar-border: rgba(28, 47, 86, 0.08);
-  --app-shell: linear-gradient(180deg, #f7f8fb 0%, #eef1f6 100%);
-  --glass-bg: rgba(255, 255, 255, 0.82);
-  --brand-color: #243041;
-  --brand-shadow: 0 10px 22px rgba(45, 109, 246, 0.08);
-  --shell-divider: rgba(45, 109, 246, 0.18);
-  --active-surface: rgba(45, 109, 246, 0.09);
-  --active-text: #234a9c;
-  --active-border: rgba(45, 109, 246, 0.18);
-  --active-shadow: 0 12px 24px rgba(45, 109, 246, 0.12);
+  --sidebar-border: rgba(23, 36, 52, 0.12);
+  --app-shell: linear-gradient(180deg, #f7f9fc 0%, #edf1f7 100%);
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --brand-color: #1d2a3c;
+  --brand-shadow: 0 10px 22px rgba(20, 85, 217, 0.12);
+  --shell-divider: rgba(20, 85, 217, 0.22);
+  --active-surface: rgba(20, 85, 217, 0.14);
+  --active-text: #143d88;
+  --active-border: rgba(20, 85, 217, 0.32);
+  --active-shadow: 0 12px 24px rgba(20, 85, 217, 0.16);
 }
 
 /* ===== Global Utility Classes ===== */
