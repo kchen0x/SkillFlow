@@ -538,6 +538,12 @@ Proxy settings for all remote operations (repo scan, GitHub install, repo-cache 
 
 When Manual is selected, a URL input appears with format hint. Proxy settings are persisted in `config_local.json`, so manual proxy values survive restart and are not included in backup/git sync.
 
+- A dedicated **Test Connection** block lets users verify proxy reachability without saving first.
+- The target URL input defaults to `https://github.com`, but users can replace it with any `http` / `https` URL.
+- The test uses the current in-memory proxy form state, so unsaved edits are honored immediately; if nothing changed, that state naturally matches the saved config.
+- Each test enforces a **5-second timeout** and shows inline feedback with target URL, elapsed time, and either the received HTTP status or the transport error message.
+- Receiving an HTTP response still counts as successful connectivity even when the status code is not `2xx` (for example `301` or `403`).
+
 ### Save Button
 
 - **"Save Settings"** — `SaveConfig(cfg)`; disabled while saving.

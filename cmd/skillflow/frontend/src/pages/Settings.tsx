@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { GetConfig, SaveConfig, ListCloudProviders, AddCustomAgent, RemoveCustomAgent, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir } from '../../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, ListCloudProviders, AddCustomAgent, RemoveCustomAgent, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir, TestProxyConnection } from '../../wailsjs/go/main/App'
 import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star, Github } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
@@ -14,6 +14,7 @@ import {
   type SkillStatusKey,
   type SkillStatusPageKey,
 } from '../lib/skillStatusVisibility'
+import { DEFAULT_PROXY_TEST_URL, buildProxyConnectionPayload } from '../lib/proxyConnection'
 
 type Tab = 'agents' | 'cloud' | 'general' | 'network'
 type ProxyMode = 'none' | 'system' | 'manual'
@@ -415,6 +416,9 @@ export default function SettingsPage() {
   const [logDir, setLogDir] = useState('')
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateResult, setUpdateResult] = useState<string | null>(null)
+  const [proxyTestURL, setProxyTestURL] = useState(DEFAULT_PROXY_TEST_URL)
+  const [testingProxy, setTestingProxy] = useState(false)
+  const [proxyTestResult, setProxyTestResult] = useState<{ tone: 'success' | 'error', text: string } | null>(null)
   const cfgRef = useRef<any>(null)
   const savingRef = useRef(false)
 
@@ -506,6 +510,45 @@ export default function SettingsPage() {
       setUpdateResult(t('settings.updateFailed', { msg: e?.message ?? String(e) }))
     } finally {
       setCheckingUpdate(false)
+    }
+  }
+
+  const testProxyConnection = async () => {
+    const payload = buildProxyConnectionPayload(proxyTestURL, cfg?.proxy)
+    setTestingProxy(true)
+    setProxyTestResult(null)
+    try {
+      const result = await TestProxyConnection(payload.targetURL, payload.proxy)
+      if (result.success) {
+        setProxyTestResult({
+          tone: 'success',
+          text: t('settings.proxyTestSuccess', {
+            url: result.targetURL,
+            status: String(result.statusCode),
+            ms: String(result.elapsedMs),
+          }),
+        })
+      } else {
+        setProxyTestResult({
+          tone: 'error',
+          text: t('settings.proxyTestFailure', {
+            url: result.targetURL,
+            msg: result.message,
+            ms: String(result.elapsedMs),
+          }),
+        })
+      }
+    } catch (e: any) {
+      setProxyTestResult({
+        tone: 'error',
+        text: t('settings.proxyTestFailure', {
+          url: payload.targetURL,
+          msg: e?.message ?? String(e),
+          ms: '0',
+        }),
+      })
+    } finally {
+      setTestingProxy(false)
     }
   }
 
@@ -1214,6 +1257,49 @@ export default function SettingsPage() {
               </p>
             </div>
           )}
+
+          <div
+            className="rounded-xl p-4 space-y-3"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-base)' }}
+          >
+            <div>
+              <p className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>{t('settings.proxyTestTitle')}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.proxyTestHint')}</p>
+            </div>
+            <div>
+              <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.proxyTestUrl')}</p>
+              <input
+                value={proxyTestURL}
+                onChange={e => setProxyTestURL(e.target.value)}
+                placeholder={DEFAULT_PROXY_TEST_URL}
+                className="input-base font-mono"
+              />
+              <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                {t('settings.proxyTestUrlHint')}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={testProxyConnection}
+                disabled={testingProxy || !cfg}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-50"
+                style={{ background: 'var(--bg-overlay)', color: 'var(--text-primary)', border: '1px solid var(--border-base)' }}
+              >
+                <RefreshCw size={12} className={testingProxy ? 'animate-spin' : ''} />
+                {testingProxy ? t('settings.proxyTesting') : t('settings.proxyTestAction')}
+              </button>
+              {proxyTestResult && (
+                <span
+                  className="text-xs"
+                  style={proxyTestResult.tone === 'success'
+                    ? { color: 'var(--success)' }
+                    : { color: 'var(--danger)' }}
+                >
+                  {proxyTestResult.text}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

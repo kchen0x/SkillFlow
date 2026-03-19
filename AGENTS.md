@@ -87,7 +87,7 @@ All other documentation lives under `docs/`:
 |------|---------------|
 | `docs/features.md` | Add / edit / remove the corresponding section(s) in English. Update the "Last updated" date at the bottom. |
 | `docs/features_zh.md` | Same changes in Chinese. Update the "最后更新" date at the bottom. |
-| `README.md` | Update the Features table row(s) if the high-level description changes. |
+| `README.md` | Update only when the high-level description changes or an existing Highlights row needs a coarse-grained capability update. |
 | `README_zh.md` | Same in Chinese. |
 
 **Rules:**
@@ -96,6 +96,7 @@ All other documentation lives under `docs/`:
 - Do **not** leave the docs stale. Never commit a feature change without the corresponding doc update in the same commit.
 - `docs/features.md` / `docs/features_zh.md` are the source of truth for UX details, but only for meaningful UX/feature behavior. Do not churn them for low-signal presentation-only edits unless the user explicitly asks.
 - `README.md` / `README_zh.md` must stay high-level and only describe coarse-grained product capabilities. Avoid adding small UI wording/layout details that increase reading burden.
+- Small user-facing helpers inside existing flows, narrow diagnostics, settings-page utilities, and similarly scoped UX additions should normally update `docs/features.md` / `docs/features_zh.md` only, and should **not** touch `README.md` / `README_zh.md` unless they materially change a top-level product capability.
 - If a frontend/backend feature change also changes architecture, module boundaries, cross-module contracts, core data flow, persistence model, or extension points, update `docs/architecture.md` in the same commit. When the Chinese architecture doc is being maintained in parallel, update `docs/architecture_zh.md` as well.
 - If a change needs detailed module-level design or implementation documentation, create or update files under a coarse-grained module folder in `docs/` such as `docs/<module>/...` instead of adding more root-level markdown files. Keep module categories broad and stable; do not create many small folders for individual pages, components, or one-off tweaks.
 
