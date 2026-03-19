@@ -17,15 +17,21 @@ function isTheme(value: string | null): value is Theme {
   return value !== null && THEMES.includes(value as Theme)
 }
 
-function getInitialTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY)
+type ThemeStorage = Pick<Storage, 'getItem'>
+
+export function resolveInitialThemeFromStorage(storage: ThemeStorage): Theme {
+  const stored = storage.getItem(STORAGE_KEY)
   if (isTheme(stored)) return stored
 
-  const legacyStored = localStorage.getItem(LEGACY_STORAGE_KEY)
+  const legacyStored = storage.getItem(LEGACY_STORAGE_KEY)
   if (legacyStored === 'light') return 'young'
   if (legacyStored === 'dark') return 'dark'
 
-  return 'dark'
+  return 'young'
+}
+
+function getInitialTheme(): Theme {
+  return resolveInitialThemeFromStorage(localStorage)
 }
 
 export function getNextTheme(theme: Theme): Theme {

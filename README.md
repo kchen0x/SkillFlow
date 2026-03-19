@@ -41,7 +41,7 @@ Get the latest release from **[GitHub Releases →](https://github.com/shinerio/
 | **Starred Repos** | Watch Git repos, browse their skills, and import or push them without installing everything into My Skills first. |
 | **Cloud Backup** | Back up skills, prompts, and sync-safe metadata to object storage providers or Git, while keeping secrets and high-churn local runtime metadata on-device only. |
 | **Update Detection** | Check GitHub-sourced skills for newer commits and update installed copies from the app, with per-skill spinner feedback and a top-of-page status banner for success or failure, including push-dir refresh and auto-push target overwrite to keep selected agents current. |
-| **Desktop Experience** | Bilingual UI, multiple themes, helper-backed tray/menu bar reopen after window close, launch-at-login, per-agent settings, and background route-memory trimming when a hidden window stays inactive. |
+| **Desktop Experience** | Bilingual UI, multiple themes with Young as the default, helper-backed tray/menu bar reopen after window close, launch-at-login, per-agent settings, and background route-memory trimming when a hidden window stays inactive. |
 
 For the complete UI/UX reference, including cloud backup behavior and provider details, see **[docs/features.md](docs/features.md)**.
 
