@@ -74,7 +74,7 @@ function contrastRatio(firstColor, secondColor) {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-for (const themeName of ['young', 'light']) {
+for (const themeName of ['dark', 'young', 'light']) {
   test(`${themeName} theme keeps text, button, and surface contrast above the accessibility floor`, () => {
     const vars = getThemeVars(themeName)
     const bgBase = parseColor(vars['bg-base'])
@@ -117,3 +117,13 @@ for (const themeName of ['young', 'light']) {
     )
   })
 }
+
+test('dark theme removes glow-heavy emphasis tokens in favor of flat contrast', () => {
+  const vars = getThemeVars('dark')
+
+  assert.equal(vars['glow-accent'], 'none')
+  assert.equal(vars['glow-accent-sm'], 'none')
+  assert.equal(vars['glow-btn'], 'none')
+  assert.equal(vars['active-shadow'], 'none')
+  assert.equal(vars['brand-shadow'], 'none')
+})

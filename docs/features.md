@@ -70,13 +70,14 @@ Central library for managing your skill collection.
 | **Update** (RefreshCw) | Calls backend `CheckUpdates()`; groups installed Git-backed skills by normalized repo source + subpath, compares installed `SourceSHA` against the same subpath inside the local repo cache, refreshes `LatestSHA` (synced) and `LastCheckedAt` (local-only), marks updatable cards with a red dot and Update action, and clears stale markers when an installed instance is already current. This checks only — it does not overwrite local files by itself |
 | **Batch Delete** (CheckSquare) | Toggles multi-select mode |
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
-| **Auto Update** (RefreshCw) | Toggles local-only automatic updates for matching installed git-backed skills after startup or manual starred-repo refresh; uses the same toolbar button slot and primary styling that previously opened remote install |
+| **Auto Update** (ToggleLeft / ToggleRight) | Uses a clear on/off state button in the old remote-install slot: when auto update is off, the control shows a muted "Turn Auto Update On" action; when it is on, it switches to a highlighted "Turn Auto Update Off" action. Successful toggles show a confirmation notice, and enabled state keeps the same local-only automatic update behavior after startup or manual starred-repo refresh |
 
 ### Auto Push Targets
 
 - A compact single-row strip under the toolbar shows the **Auto Push Targets** title and agent chips together, using the same icon-chip selection style as **Push to Agents**.
 - The selection is persisted locally on the current device and reused for future imports into **My Skills**.
 - The toolbar **Auto Update** toggle is also persisted locally on the current device, alongside the auto-push target selection.
+- The button now exposes the next action instead of a static label, and also uses left/right toggle icons plus contrastful styling so the current state is visible before you click it.
 - Turning an agent on here immediately backfills the current library to that agent, so existing My Skills entries are pushed right away instead of waiting for the next import.
 - Any newly added skill in **My Skills** is automatically copied to the selected agents after the library import succeeds. This applies to local folder import, Pull from Agents, and Starred Repo import.
 - If a cloud restore brings skills onto the current device, SkillFlow auto-pushes any newly restored or newly updated library skills to the selected agents on this device.
