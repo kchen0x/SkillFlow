@@ -37,4 +37,4 @@ Notes:
 | `make generate` | Regenerate Wails TypeScript bindings |
 | `make clean` | Remove build artifacts |
 
-For contributor-facing internals, see **[architecture.md](docs/architecture.md)**.
+For contributor-facing internals, see **[docs/architecture/README.md](docs/architecture/README.md)**.

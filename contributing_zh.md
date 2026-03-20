@@ -37,4 +37,4 @@ make build-cloud PROVIDERS="aws,google"
 | `make generate` | 重新生成 Wails TypeScript 绑定 |
 | `make clean` | 清理构建产物 |
 
-面向贡献者的内部说明请查阅 **[architecture_zh.md](docs/architecture_zh.md)**。
+面向贡献者的内部说明请查阅 **[docs/architecture/README_zh.md](docs/architecture/README_zh.md)**。
