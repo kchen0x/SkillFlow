@@ -213,6 +213,20 @@ jobs:
           name: skillflow-checksum-${{ matrix.name }}
           path: cmd/skillflow/build/bin/SkillFlow-${{ matrix.name }}.dmg.sha256
 
+      - name: Generate Windows checksum
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $hash = (Get-FileHash 'cmd/skillflow/build/bin/SkillFlow.exe' -Algorithm SHA256).Hash.ToLower()
+          "$hash  SkillFlow-windows.exe" | Set-Content -Path 'cmd/skillflow/build/bin/SkillFlow-windows.exe.sha256' -NoNewline
+
+      - name: Upload Windows checksum
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: skillflow-checksum-windows
+          path: cmd/skillflow/build/bin/SkillFlow-windows.exe.sha256
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -238,8 +252,10 @@ jobs:
       - name: Validate build checksums before release
         run: |
           set -euo pipefail
+          cp dist/skillflow-checksum-windows/SkillFlow-windows.exe.sha256 dist/
           cp dist/skillflow-checksum-macos-intel/SkillFlow-macos-intel.dmg.sha256 dist/skillflow-macos-intel/
           cp dist/skillflow-checksum-macos-apple-silicon/SkillFlow-macos-apple-silicon.dmg.sha256 dist/skillflow-macos-apple-silicon/
+          (cd dist && sha256sum -c SkillFlow-windows.exe.sha256)
           (cd dist/skillflow-macos-intel && sha256sum -c SkillFlow-macos-intel.dmg.sha256)
           (cd dist/skillflow-macos-apple-silicon && sha256sum -c SkillFlow-macos-apple-silicon.dmg.sha256)
 
@@ -248,6 +264,7 @@ jobs:
         with:
           name: skillflow-release-checksums
           path: |
+            dist/SkillFlow-windows.exe.sha256
             dist/skillflow-checksum-macos-intel/SkillFlow-macos-intel.dmg.sha256
             dist/skillflow-checksum-macos-apple-silicon/SkillFlow-macos-apple-silicon.dmg.sha256
 
@@ -261,6 +278,7 @@ jobs:
             dist/skillflow-macos-intel/SkillFlow-macos-intel.dmg
             dist/skillflow-macos-apple-silicon/SkillFlow-macos-apple-silicon.dmg
             dist/SkillFlow-windows.exe
+            dist/SkillFlow-windows.exe.sha256
           generate_release_notes: true
 
       - name: Release download guidance
