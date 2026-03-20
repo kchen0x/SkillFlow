@@ -33,8 +33,6 @@ export const en = {
   'common.updatable': 'Update available',
   'common.pushedToTools': 'Pushed to {tools}',
   'common.pushedToAgents': 'Pushed to {agents}',
-  'app.backgroundTrimTitle': 'Background memory trim active',
-  'app.backgroundTrimDesc': 'Current page data will reload automatically when the window becomes active again.',
   'update.newVersion': 'Update Available',
   'update.ready': 'Ready to Restart',
   'update.failed': 'Download Failed',

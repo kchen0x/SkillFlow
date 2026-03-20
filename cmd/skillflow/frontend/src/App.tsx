@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useReducer, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes, NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, FolderOpen, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench, Palette, Languages, FileText } from 'lucide-react'
@@ -14,7 +14,6 @@ import { THEME_LABELS, getNextTheme } from './hooks/useTheme'
 import AnimatedDialog from './components/ui/AnimatedDialog'
 import { pageVariants } from './lib/motionVariants'
 import { subscribeToEvents } from './lib/wailsEvents'
-import { BACKGROUND_MEMORY_TRIM_DELAY_MS, createAppActivityState, reduceAppActivityState } from './lib/appActivity'
 
 type UpdateDialogState = 'idle' | 'available' | 'downloading' | 'ready_to_restart' | 'download_failed'
 
@@ -50,38 +49,11 @@ function parseAppUpdatePayload(data: unknown): main.AppUpdateInfo {
   return main.AppUpdateInfo.createFrom(data)
 }
 
-function parseWindowVisibilityPayload(data: unknown): boolean {
-  if (typeof data === 'boolean') return data
-  if (typeof data === 'string') {
-    try {
-      const parsed = JSON.parse(data)
-      if (typeof parsed === 'boolean') return parsed
-      if (parsed && typeof parsed === 'object' && typeof parsed.visible === 'boolean') {
-        return parsed.visible
-      }
-    } catch {
-      return data === 'true'
-    }
-  }
-  if (data && typeof data === 'object' && typeof (data as any).visible === 'boolean') {
-    return (data as any).visible
-  }
-  return true
-}
-
 function AppContent() {
   const { t, lang, setLang } = useLanguage()
   const { theme, cycleTheme } = useThemeContext()
   const [dialogState, setDialogState] = useState<UpdateDialogState>('idle')
   const [updateInfo, setUpdateInfo] = useState<main.AppUpdateInfo | null>(null)
-  const [activity, dispatchActivity] = useReducer(
-    reduceAppActivityState,
-    undefined,
-    () => createAppActivityState({
-      documentVisible: typeof document === 'undefined' ? true : document.visibilityState === 'visible',
-      focused: typeof document === 'undefined' ? true : document.hasFocus(),
-    }),
-  )
 
   const [conflictOpen, setConflictOpen] = useState(false)
   const [conflictInfo, setConflictInfo] = useState<GitConflictInfo>({ message: '', files: [] })
@@ -128,54 +100,11 @@ function AppContent() {
         setResolveError('')
         setConflictOpen(true)
       }],
-      ['app.window.visibility.changed', (data: unknown) => {
-        dispatchActivity({
-          type: 'window_visibility_changed',
-          visible: parseWindowVisibilityPayload(data),
-        })
-      }],
     ])
     GetGitConflictPending().then(pending => { if (pending) setConflictOpen(true) })
 
     return cleanup
   }, [])
-
-  useEffect(() => {
-    const handleFocus = () => {
-      dispatchActivity({ type: 'focus_changed', focused: true })
-    }
-    const handleBlur = () => {
-      dispatchActivity({ type: 'focus_changed', focused: false })
-    }
-    const handleVisibilityChange = () => {
-      dispatchActivity({
-        type: 'document_visibility_changed',
-        visible: document.visibilityState === 'visible',
-      })
-    }
-
-    window.addEventListener('focus', handleFocus)
-    window.addEventListener('blur', handleBlur)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('blur', handleBlur)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!activity.trimScheduled) return
-
-    const timer = window.setTimeout(() => {
-      dispatchActivity({ type: 'trim_timeout_elapsed' })
-    }, BACKGROUND_MEMORY_TRIM_DELAY_MS)
-
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [activity.trimScheduled])
 
   const handleDownload = () => {
     if (!updateInfo?.downloadUrl) return
@@ -372,37 +301,20 @@ function AppContent() {
 
         {/* Main content with page transitions */}
         <main className="flex-1 overflow-auto relative">
-          {activity.trimmed ? <BackgroundTrimPlaceholder /> : <AnimatedRoutes resumeToken={activity.resumeToken} />}
+          <AnimatedRoutes />
         </main>
       </div>
     </div>
   )
 }
 
-function BackgroundTrimPlaceholder() {
-  const { t } = useLanguage()
-
-  return (
-    <div className="flex h-full items-center justify-center px-6 text-center">
-      <div>
-        <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-          {t('app.backgroundTrimTitle')}
-        </p>
-        <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-          {t('app.backgroundTrimDesc')}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function AnimatedRoutes({ resumeToken }: { resumeToken: number }) {
+function AnimatedRoutes() {
   const location = useLocation()
   const { t } = useLanguage()
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={`${location.pathname}:${resumeToken}`}
+        key={location.pathname}
         variants={pageVariants}
         initial="initial"
         animate="animate"

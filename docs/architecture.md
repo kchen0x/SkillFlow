@@ -462,11 +462,7 @@ Key frontend areas:
 - `src/lib/` — shared list/search/clipboard/state helpers
 - `tests/` — frontend unit tests run outside the Wails build
 
-`App.tsx` also owns the app-activity state machine:
-
-- backend hide/show signals and browser focus/visibility are merged into one foreground/background model
-- after roughly 30 seconds in the background, the routed page subtree is unmounted to release page-local arrays and prompt content
-- when the window becomes active again, the current route mounts from scratch and reloads fresh data
+`App.tsx` owns the shell-level route transition behavior and keeps the routed page subtree mounted while the desktop window moves between hidden/background and foreground states. React route transitions still key off `location.pathname`, so navigating to another page remounts that page, but simply reactivating the window no longer swaps in a placeholder screen or forces the current route to reload.
 
 Frontend code imports backend methods from the generated Wails module, for example:
 
