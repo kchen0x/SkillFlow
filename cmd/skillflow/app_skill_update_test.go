@@ -10,7 +10,9 @@ import (
 
 	"github.com/shinerio/skillflow/core/config"
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +22,7 @@ func TestCheckUpdatesUsesLocalCacheSHA(t *testing.T) {
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
 	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
 
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
 	require.NoError(t, err)
 	sk.SourceSHA = oldSHA
 	sk.LatestSHA = ""
@@ -40,13 +42,13 @@ func TestUpdateSkillRefreshesExistingPushedCopiesFromLocalCache(t *testing.T) {
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
 	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
 
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
 	require.NoError(t, err)
 	sk.SourceSHA = oldSHA
 	sk.LatestSHA = newSHA
 	require.NoError(t, app.storage.UpdateMeta(sk))
 
-	app.autoPushImportedSkillsToAgents("test.setup", []*skill.Skill{sk})
+	app.autoPushImportedSkillsToAgents("test.setup", []*skilldomain.InstalledSkill{sk})
 	conflicts, err := app.PushToAgents([]string{sk.ID}, []string{"claude-code"})
 	require.NoError(t, err)
 	require.Empty(t, conflicts)
@@ -74,7 +76,7 @@ func TestUpdateSkillAutoPushesToSelectedAgentsWhenMissing(t *testing.T) {
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
 	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
 
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
 	require.NoError(t, err)
 	sk.SourceSHA = oldSHA
 	sk.LatestSHA = newSHA
@@ -92,7 +94,7 @@ func TestUpdateSkillAutoPushOverwritesSelectedAgentSkill(t *testing.T) {
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
 	_, oldSHA, newSHA := seedCachedSkillRepo(t, dataDir, "https://github.com/octo/demo", "skills/demo-skill", "# Demo\nOld\n", "# Demo\nNew\n")
 
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
 	require.NoError(t, err)
 	sk.SourceSHA = oldSHA
 	sk.LatestSHA = newSHA
@@ -110,7 +112,7 @@ func TestUpdateSkillFailsWhenLocalCacheMissing(t *testing.T) {
 	app, _, _, _ := newUpdateSkillTestApp(t)
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nOld\n")
 
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceGitHub, "https://github.com/octo/demo", "skills/demo-skill")
 	require.NoError(t, err)
 
 	err = app.UpdateSkill(sk.ID)
@@ -225,7 +227,7 @@ func newUpdateSkillTestApp(t *testing.T) (*App, string, string, string) {
 
 	app := NewApp()
 	app.config = svc
-	app.storage = skill.NewStorage(skillsDir)
+	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = filepath.Join(dataDir, "cache")
 	return app, codexPushDir, claudePushDir, dataDir
 }
@@ -234,7 +236,7 @@ type starredRepoAutoUpdateFixture struct {
 	repoURL       string
 	skillSubPath  string
 	remoteRepoDir string
-	skill         *skill.Skill
+	skill         *skilldomain.InstalledSkill
 	oldSHA        string
 }
 
@@ -258,7 +260,7 @@ func setupStarredRepoAutoUpdateFixture(t *testing.T, app *App, dataDir, repoURL,
 	require.NoError(t, coregit.CloneOrUpdate(context.Background(), remoteRepoDir, cacheDir, ""))
 
 	sourceDir := writeTestSkillDir(t, t.TempDir(), filepath.Base(filepath.FromSlash(skillSubPath)), oldContent)
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceGitHub, repoURL, skillSubPath)
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceGitHub, repoURL, skillSubPath)
 	require.NoError(t, err)
 	sk.SourceSHA = oldSHA
 	sk.LatestSHA = ""

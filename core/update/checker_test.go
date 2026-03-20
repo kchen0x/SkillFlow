@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/shinerio/skillflow/core/skill"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/update"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,8 +20,8 @@ func TestCheckerDetectsUpdate(t *testing.T) {
 	defer srv.Close()
 
 	checker := update.NewChecker(srv.URL, nil)
-	sk := &skill.Skill{
-		Source:        skill.SourceGitHub,
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
 		SourceURL:     "https://github.com/user/repo",
 		SourceSubPath: "skills/skill-a",
 		SourceSHA:     "oldsha456",
@@ -39,8 +39,8 @@ func TestCheckerNoUpdateWhenSHAMatches(t *testing.T) {
 	defer srv.Close()
 
 	checker := update.NewChecker(srv.URL, nil)
-	sk := &skill.Skill{
-		Source:    skill.SourceGitHub,
+	sk := &skilldomain.InstalledSkill{
+		Source:    skilldomain.SourceGitHub,
 		SourceSHA: "sameSHA",
 	}
 	result, err := checker.Check(context.Background(), sk)
@@ -57,8 +57,8 @@ func TestCheckerSupportsSSHSourceURL(t *testing.T) {
 	defer srv.Close()
 
 	checker := update.NewChecker(srv.URL, nil)
-	sk := &skill.Skill{
-		Source:        skill.SourceGitHub,
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
 		SourceURL:     "git@github.com:user/repo.git",
 		SourceSubPath: "skills/skill-a",
 		SourceSHA:     "oldsha",
@@ -79,8 +79,8 @@ func TestCheckerOmitsPathFilterForRepoRootSkill(t *testing.T) {
 	defer srv.Close()
 
 	checker := update.NewChecker(srv.URL, nil)
-	sk := &skill.Skill{
-		Source:        skill.SourceGitHub,
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
 		SourceURL:     "https://github.com/user/repo",
 		SourceSubPath: ".",
 		SourceSHA:     "oldsha",
@@ -101,8 +101,8 @@ func TestCheckerReturnsGitHubStatusError(t *testing.T) {
 	defer srv.Close()
 
 	checker := update.NewChecker(srv.URL, nil)
-	sk := &skill.Skill{
-		Source:        skill.SourceGitHub,
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
 		SourceURL:     "https://github.com/user/repo",
 		SourceSubPath: "skills/skill-a",
 	}

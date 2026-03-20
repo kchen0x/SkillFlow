@@ -10,7 +10,7 @@ import (
 
 	"github.com/shinerio/skillflow/core/config"
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
 	"github.com/shinerio/skillflow/core/viewstate"
 )
 
@@ -41,7 +41,7 @@ func (a *App) listSkillsUncached() ([]InstalledSkillEntry, error) {
 			sk.Category = defaultCategoryName
 		}
 	}
-	installedIndex := skill.BuildInstalledIndex(skills)
+	installedIndex := skillquery.BuildInstalledIndex(skills)
 	return a.buildInstalledSkillEntries(skills, a.buildAgentPresenceIndex(installedIndex)), nil
 }
 
@@ -123,7 +123,7 @@ func (a *App) allStarSkillsFingerprint() (string, error) {
 	return viewstate.HashFingerprint(installedFingerprint, string(repoData)), nil
 }
 
-func (a *App) buildAgentPresenceSnapshot(cfg config.AppConfig, idx *skill.InstalledIndex) (viewstate.AgentPresenceSnapshot, error) {
+func (a *App) buildAgentPresenceSnapshot(cfg config.AppConfig, idx *skillquery.InstalledIndex) (viewstate.AgentPresenceSnapshot, error) {
 	configFingerprint, err := a.agentPresenceConfigFingerprint(cfg)
 	if err != nil {
 		return viewstate.AgentPresenceSnapshot{}, err

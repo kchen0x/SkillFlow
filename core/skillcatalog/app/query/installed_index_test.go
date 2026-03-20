@@ -1,11 +1,12 @@
-package skill_test
+package query_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/shinerio/skillflow/core/skill"
+	"github.com/shinerio/skillflow/core/skillcatalog/app/query"
+	"github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/skillkey"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,12 +24,12 @@ func TestBuildInstalledIndexResolvesByLogicalKeyBeforeName(t *testing.T) {
 	firstPath := makeDir("same-name-a", "# alpha\n")
 	secondPath := makeDir("same-name-b", "# beta\n")
 
-	skills := []*skill.Skill{
+	skills := []*domain.InstalledSkill{
 		{
 			ID:            "skill-a",
 			Name:          "same-name",
 			Path:          firstPath,
-			Source:        skill.SourceGitHub,
+			Source:        domain.SourceGitHub,
 			SourceURL:     "https://github.com/acme/repo-a",
 			SourceSubPath: "skills/same-name",
 		},
@@ -36,13 +37,13 @@ func TestBuildInstalledIndexResolvesByLogicalKeyBeforeName(t *testing.T) {
 			ID:            "skill-b",
 			Name:          "same-name",
 			Path:          secondPath,
-			Source:        skill.SourceGitHub,
+			Source:        domain.SourceGitHub,
 			SourceURL:     "https://github.com/acme/repo-b",
 			SourceSubPath: "skills/same-name",
 		},
 	}
 
-	idx := skill.BuildInstalledIndex(skills)
+	idx := query.BuildInstalledIndex(skills)
 	status := idx.Resolve("same-name", "git:github.com/acme/repo-b#skills/same-name")
 
 	assert.True(t, status.Installed)
@@ -56,11 +57,11 @@ func TestBuildInstalledIndexFallsBackToUniqueNameWhenLogicalKeyMissing(t *testin
 	require.NoError(t, os.MkdirAll(dir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# alpha\n"), 0644))
 
-	idx := skill.BuildInstalledIndex([]*skill.Skill{{
+	idx := query.BuildInstalledIndex([]*domain.InstalledSkill{{
 		ID:        "manual-1",
 		Name:      "alpha",
 		Path:      dir,
-		Source:    skill.SourceManual,
+		Source:    domain.SourceManual,
 		LatestSHA: "",
 	}})
 
@@ -71,10 +72,10 @@ func TestBuildInstalledIndexFallsBackToUniqueNameWhenLogicalKeyMissing(t *testin
 }
 
 func TestBuildInstalledIndexMarksGroupUpdatable(t *testing.T) {
-	idx := skill.BuildInstalledIndex([]*skill.Skill{{
+	idx := query.BuildInstalledIndex([]*domain.InstalledSkill{{
 		ID:            "git-1",
 		Name:          "alpha",
-		Source:        skill.SourceGitHub,
+		Source:        domain.SourceGitHub,
 		SourceURL:     "https://github.com/acme/repo",
 		SourceSubPath: "skills/alpha",
 		SourceSHA:     "old",
@@ -91,11 +92,11 @@ func TestBuildInstalledIndexIncludesInstalledContentKeys(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# alpha\nLine 2\n"), 0644))
 
-	idx := skill.BuildInstalledIndex([]*skill.Skill{{
+	idx := query.BuildInstalledIndex([]*domain.InstalledSkill{{
 		ID:            "git-1",
 		Name:          "alpha",
 		Path:          dir,
-		Source:        skill.SourceGitHub,
+		Source:        domain.SourceGitHub,
 		SourceURL:     "https://github.com/acme/repo",
 		SourceSubPath: "skills/alpha",
 	}})
@@ -113,11 +114,11 @@ func TestBuildInstalledIndexResolvesGitSkillByContentKey(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "skill.md"), []byte("# alpha\nLine 2\n"), 0644))
 
-	idx := skill.BuildInstalledIndex([]*skill.Skill{{
+	idx := query.BuildInstalledIndex([]*domain.InstalledSkill{{
 		ID:            "git-1",
 		Name:          "alpha",
 		Path:          dir,
-		Source:        skill.SourceGitHub,
+		Source:        domain.SourceGitHub,
 		SourceURL:     "https://github.com/acme/repo",
 		SourceSubPath: "skills/alpha",
 	}})

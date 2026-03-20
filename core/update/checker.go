@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	"github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/skillkey"
 )
 
@@ -36,7 +36,7 @@ func NewChecker(baseURL string, client *http.Client) *Checker {
 	return &Checker{baseURL: baseURL, client: client}
 }
 
-func (c *Checker) Check(ctx context.Context, sk *skill.Skill) (CheckResult, error) {
+func (c *Checker) Check(ctx context.Context, sk *domain.InstalledSkill) (CheckResult, error) {
 	if !sk.IsGitHub() {
 		return CheckResult{}, nil
 	}

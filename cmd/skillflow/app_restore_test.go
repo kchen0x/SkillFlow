@@ -8,7 +8,9 @@ import (
 
 	"github.com/shinerio/skillflow/core/config"
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +20,7 @@ func TestHandleRestoredCloudStateAutoPushesNewlyRestoredSkills(t *testing.T) {
 	before := app.captureCloudRestoreState()
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nRestored\n")
 
-	_, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceManual, "", "")
+	_, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceManual, "", "")
 	require.NoError(t, err)
 
 	require.NoError(t, app.handleRestoredCloudState(before, "test.restore"))
@@ -35,10 +37,10 @@ func TestHandleRestoredCloudStateAutoPushesUpdatedExistingSkills(t *testing.T) {
 	app, pushDir, _, _ := newRestoreTestApp(t, []string{"codex"})
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nVersion 1\n")
 
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceManual, "", "")
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceManual, "", "")
 	require.NoError(t, err)
 
-	app.autoPushImportedSkillsToAgents("test.setup", []*skill.Skill{sk})
+	app.autoPushImportedSkillsToAgents("test.setup", []*skilldomain.InstalledSkill{sk})
 	pushPath := filepath.Join(pushDir, "demo-skill", "skill.md")
 	assertFileContentEquals(t, pushPath, "# Demo\nVersion 1\n")
 
@@ -101,7 +103,7 @@ func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, str
 
 	app := NewApp()
 	app.config = svc
-	app.storage = skill.NewStorage(skillsDir)
+	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = filepath.Join(dataDir, "cache")
 	app.starStorage = coregit.NewStarStorage(starsPath)
 	return app, pushDir, skillsDir, starsPath

@@ -1,4 +1,4 @@
-package skill_test
+package repository_test
 
 import (
 	"encoding/json"
@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shinerio/skillflow/core/skill"
+	"github.com/shinerio/skillflow/core/skillcatalog/domain"
+	"github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ func makeTestSkillDir(t *testing.T, baseDir, name string) string {
 	return dir
 }
 
-func writeStoredMeta(t *testing.T, root string, sk skill.Skill) {
+func writeStoredMeta(t *testing.T, root string, sk domain.InstalledSkill) {
 	t.Helper()
 	metaDir := filepath.Join(filepath.Dir(root), "meta")
 	require.NoError(t, os.MkdirAll(metaDir, 0755))
@@ -35,7 +36,7 @@ func readStoredPath(t *testing.T, root, id string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(filepath.Dir(root), "meta", id+".json"))
 	require.NoError(t, err)
-	var stored skill.Skill
+	var stored domain.InstalledSkill
 	require.NoError(t, json.Unmarshal(data, &stored))
 	return stored.Path
 }
@@ -54,9 +55,9 @@ func foreignAbsolutePath() string {
 	return `C:\Users\demo\.skillflow\skills\coding\portable-skill`
 }
 
-func TestStorageListCategories(t *testing.T) {
+func TestFilesystemStorageListCategories(t *testing.T) {
 	root := t.TempDir()
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 	require.NoError(t, svc.CreateCategory("coding"))
 	require.NoError(t, svc.CreateCategory("writing"))
 	cats, err := svc.ListCategories()
@@ -64,44 +65,43 @@ func TestStorageListCategories(t *testing.T) {
 	assert.ElementsMatch(t, []string{"coding", "writing"}, cats)
 }
 
-func TestStorageImportSkill(t *testing.T) {
+func TestFilesystemStorageImportSkill(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "skills")
 	require.NoError(t, os.MkdirAll(root, 0755))
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "my-skill")
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 
-	imported, err := svc.Import(skillDir, "coding", skill.SourceManual, "", "")
+	imported, err := svc.Import(skillDir, "coding", domain.SourceManual, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "my-skill", imported.Name)
 	assert.Equal(t, "coding", imported.Category)
 
-	// verify directory was copied
 	_, err = os.Stat(filepath.Join(root, "coding", "my-skill", "skill.md"))
 	assert.NoError(t, err)
 	assert.Equal(t, "skills/coding/my-skill", readStoredPath(t, root, imported.ID))
 }
 
-func TestStorageConflictDetected(t *testing.T) {
+func TestFilesystemStorageConflictDetected(t *testing.T) {
 	root := t.TempDir()
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "dup-skill")
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 
-	_, err := svc.Import(skillDir, "coding", skill.SourceManual, "", "")
+	_, err := svc.Import(skillDir, "coding", domain.SourceManual, "", "")
 	require.NoError(t, err)
 
-	_, err = svc.Import(skillDir, "coding", skill.SourceManual, "", "")
-	assert.ErrorIs(t, err, skill.ErrSkillExists)
+	_, err = svc.Import(skillDir, "coding", domain.SourceManual, "", "")
+	assert.ErrorIs(t, err, repository.ErrSkillExists)
 }
 
-func TestStorageDeleteSkill(t *testing.T) {
+func TestFilesystemStorageDeleteSkill(t *testing.T) {
 	root := t.TempDir()
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "del-skill")
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 
-	s, err := svc.Import(skillDir, "", skill.SourceManual, "", "")
+	s, err := svc.Import(skillDir, "", domain.SourceManual, "", "")
 	require.NoError(t, err)
 	require.NoError(t, svc.Delete(s.ID))
 
@@ -110,15 +110,15 @@ func TestStorageDeleteSkill(t *testing.T) {
 	assert.Empty(t, skills)
 }
 
-func TestStorageMoveCategory(t *testing.T) {
+func TestFilesystemStorageMoveCategory(t *testing.T) {
 	root := t.TempDir()
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "move-skill")
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 	require.NoError(t, svc.CreateCategory("cat-a"))
 	require.NoError(t, svc.CreateCategory("cat-b"))
 
-	s, err := svc.Import(skillDir, "cat-a", skill.SourceManual, "", "")
+	s, err := svc.Import(skillDir, "cat-a", domain.SourceManual, "", "")
 	require.NoError(t, err)
 
 	err = svc.MoveCategory(s.ID, "cat-b")
@@ -129,9 +129,9 @@ func TestStorageMoveCategory(t *testing.T) {
 	assert.Equal(t, "cat-b", updated.Category)
 }
 
-func TestStorageDeleteEmptyCategory(t *testing.T) {
+func TestFilesystemStorageDeleteEmptyCategory(t *testing.T) {
 	root := t.TempDir()
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 	require.NoError(t, svc.CreateCategory("empty-cat"))
 
 	require.NoError(t, svc.DeleteCategory("empty-cat"))
@@ -139,29 +139,29 @@ func TestStorageDeleteEmptyCategory(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
 
-func TestStorageDeleteCategoryRejectsWhenNotEmpty(t *testing.T) {
+func TestFilesystemStorageDeleteCategoryRejectsWhenNotEmpty(t *testing.T) {
 	root := t.TempDir()
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "busy-skill")
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 	require.NoError(t, svc.CreateCategory("busy-cat"))
-	_, err := svc.Import(skillDir, "busy-cat", skill.SourceManual, "", "")
+	_, err := svc.Import(skillDir, "busy-cat", domain.SourceManual, "", "")
 	require.NoError(t, err)
 
 	err = svc.DeleteCategory("busy-cat")
-	assert.ErrorIs(t, err, skill.ErrCategoryNotEmpty)
+	assert.ErrorIs(t, err, repository.ErrCategoryNotEmpty)
 	_, statErr := os.Stat(filepath.Join(root, "busy-cat"))
 	assert.NoError(t, statErr)
 }
 
-func TestStorageListAllMigratesAbsoluteMetaPath(t *testing.T) {
+func TestFilesystemStorageListAllMigratesAbsoluteMetaPath(t *testing.T) {
 	base := t.TempDir()
 	root := filepath.Join(base, "skills")
 	actual := filepath.Join(root, "coding", "portable-skill")
 	require.NoError(t, os.MkdirAll(actual, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(actual, "skill.md"), []byte("# portable-skill"), 0644))
 
-	stored := skill.Skill{
+	stored := domain.InstalledSkill{
 		ID:       "skill-absolute",
 		Name:     "portable-skill",
 		Category: "coding",
@@ -169,7 +169,7 @@ func TestStorageListAllMigratesAbsoluteMetaPath(t *testing.T) {
 	}
 	writeStoredMeta(t, root, stored)
 
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 	items, err := svc.ListAll()
 	require.NoError(t, err)
 	require.Len(t, items, 1)
@@ -177,14 +177,14 @@ func TestStorageListAllMigratesAbsoluteMetaPath(t *testing.T) {
 	assert.Equal(t, "skills/coding/portable-skill", readStoredPath(t, root, stored.ID))
 }
 
-func TestStorageListAllRecoversFromForeignAbsoluteMetaPath(t *testing.T) {
+func TestFilesystemStorageListAllRecoversFromForeignAbsoluteMetaPath(t *testing.T) {
 	base := t.TempDir()
 	root := filepath.Join(base, "skills")
 	actual := filepath.Join(root, "coding", "portable-skill")
 	require.NoError(t, os.MkdirAll(actual, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(actual, "skill.md"), []byte("# portable-skill"), 0644))
 
-	stored := skill.Skill{
+	stored := domain.InstalledSkill{
 		ID:       "skill-foreign",
 		Name:     "portable-skill",
 		Category: "coding",
@@ -192,7 +192,7 @@ func TestStorageListAllRecoversFromForeignAbsoluteMetaPath(t *testing.T) {
 	}
 	writeStoredMeta(t, root, stored)
 
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 	items, err := svc.ListAll()
 	require.NoError(t, err)
 	require.Len(t, items, 1)
@@ -200,14 +200,14 @@ func TestStorageListAllRecoversFromForeignAbsoluteMetaPath(t *testing.T) {
 	assert.Equal(t, "skills/coding/portable-skill", readStoredPath(t, root, stored.ID))
 }
 
-func TestStorageSaveMetaStoresLastCheckedAtInLocalMetaOnly(t *testing.T) {
+func TestFilesystemStorageSaveMetaStoresLastCheckedAtInLocalMetaOnly(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "skills")
 	require.NoError(t, os.MkdirAll(root, 0755))
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "local-meta-skill")
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 
-	imported, err := svc.Import(skillDir, "coding", skill.SourceGitHub, "https://github.com/example/repo.git", "skills/local-meta-skill")
+	imported, err := svc.Import(skillDir, "coding", domain.SourceGitHub, "https://github.com/example/repo.git", "skills/local-meta-skill")
 	require.NoError(t, err)
 	checkedAt := time.Now().UTC().Truncate(time.Second)
 	imported.LastCheckedAt = checkedAt
@@ -228,14 +228,14 @@ func TestStorageSaveMetaStoresLastCheckedAtInLocalMetaOnly(t *testing.T) {
 	assert.Equal(t, checkedAt, reloaded.LastCheckedAt.UTC().Truncate(time.Second))
 }
 
-func TestStorageDeleteRemovesLocalMeta(t *testing.T) {
+func TestFilesystemStorageDeleteRemovesLocalMeta(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "skills")
 	require.NoError(t, os.MkdirAll(root, 0755))
 	src := t.TempDir()
 	skillDir := makeTestSkillDir(t, src, "delete-local-meta-skill")
-	svc := skill.NewStorage(root)
+	svc := repository.NewFilesystemStorage(root)
 
-	imported, err := svc.Import(skillDir, "coding", skill.SourceGitHub, "https://github.com/example/repo.git", "skills/delete-local-meta-skill")
+	imported, err := svc.Import(skillDir, "coding", domain.SourceGitHub, "https://github.com/example/repo.git", "skills/delete-local-meta-skill")
 	require.NoError(t, err)
 	imported.LastCheckedAt = time.Now().UTC()
 	require.NoError(t, svc.SaveMeta(imported))

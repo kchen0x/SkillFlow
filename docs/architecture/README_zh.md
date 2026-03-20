@@ -44,4 +44,15 @@ SkillFlow 的目标后端架构是一个基于 DDD 的模块化单体：
 
 当前代码尚未完全迁移到这套架构。除非文中明确说明，这组文档描述的是后续重构要收敛到的目标结构。
 
-*最后更新：2026-03-20*
+截至 2026-03-21，已经有两个端到端 bounded context 落地到 `core/` 下：
+
+- `core/skillcatalog/app`
+- `core/skillcatalog/domain`
+- `core/skillcatalog/infra`
+- `core/promptcatalog/app`
+- `core/promptcatalog/domain`
+- `core/promptcatalog/infra`
+
+旧的 `core/skill` 和 `core/prompt` 包已经移除。其余领域与横切模块仍需继续按同样方式迁移。
+
+*最后更新：2026-03-21*

@@ -19,7 +19,9 @@ import (
 	coregit "github.com/shinerio/skillflow/core/git"
 	"github.com/shinerio/skillflow/core/notify"
 	"github.com/shinerio/skillflow/core/registry"
-	"github.com/shinerio/skillflow/core/skill"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/shinerio/skillflow/core/skillkey"
 	agentsync "github.com/shinerio/skillflow/core/sync"
 	"github.com/shinerio/skillflow/core/upgrade"
@@ -28,14 +30,14 @@ import (
 )
 
 type maxDepthPuller interface {
-	PullWithMaxDepth(ctx context.Context, sourceDir string, maxDepth int) ([]*skill.Skill, error)
+	PullWithMaxDepth(ctx context.Context, sourceDir string, maxDepth int) ([]*skilldomain.InstalledSkill, error)
 }
 
 type App struct {
 	ctx                context.Context
 	hub                *notify.Hub
 	sysLog             *applog.Logger
-	storage            *skill.Storage
+	storage            *skillcatalogapp.Service
 	config             *config.Service
 	starStorage        *coregit.StarStorage
 	cacheDir           string
@@ -124,7 +126,7 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
 		a.logErrorf("application startup launch-at-login reconcile failed: %v", err)
 	}
-	a.storage = skill.NewStorage(cfg.SkillsStorageDir)
+	a.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(cfg.SkillsStorageDir))
 	a.cacheDir = filepath.Join(dataDir, "cache")
 	a.viewCache = viewstate.NewManager(filepath.Join(a.cacheDir, "viewstate"))
 	a.starStorage = coregit.NewStarStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
@@ -348,7 +350,7 @@ func (a *App) reloadStateFromDisk() {
 	if err != nil {
 		return
 	}
-	a.storage = skill.NewStorage(cfg.SkillsStorageDir)
+	a.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(cfg.SkillsStorageDir))
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 }
 
@@ -661,7 +663,7 @@ func (a *App) DeleteCategory(name string) error {
 		return err
 	}
 	if err := a.storage.DeleteCategory(name); err != nil {
-		if errors.Is(err, skill.ErrCategoryNotEmpty) {
+		if errors.Is(err, skillrepo.ErrCategoryNotEmpty) {
 			wrapped := fmt.Errorf("分类下仍有 Skill，请先清空后再删除")
 			a.logErrorf("delete category failed: category=%s, err=%v", name, wrapped)
 			return wrapped
@@ -696,17 +698,17 @@ func (a *App) DeleteSkills(skillIDs []string) error {
 	return nil
 }
 
-func (a *App) GetSkillMeta(skillID string) (*skill.SkillMeta, error) {
+func (a *App) GetSkillMeta(skillID string) (*skilldomain.SkillMeta, error) {
 	sk, err := a.storage.Get(skillID)
 	if err != nil {
 		return nil, err
 	}
-	return skill.ReadMeta(sk.Path)
+	return skilldomain.ReadMeta(sk.Path)
 }
 
 // GetSkillMetaByPath reads skill.md frontmatter from a skill directory path (no ID required).
-func (a *App) GetSkillMetaByPath(path string) (*skill.SkillMeta, error) {
-	return skill.ReadMeta(path)
+func (a *App) GetSkillMetaByPath(path string) (*skilldomain.SkillMeta, error) {
+	return skilldomain.ReadMeta(path)
 }
 
 // ReadSkillFileContent returns the full text content of skill.md inside the given skill directory.
@@ -773,7 +775,7 @@ func (a *App) PushStarSkillsToAgents(skillPaths []string, agentNames []string) (
 					})
 					continue
 				}
-				sk := []*skill.Skill{{Name: name, Path: skillPath}}
+				sk := []*skilldomain.InstalledSkill{{Name: name, Path: skillPath}}
 				if err := adapter.Push(a.ctx, sk, agent.PushDir); err != nil {
 					a.logErrorf("push starred skills to agents failed: agent=%s skill=%s err=%v", agentName, name, err)
 					return nil, err
@@ -800,7 +802,7 @@ func (a *App) PushStarSkillsToAgentsForce(skillPaths []string, agentNames []stri
 				a.logErrorf("force push starred skills to agents failed: agent=%s err=%v", agentName, err)
 				return err
 			}
-			var tempSkills []*skill.Skill
+			var tempSkills []*skilldomain.InstalledSkill
 			for _, skillPath := range skillPaths {
 				name := filepath.Base(skillPath)
 				targetPath := filepath.Join(agent.PushDir, name)
@@ -808,7 +810,7 @@ func (a *App) PushStarSkillsToAgentsForce(skillPaths []string, agentNames []stri
 					a.logErrorf("force push starred skills to agents failed: agent=%s target=%s err=%v", agentName, targetPath, err)
 					return err
 				}
-				tempSkills = append(tempSkills, &skill.Skill{Name: name, Path: skillPath})
+				tempSkills = append(tempSkills, &skilldomain.InstalledSkill{Name: name, Path: skillPath})
 			}
 			if err := getAdapter(agent).Push(a.ctx, tempSkills, agent.PushDir); err != nil {
 				a.logErrorf("force push starred skills to agents failed: agent=%s err=%v", agentName, err)
@@ -820,13 +822,13 @@ func (a *App) PushStarSkillsToAgentsForce(skillPaths []string, agentNames []stri
 	return nil
 }
 
-func (a *App) ImportLocal(dir, category string) (*skill.Skill, error) {
+func (a *App) ImportLocal(dir, category string) (*skilldomain.InstalledSkill, error) {
 	category = normalizeCategoryName(category)
-	sk, err := a.storage.Import(dir, category, skill.SourceManual, "", "")
+	sk, err := a.storage.Import(dir, category, skilldomain.SourceManual, "", "")
 	if err != nil {
 		return nil, err
 	}
-	a.autoPushImportedSkillsToAgents("local.import", []*skill.Skill{sk})
+	a.autoPushImportedSkillsToAgents("local.import", []*skilldomain.InstalledSkill{sk})
 	a.scheduleAutoBackup()
 	return sk, nil
 }
@@ -851,11 +853,11 @@ func (a *App) autoPushAgentTargets(cfg config.AppConfig) []config.AgentConfig {
 	return targets
 }
 
-func (a *App) autoPushImportedSkillsToAgents(source string, imported []*skill.Skill) {
+func (a *App) autoPushImportedSkillsToAgents(source string, imported []*skilldomain.InstalledSkill) {
 	a.autoPushSkillsToConfiguredAgents(source, imported, false)
 }
 
-func (a *App) autoPushSkillsToConfiguredAgents(source string, skills []*skill.Skill, overwriteExisting bool) {
+func (a *App) autoPushSkillsToConfiguredAgents(source string, skills []*skilldomain.InstalledSkill, overwriteExisting bool) {
 	if len(skills) == 0 {
 		return
 	}
@@ -882,7 +884,7 @@ func (a *App) autoPushSkillsToConfiguredAgents(source string, skills []*skill.Sk
 			continue
 		}
 
-		toPush := make([]*skill.Skill, 0, len(skills))
+		toPush := make([]*skilldomain.InstalledSkill, 0, len(skills))
 		skippedExisting := 0
 		for _, sk := range skills {
 			targetPath := filepath.Join(agent.PushDir, sk.Name)
@@ -983,7 +985,7 @@ func (a *App) ListAgentSkills(agentName string) ([]AgentSkillEntry, error) {
 		return nil, err
 	}
 	presence := a.buildAgentPresenceIndex(installedIndex)
-	var pushSkills []*skill.Skill
+	var pushSkills []*skilldomain.InstalledSkill
 
 	if agentCfg.PushDir != "" {
 		if _, statErr := os.Stat(agentCfg.PushDir); statErr == nil {
@@ -1065,7 +1067,7 @@ func (a *App) PushToAgents(skillIDs []string, agentNames []string) ([]PushConfli
 	for _, id := range skillIDs {
 		idSet[id] = true
 	}
-	var selected []*skill.Skill
+	var selected []*skilldomain.InstalledSkill
 	for _, sk := range skills {
 		if idSet[sk.ID] {
 			selected = append(selected, sk)
@@ -1084,7 +1086,7 @@ func (a *App) PushToAgents(skillIDs []string, agentNames []string) ([]PushConfli
 				return nil, err
 			}
 			adapter := getAdapter(agent)
-			var toPush []*skill.Skill
+			var toPush []*skilldomain.InstalledSkill
 			for _, sk := range selected {
 				dst := filepath.Join(agent.PushDir, sk.Name)
 				if _, err := os.Stat(dst); err == nil {
@@ -1121,7 +1123,7 @@ func (a *App) PushToAgentsForce(skillIDs []string, agentNames []string) error {
 	for _, id := range skillIDs {
 		idSet[id] = true
 	}
-	var selected []*skill.Skill
+	var selected []*skilldomain.InstalledSkill
 	for _, sk := range skills {
 		if idSet[sk.ID] {
 			selected = append(selected, sk)
@@ -1171,14 +1173,14 @@ func (a *App) PullFromAgent(agentName string, skillPaths []string, category stri
 		}
 		candidates := resolveAgentSkillSelection(resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), skillPaths)
 		var conflicts []string
-		imported := make([]*skill.Skill, 0, len(candidates))
+		imported := make([]*skilldomain.InstalledSkill, 0, len(candidates))
 		for _, candidate := range candidates {
 			if candidate.Imported {
 				conflicts = append(conflicts, candidate.Path)
 				continue
 			}
-			sk, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
-			if err == skill.ErrSkillExists {
+			sk, err := a.storage.Import(candidate.Path, category, skilldomain.SourceManual, "", "")
+			if err == skillrepo.ErrSkillExists {
 				conflicts = append(conflicts, candidate.Path)
 				continue
 			}
@@ -1210,16 +1212,16 @@ func (a *App) PullFromAgentForce(agentName string, skillPaths []string, category
 		if err != nil {
 			return err
 		}
-		imported := make([]*skill.Skill, 0, len(skillPaths))
+		imported := make([]*skilldomain.InstalledSkill, 0, len(skillPaths))
 		for _, candidate := range resolveAgentSkillSelection(resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), skillPaths) {
 			existing, _ := a.storage.ListAll()
 			for _, e := range existing {
-				logicalKey, logicalErr := skill.LogicalKey(e)
+				logicalKey, logicalErr := skilldomain.LogicalKey(e)
 				if (candidate.LogicalKey != "" && logicalErr == nil && logicalKey == candidate.LogicalKey) || (candidate.LogicalKey == "" && e.Name == candidate.Name) {
 					_ = a.storage.Delete(e.ID)
 				}
 			}
-			sk, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
+			sk, err := a.storage.Import(candidate.Path, category, skilldomain.SourceManual, "", "")
 			if err != nil {
 				return err
 			}
@@ -1231,7 +1233,7 @@ func (a *App) PullFromAgentForce(agentName string, skillPaths []string, category
 	return nil
 }
 
-func pullAgentSkills(ctx context.Context, adapter agentsync.AgentAdapter, dir string, maxDepth int) ([]*skill.Skill, error) {
+func pullAgentSkills(ctx context.Context, adapter agentsync.AgentAdapter, dir string, maxDepth int) ([]*skilldomain.InstalledSkill, error) {
 	if depthAware, ok := adapter.(maxDepthPuller); ok {
 		return depthAware.PullWithMaxDepth(ctx, dir, maxDepth)
 	}
@@ -1515,7 +1517,7 @@ func (a *App) CheckUpdates() error {
 
 	type updateGroup struct {
 		LogicalKey string
-		Skills     []*skill.Skill
+		Skills     []*skilldomain.InstalledSkill
 	}
 
 	groups := map[string]*updateGroup{}
@@ -1604,7 +1606,7 @@ func (a *App) UpdateSkill(skillID string) error {
 		a.scheduleAutoBackup()
 		return err
 	}
-	a.autoPushSkillsToConfiguredAgents("skill.update", []*skill.Skill{sk}, true)
+	a.autoPushSkillsToConfiguredAgents("skill.update", []*skilldomain.InstalledSkill{sk}, true)
 	a.scheduleAutoBackup()
 	a.hub.Publish(notify.Event{Type: notify.EventSkillsUpdated})
 	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
@@ -1679,7 +1681,7 @@ func (a *App) autoUpdateInstalledSkillsForRepos(source string, repoURLs []string
 	a.logInfof("auto update installed skills completed: source=%s updated=%d", source, updatedCount)
 }
 
-func (a *App) cachedSkillSourceDir(sk *skill.Skill) (string, string, error) {
+func (a *App) cachedSkillSourceDir(sk *skilldomain.InstalledSkill) (string, string, error) {
 	if sk == nil {
 		return "", "", fmt.Errorf("skill is required")
 	}
@@ -1727,7 +1729,7 @@ func (a *App) cachedSkillSourceDir(sk *skill.Skill) (string, string, error) {
 	return sourceDir, latestSHA, nil
 }
 
-func (a *App) refreshUpdatedPushedSkillCopies(sk *skill.Skill) error {
+func (a *App) refreshUpdatedPushedSkillCopies(sk *skilldomain.InstalledSkill) error {
 	if sk == nil {
 		return nil
 	}
@@ -1760,7 +1762,7 @@ func (a *App) refreshUpdatedPushedSkillCopies(sk *skill.Skill) error {
 			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
 			return err
 		}
-		if err := getAdapter(agent).Push(a.ctx, []*skill.Skill{sk}, agent.PushDir); err != nil {
+		if err := getAdapter(agent).Push(a.ctx, []*skilldomain.InstalledSkill{sk}, agent.PushDir); err != nil {
 			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
 			return err
 		}
@@ -2190,7 +2192,7 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	if err != nil {
 		return err
 	}
-	imported := make([]*skill.Skill, 0, len(skillPaths))
+	imported := make([]*skilldomain.InstalledSkill, 0, len(skillPaths))
 	for _, skillPath := range skillPaths {
 		subPath, _ := filepath.Rel(repoLocalDir, skillPath)
 		subPath = filepath.ToSlash(subPath)
@@ -2198,8 +2200,8 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 		if installedIndex.IsInstalled(filepath.Base(skillPath), logicalKey) {
 			continue
 		}
-		sk, err := a.storage.Import(skillPath, category, skill.SourceGitHub, canonicalRepoURL, subPath)
-		if err == skill.ErrSkillExists {
+		sk, err := a.storage.Import(skillPath, category, skilldomain.SourceGitHub, canonicalRepoURL, subPath)
+		if err == skillrepo.ErrSkillExists {
 			continue
 		}
 		if err != nil {

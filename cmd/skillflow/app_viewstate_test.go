@@ -7,7 +7,8 @@ import (
 
 	"github.com/shinerio/skillflow/core/config"
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,7 +118,7 @@ func newViewStateTestApp(t *testing.T) (*App, string, string, string) {
 
 	app := NewApp()
 	app.config = svc
-	app.storage = skill.NewStorage(skillsDir)
+	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = cacheDir
 	app.viewCache = viewstate.NewManager(filepath.Join(cacheDir, "viewstate"))
 	app.starStorage = coregit.NewStarStorage(starsPath)

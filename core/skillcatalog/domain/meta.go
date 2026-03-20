@@ -1,4 +1,4 @@
-package skill
+package domain
 
 import (
 	"os"
@@ -8,8 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SkillMeta holds parsed YAML frontmatter from a SKILL.md file.
-// All fields are optional — missing fields remain zero values.
 type SkillMeta struct {
 	Name                   string `yaml:"name"                     json:"Name"`
 	Description            string `yaml:"description"              json:"Description"`
@@ -19,9 +17,6 @@ type SkillMeta struct {
 	DisableModelInvocation bool   `yaml:"disable-model-invocation" json:"DisableModelInvocation"`
 }
 
-// ReadMeta locates skill.md / skill.md (case-insensitive) inside skillPath,
-// extracts the YAML frontmatter block (between the first pair of --- delimiters),
-// and unmarshals it. Returns an empty SkillMeta when no frontmatter is present.
 func ReadMeta(skillPath string) (*SkillMeta, error) {
 	entries, err := os.ReadDir(skillPath)
 	if err != nil {
@@ -29,13 +24,12 @@ func ReadMeta(skillPath string) (*SkillMeta, error) {
 	}
 
 	var mdPath string
-	for _, e := range entries {
-		if e.IsDir() {
+	for _, entry := range entries {
+		if entry.IsDir() {
 			continue
 		}
-		lower := strings.ToLower(e.Name())
-		if lower == "skill.md" {
-			mdPath = filepath.Join(skillPath, e.Name())
+		if strings.ToLower(entry.Name()) == "skill.md" {
+			mdPath = filepath.Join(skillPath, entry.Name())
 			break
 		}
 	}
@@ -60,8 +54,6 @@ func ReadMeta(skillPath string) (*SkillMeta, error) {
 	return &meta, nil
 }
 
-// extractFrontmatter returns the YAML content between the first pair of "---" lines.
-// Returns empty string if no valid frontmatter block is found.
 func extractFrontmatter(content string) string {
 	lines := strings.Split(content, "\n")
 	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {

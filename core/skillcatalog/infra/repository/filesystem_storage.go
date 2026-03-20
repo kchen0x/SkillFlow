@@ -1,4 +1,4 @@
-package skill
+package repository
 
 import (
 	"encoding/json"
@@ -11,23 +11,24 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shinerio/skillflow/core/pathutil"
+	"github.com/shinerio/skillflow/core/skillcatalog/domain"
 )
 
 var ErrSkillExists = errors.New("skill already exists in target location")
 var ErrSkillNotFound = errors.New("skill not found")
 var ErrCategoryNotEmpty = errors.New("category not empty")
 
-type Storage struct {
+type FilesystemStorage struct {
 	root         string
 	metaDir      string
 	localMetaDir string
 	syncRoot     string
 }
 
-func NewStorage(root string) *Storage {
+func NewFilesystemStorage(root string) *FilesystemStorage {
 	cleanRoot := filepath.Clean(root)
 	syncRoot := filepath.Dir(cleanRoot)
-	return &Storage{
+	return &FilesystemStorage{
 		root:         cleanRoot,
 		metaDir:      filepath.Join(syncRoot, "meta"),
 		localMetaDir: filepath.Join(syncRoot, "meta_local"),
@@ -35,11 +36,11 @@ func NewStorage(root string) *Storage {
 	}
 }
 
-func (s *Storage) CreateCategory(name string) error {
+func (s *FilesystemStorage) CreateCategory(name string) error {
 	return os.MkdirAll(filepath.Join(s.root, name), 0755)
 }
 
-func (s *Storage) ListCategories() ([]string, error) {
+func (s *FilesystemStorage) ListCategories() ([]string, error) {
 	entries, err := os.ReadDir(s.root)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -56,7 +57,7 @@ func (s *Storage) ListCategories() ([]string, error) {
 	return cats, nil
 }
 
-func (s *Storage) Import(srcDir, category string, source SourceType, sourceURL, sourceSubPath string) (*Skill, error) {
+func (s *FilesystemStorage) Import(srcDir, category string, source domain.SourceType, sourceURL, sourceSubPath string) (*domain.InstalledSkill, error) {
 	name := filepath.Base(srcDir)
 	targetDir := filepath.Join(s.root, category, name)
 	if _, err := os.Stat(targetDir); err == nil {
@@ -65,7 +66,7 @@ func (s *Storage) Import(srcDir, category string, source SourceType, sourceURL, 
 	if err := copyDir(srcDir, targetDir); err != nil {
 		return nil, err
 	}
-	sk := &Skill{
+	sk := &domain.InstalledSkill{
 		ID:            uuid.New().String(),
 		Name:          name,
 		Path:          targetDir,
@@ -79,7 +80,7 @@ func (s *Storage) Import(srcDir, category string, source SourceType, sourceURL, 
 	return sk, s.saveMeta(sk)
 }
 
-func (s *Storage) Get(id string) (*Skill, error) {
+func (s *FilesystemStorage) Get(id string) (*domain.InstalledSkill, error) {
 	skills, err := s.ListAll()
 	if err != nil {
 		return nil, err
@@ -92,7 +93,7 @@ func (s *Storage) Get(id string) (*Skill, error) {
 	return nil, ErrSkillNotFound
 }
 
-func (s *Storage) ListAll() ([]*Skill, error) {
+func (s *FilesystemStorage) ListAll() ([]*domain.InstalledSkill, error) {
 	if err := os.MkdirAll(s.metaDir, 0755); err != nil {
 		return nil, err
 	}
@@ -100,7 +101,7 @@ func (s *Storage) ListAll() ([]*Skill, error) {
 	if err != nil {
 		return nil, err
 	}
-	var skills []*Skill
+	var skills []*domain.InstalledSkill
 	for _, e := range entries {
 		if filepath.Ext(e.Name()) != ".json" {
 			continue
@@ -109,7 +110,7 @@ func (s *Storage) ListAll() ([]*Skill, error) {
 		if err != nil {
 			continue
 		}
-		var sk Skill
+		var sk domain.InstalledSkill
 		if err := json.Unmarshal(data, &sk); err == nil {
 			if s.resolveLoadedSkillPath(&sk) {
 				_ = s.saveMeta(&sk)
@@ -123,7 +124,7 @@ func (s *Storage) ListAll() ([]*Skill, error) {
 	return skills, nil
 }
 
-func (s *Storage) Delete(id string) error {
+func (s *FilesystemStorage) Delete(id string) error {
 	sk, err := s.Get(id)
 	if err != nil {
 		return err
@@ -140,7 +141,7 @@ func (s *Storage) Delete(id string) error {
 	return nil
 }
 
-func (s *Storage) MoveCategory(id, newCategory string) error {
+func (s *FilesystemStorage) MoveCategory(id, newCategory string) error {
 	sk, err := s.Get(id)
 	if err != nil {
 		return err
@@ -158,16 +159,16 @@ func (s *Storage) MoveCategory(id, newCategory string) error {
 	return s.saveMeta(sk)
 }
 
-func (s *Storage) UpdateMeta(sk *Skill) error {
+func (s *FilesystemStorage) UpdateMeta(sk *domain.InstalledSkill) error {
 	sk.UpdatedAt = time.Now()
 	return s.saveMeta(sk)
 }
 
-func (s *Storage) SaveMeta(sk *Skill) error {
+func (s *FilesystemStorage) SaveMeta(sk *domain.InstalledSkill) error {
 	return s.saveMeta(sk)
 }
 
-func (s *Storage) RenameCategory(oldName, newName string) error {
+func (s *FilesystemStorage) RenameCategory(oldName, newName string) error {
 	oldPath := filepath.Join(s.root, oldName)
 	newPath := filepath.Join(s.root, newName)
 	if err := os.Rename(oldPath, newPath); err != nil {
@@ -190,7 +191,7 @@ func (s *Storage) RenameCategory(oldName, newName string) error {
 	return nil
 }
 
-func (s *Storage) DeleteCategory(name string) error {
+func (s *FilesystemStorage) DeleteCategory(name string) error {
 	skills, err := s.ListAll()
 	if err != nil {
 		return err
@@ -203,8 +204,7 @@ func (s *Storage) DeleteCategory(name string) error {
 	return os.Remove(filepath.Join(s.root, name))
 }
 
-// OverwriteFromDir replaces an existing skill's directory contents from srcDir, used for updates.
-func (s *Storage) OverwriteFromDir(id, srcDir string) error {
+func (s *FilesystemStorage) OverwriteFromDir(id, srcDir string) error {
 	sk, err := s.Get(id)
 	if err != nil {
 		return err
@@ -215,14 +215,18 @@ func (s *Storage) OverwriteFromDir(id, srcDir string) error {
 	return copyDir(srcDir, sk.Path)
 }
 
-func (s *Storage) saveMeta(sk *Skill) error {
+type localMetaSnapshot struct {
+	LastCheckedAt time.Time `json:"lastCheckedAt,omitempty"`
+}
+
+func (s *FilesystemStorage) saveMeta(sk *domain.InstalledSkill) error {
 	if err := s.saveSharedMeta(sk); err != nil {
 		return err
 	}
 	return s.saveLocalMeta(sk)
 }
 
-func (s *Storage) saveSharedMeta(sk *Skill) error {
+func (s *FilesystemStorage) saveSharedMeta(sk *domain.InstalledSkill) error {
 	if err := os.MkdirAll(s.metaDir, 0755); err != nil {
 		return err
 	}
@@ -231,7 +235,7 @@ func (s *Storage) saveSharedMeta(sk *Skill) error {
 		Name          string
 		Path          string
 		Category      string
-		Source        SourceType
+		Source        domain.SourceType
 		SourceURL     string
 		SourceSubPath string
 		SourceSHA     string
@@ -259,11 +263,7 @@ func (s *Storage) saveSharedMeta(sk *Skill) error {
 	return os.WriteFile(filepath.Join(s.metaDir, sk.ID+".json"), data, 0644)
 }
 
-type localMetaSnapshot struct {
-	LastCheckedAt time.Time `json:"lastCheckedAt,omitempty"`
-}
-
-func (s *Storage) saveLocalMeta(sk *Skill) error {
+func (s *FilesystemStorage) saveLocalMeta(sk *domain.InstalledSkill) error {
 	localPath := filepath.Join(s.localMetaDir, sk.ID+".local.json")
 	if sk.LastCheckedAt.IsZero() {
 		if err := os.Remove(localPath); err != nil && !os.IsNotExist(err) {
@@ -282,7 +282,7 @@ func (s *Storage) saveLocalMeta(sk *Skill) error {
 	return os.WriteFile(localPath, data, 0644)
 }
 
-func (s *Storage) loadLocalCheckedAt(id string) (time.Time, error) {
+func (s *FilesystemStorage) loadLocalCheckedAt(id string) (time.Time, error) {
 	data, err := os.ReadFile(filepath.Join(s.localMetaDir, id+".local.json"))
 	if err != nil {
 		return time.Time{}, err
@@ -294,14 +294,14 @@ func (s *Storage) loadLocalCheckedAt(id string) (time.Time, error) {
 	return local.LastCheckedAt, nil
 }
 
-func (s *Storage) resolveLoadedSkillPath(sk *Skill) bool {
+func (s *FilesystemStorage) resolveLoadedSkillPath(sk *domain.InstalledSkill) bool {
 	expected := s.skillPath(sk.Category, sk.Name)
 	resolved, needsMigration := pathutil.ResolveStoredPath(s.syncRoot, sk.Path, expected)
 	sk.Path = resolved
 	return needsMigration
 }
 
-func (s *Storage) skillPath(category, name string) string {
+func (s *FilesystemStorage) skillPath(category, name string) string {
 	if strings.TrimSpace(name) == "" {
 		return ""
 	}

@@ -6,7 +6,8 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
-	"github.com/shinerio/skillflow/core/skill"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,7 +90,7 @@ func newAutoPushTestApp(t *testing.T, autoPushAgents []string) (*App, string, st
 
 	app := NewApp()
 	app.config = svc
-	app.storage = skill.NewStorage(skillsDir)
+	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	return app, pushDir, skillsDir
 }
 

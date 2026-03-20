@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/shinerio/skillflow/core/skill"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	agentsync "github.com/shinerio/skillflow/core/sync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,10 +23,10 @@ func TestFilesystemAdapterPushFlattens(t *testing.T) {
 	dst := t.TempDir()
 	skillDir := filepath.Join(src, "coding", "my-skill")
 	writeSkill(t, skillDir, "skill.md")
-	sk := &skill.Skill{Name: "my-skill", Path: skillDir}
+	sk := &skilldomain.InstalledSkill{Name: "my-skill", Path: skillDir}
 
 	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
-	require.NoError(t, adapter.Push(context.Background(), []*skill.Skill{sk}, dst))
+	require.NoError(t, adapter.Push(context.Background(), []*skilldomain.InstalledSkill{sk}, dst))
 
 	_, err := os.Stat(filepath.Join(dst, "my-skill", "skill.md"))
 	assert.NoError(t, err)

@@ -7,62 +7,64 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shinerio/skillflow/core/prompt"
+	promptcatalogapp "github.com/shinerio/skillflow/core/promptcatalog/app"
+	promptdomain "github.com/shinerio/skillflow/core/promptcatalog/domain"
+	promptrepo "github.com/shinerio/skillflow/core/promptcatalog/infra/repository"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func (a *App) promptStorage() (*prompt.Storage, string, error) {
+func (a *App) promptService() (*promptcatalogapp.Service, string, error) {
 	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, "", err
 	}
 	root := filepath.Join(a.backupRootDir(cfg), "prompts")
-	return prompt.NewStorage(root), root, nil
+	return promptcatalogapp.NewService(promptrepo.NewFilesystemStorage(root)), root, nil
 }
 
-func (a *App) ListPrompts() ([]*prompt.Prompt, error) {
-	store, _, err := a.promptStorage()
+func (a *App) ListPrompts() ([]*promptdomain.Prompt, error) {
+	service, _, err := a.promptService()
 	if err != nil {
 		return nil, err
 	}
-	return store.ListAll()
+	return service.ListPrompts()
 }
 
 func (a *App) ListPromptCategories() ([]string, error) {
-	store, _, err := a.promptStorage()
+	service, _, err := a.promptService()
 	if err != nil {
 		return nil, err
 	}
-	categories, err := store.ListCategories()
+	categories, err := service.ListPromptCategories()
 	if err != nil {
 		return nil, err
 	}
 	hasDefault := false
 	for _, category := range categories {
-		if category == prompt.DefaultCategoryName {
+		if category == promptdomain.DefaultCategoryName {
 			hasDefault = true
 			break
 		}
 	}
 	if !hasDefault {
-		categories = append([]string{prompt.DefaultCategoryName}, categories...)
+		categories = append([]string{promptdomain.DefaultCategoryName}, categories...)
 	}
 	return categories, nil
 }
 
-func (a *App) CreatePrompt(name, description, category, content string, imageURLs []string, webLinksMarkdown string) (*prompt.Prompt, error) {
-	store, root, err := a.promptStorage()
+func (a *App) CreatePrompt(name, description, category, content string, imageURLs []string, webLinksMarkdown string) (*promptdomain.Prompt, error) {
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt create failed: load storage failed: %v", err)
 		return nil, err
 	}
-	webLinks, err := prompt.ParseWebLinksMarkdown(webLinksMarkdown)
+	webLinks, err := promptcatalogapp.ParseWebLinksMarkdown(webLinksMarkdown)
 	if err != nil {
 		a.logErrorf("prompt create failed: prompt=%s category=%s root=%s err=%v", name, category, root, err)
 		return nil, err
 	}
 	a.logInfof("prompt create started: prompt=%s category=%s images=%d links=%d root=%s", name, category, len(imageURLs), len(webLinks), root)
-	item, err := store.Create(name, description, category, content, imageURLs, webLinks)
+	item, err := service.CreatePrompt(name, description, category, content, imageURLs, webLinks)
 	if err != nil {
 		a.logErrorf("prompt create failed: prompt=%s category=%s root=%s err=%v", name, category, root, err)
 		return nil, err
@@ -72,19 +74,19 @@ func (a *App) CreatePrompt(name, description, category, content string, imageURL
 	return item, nil
 }
 
-func (a *App) UpdatePrompt(originalName, name, description, category, content string, imageURLs []string, webLinksMarkdown string) (*prompt.Prompt, error) {
-	store, root, err := a.promptStorage()
+func (a *App) UpdatePrompt(originalName, name, description, category, content string, imageURLs []string, webLinksMarkdown string) (*promptdomain.Prompt, error) {
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt update failed: prompt=%s load storage failed: %v", originalName, err)
 		return nil, err
 	}
-	webLinks, err := prompt.ParseWebLinksMarkdown(webLinksMarkdown)
+	webLinks, err := promptcatalogapp.ParseWebLinksMarkdown(webLinksMarkdown)
 	if err != nil {
 		a.logErrorf("prompt update failed: prompt=%s next=%s category=%s root=%s err=%v", originalName, name, category, root, err)
 		return nil, err
 	}
 	a.logInfof("prompt update started: prompt=%s next=%s category=%s images=%d links=%d root=%s", originalName, name, category, len(imageURLs), len(webLinks), root)
-	item, err := store.Update(originalName, name, description, category, content, imageURLs, webLinks)
+	item, err := service.UpdatePrompt(originalName, name, description, category, content, imageURLs, webLinks)
 	if err != nil {
 		a.logErrorf("prompt update failed: prompt=%s next=%s category=%s root=%s err=%v", originalName, name, category, root, err)
 		return nil, err
@@ -95,13 +97,13 @@ func (a *App) UpdatePrompt(originalName, name, description, category, content st
 }
 
 func (a *App) MovePromptCategory(name string, category string) error {
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt move category failed: prompt=%s category=%s load storage failed: %v", name, category, err)
 		return err
 	}
 	a.logInfof("prompt move category started: prompt=%s category=%s root=%s", name, category, root)
-	if err := store.MoveCategory(name, category); err != nil {
+	if err := service.MovePromptToCategory(name, category); err != nil {
 		a.logErrorf("prompt move category failed: prompt=%s category=%s root=%s err=%v", name, category, root, err)
 		return err
 	}
@@ -111,13 +113,13 @@ func (a *App) MovePromptCategory(name string, category string) error {
 }
 
 func (a *App) DeletePrompt(name string) error {
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt delete failed: prompt=%s load storage failed: %v", name, err)
 		return err
 	}
 	a.logInfof("prompt delete started: prompt=%s root=%s", name, root)
-	if err := store.Delete(name); err != nil {
+	if err := service.DeletePrompt(name); err != nil {
 		a.logErrorf("prompt delete failed: prompt=%s root=%s err=%v", name, root, err)
 		return err
 	}
@@ -127,13 +129,13 @@ func (a *App) DeletePrompt(name string) error {
 }
 
 func (a *App) CreatePromptCategory(name string) error {
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt category create failed: category=%s load storage failed: %v", name, err)
 		return err
 	}
 	a.logInfof("prompt category create started: category=%s root=%s", name, root)
-	if err := store.CreateCategory(name); err != nil {
+	if err := service.CreatePromptCategory(name); err != nil {
 		a.logErrorf("prompt category create failed: category=%s root=%s err=%v", name, root, err)
 		return err
 	}
@@ -143,19 +145,19 @@ func (a *App) CreatePromptCategory(name string) error {
 }
 
 func (a *App) RenamePromptCategory(oldName, newName string) error {
-	if oldName == prompt.DefaultCategoryName {
+	if oldName == promptdomain.DefaultCategoryName {
 		return fmt.Errorf("默认分类不可重命名")
 	}
-	if newName == prompt.DefaultCategoryName {
+	if newName == promptdomain.DefaultCategoryName {
 		return fmt.Errorf("不能重命名为默认分类")
 	}
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt category rename failed: category=%s next=%s load storage failed: %v", oldName, newName, err)
 		return err
 	}
 	a.logInfof("prompt category rename started: category=%s next=%s root=%s", oldName, newName, root)
-	if err := store.RenameCategory(oldName, newName); err != nil {
+	if err := service.RenamePromptCategory(oldName, newName); err != nil {
 		a.logErrorf("prompt category rename failed: category=%s next=%s root=%s err=%v", oldName, newName, root, err)
 		return err
 	}
@@ -165,16 +167,16 @@ func (a *App) RenamePromptCategory(oldName, newName string) error {
 }
 
 func (a *App) DeletePromptCategory(name string) error {
-	if name == prompt.DefaultCategoryName {
+	if name == promptdomain.DefaultCategoryName {
 		return fmt.Errorf("默认分类不可删除")
 	}
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt category delete failed: category=%s load storage failed: %v", name, err)
 		return err
 	}
 	a.logInfof("prompt category delete started: category=%s root=%s", name, root)
-	if err := store.DeleteCategory(name); err != nil {
+	if err := service.DeletePromptCategory(name); err != nil {
 		a.logErrorf("prompt category delete failed: category=%s root=%s err=%v", name, root, err)
 		return err
 	}
@@ -195,7 +197,7 @@ func (a *App) ImportPrompts() (int, error) {
 }
 
 func (a *App) PrepareImportPrompts() (*PromptImportPrepareResult, error) {
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt import prepare failed: load storage failed: %v", err)
 		return nil, err
@@ -221,7 +223,7 @@ func (a *App) PrepareImportPrompts() (*PromptImportPrepareResult, error) {
 		a.logErrorf("prompt import prepare failed: file=%s err=%v", filePath, err)
 		return nil, err
 	}
-	preview, err := store.PreviewImportJSON(data)
+	preview, err := service.PreviewPromptImport(data)
 	if err != nil {
 		a.logErrorf("prompt import prepare failed: file=%s err=%v", filePath, err)
 		return nil, err
@@ -236,7 +238,7 @@ func (a *App) PrepareImportPrompts() (*PromptImportPrepareResult, error) {
 }
 
 func (a *App) CompleteImportPrompts(sessionID string, overwriteNames []string) (int, error) {
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt import complete failed: session=%s load storage failed: %v", sessionID, err)
 		return 0, err
@@ -248,7 +250,7 @@ func (a *App) CompleteImportPrompts(sessionID string, overwriteNames []string) (
 		return 0, err
 	}
 	a.logInfof("prompt import complete started: session=%s file=%s creates=%d conflicts=%d overwrites=%d root=%s", sessionID, session.FilePath, len(session.Preview.Creates), len(session.Preview.Conflicts), len(overwriteNames), root)
-	count, err := store.ApplyImportPreview(session.Preview, overwriteNames)
+	count, err := service.ApplyPromptImport(session.Preview, overwriteNames)
 	if err != nil {
 		a.logErrorf("prompt import complete failed: session=%s file=%s root=%s err=%v", sessionID, session.FilePath, root, err)
 		return 0, err
@@ -272,7 +274,7 @@ func (a *App) ExportPrompts() (string, error) {
 }
 
 func (a *App) ExportPromptsByNames(names []string) (string, error) {
-	store, root, err := a.promptStorage()
+	service, root, err := a.promptService()
 	if err != nil {
 		a.logErrorf("prompt export failed: load storage failed: %v", err)
 		return "", err
@@ -295,7 +297,7 @@ func (a *App) ExportPromptsByNames(names []string) (string, error) {
 		return "", nil
 	}
 	a.logInfof("prompt export started: file=%s promptCount=%d", filePath, len(names))
-	data, err := store.ExportJSONByNames(names)
+	data, err := service.ExportPromptBundle(names)
 	if err != nil {
 		a.logErrorf("prompt export failed: file=%s err=%v", filePath, err)
 		return "", err
@@ -309,14 +311,14 @@ func (a *App) ExportPromptsByNames(names []string) (string, error) {
 }
 
 func (a *App) PromptRootDir() (string, error) {
-	_, root, err := a.promptStorage()
+	_, root, err := a.promptService()
 	if err != nil {
 		return "", fmt.Errorf("load prompt root failed: %w", err)
 	}
 	return root, nil
 }
 
-func promptImportNames(items []prompt.ImportPrompt) []string {
+func promptImportNames(items []promptcatalogapp.ImportPrompt) []string {
 	names := make([]string, 0, len(items))
 	for _, item := range items {
 		names = append(names, item.Name)

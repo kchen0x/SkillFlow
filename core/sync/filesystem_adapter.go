@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/shinerio/skillflow/core/config"
-	"github.com/shinerio/skillflow/core/skill"
+	"github.com/shinerio/skillflow/core/skillcatalog/domain"
 )
 
 // FilesystemAdapter works for all agents — they all share the same file-based skills directory model.
@@ -25,7 +25,7 @@ func NewFilesystemAdapter(name, defaultSkillsDir string) *FilesystemAdapter {
 func (f *FilesystemAdapter) Name() string             { return f.name }
 func (f *FilesystemAdapter) DefaultSkillsDir() string { return f.defaultSkillsDir }
 
-func (f *FilesystemAdapter) Push(_ context.Context, skills []*skill.Skill, targetDir string) error {
+func (f *FilesystemAdapter) Push(_ context.Context, skills []*domain.InstalledSkill, targetDir string) error {
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return err
 	}
@@ -38,18 +38,18 @@ func (f *FilesystemAdapter) Push(_ context.Context, skills []*skill.Skill, targe
 	return nil
 }
 
-func (f *FilesystemAdapter) Pull(ctx context.Context, sourceDir string) ([]*skill.Skill, error) {
+func (f *FilesystemAdapter) Pull(ctx context.Context, sourceDir string) ([]*domain.InstalledSkill, error) {
 	return f.PullWithMaxDepth(ctx, sourceDir, config.DefaultRepoScanMaxDepth)
 }
 
-func (f *FilesystemAdapter) PullWithMaxDepth(_ context.Context, sourceDir string, maxDepth int) ([]*skill.Skill, error) {
+func (f *FilesystemAdapter) PullWithMaxDepth(_ context.Context, sourceDir string, maxDepth int) ([]*domain.InstalledSkill, error) {
 	if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("目录不存在: %s", sourceDir)
 	}
 	if maxDepth < 0 {
 		maxDepth = 0
 	}
-	var skills []*skill.Skill
+	var skills []*domain.InstalledSkill
 	var walk func(dir string, depth int)
 	walk = func(dir string, depth int) {
 		entries, err := os.ReadDir(dir)
@@ -59,10 +59,10 @@ func (f *FilesystemAdapter) PullWithMaxDepth(_ context.Context, sourceDir string
 		// Check if this directory itself contains a skill.md file.
 		for _, e := range entries {
 			if !e.IsDir() && isSkillMd(e.Name()) {
-				skills = append(skills, &skill.Skill{
+				skills = append(skills, &domain.InstalledSkill{
 					Name:   filepath.Base(dir),
 					Path:   dir,
-					Source: skill.SourceManual,
+					Source: domain.SourceManual,
 				})
 				return // found skill here — don't recurse deeper
 			}

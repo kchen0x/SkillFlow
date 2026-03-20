@@ -6,6 +6,18 @@ Move the backend from the current technology-oriented package layout to the targ
 
 The migration should be incremental. The target architecture is strict, but the transition plan should avoid a high-risk big-bang rewrite.
 
+## Progress Checkpoint
+
+As of 2026-03-21:
+
+- `skillcatalog` is extracted under `core/skillcatalog/app`, `domain`, and `infra`
+- `promptcatalog` is extracted under `core/promptcatalog/app`, `domain`, and `infra`
+- `cmd/skillflow` and supporting backend packages no longer import `core/skill`
+- `cmd/skillflow` no longer imports `core/prompt`
+- the old `core/skill` and `core/prompt` packages have been removed
+
+This means Phase 1 exit criteria are now met with two extracted core contexts. `skillcatalog` and `promptcatalog` are now the reference extraction patterns for the next migrations.
+
 ## Current-to-Target Mapping
 
 | Current package / area | Target destination |
@@ -148,4 +160,4 @@ The migration is on track when these statements become true:
 - cross-context views happen in `readmodel/`
 - old packages are steadily deprecated instead of quietly accepting new code forever
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*

@@ -1,4 +1,4 @@
-package skill
+package domain
 
 import (
 	"errors"
@@ -8,7 +8,6 @@ import (
 
 var ErrNoSKILLSmd = errors.New("skill.md not found in skill directory")
 
-// ValidationRule is the extension point for future complex validators.
 type ValidationRule func(dir string) error
 
 type Validator struct {
@@ -29,7 +28,6 @@ func (v *Validator) Validate(dir string) error {
 	return nil
 }
 
-// requireSkillMd accepts any casing of "skill.md" or "skill.md".
 func requireSkillMd(dir string) error {
 	if _, err := os.Stat(dir); err != nil {
 		return err
@@ -42,8 +40,7 @@ func requireSkillMd(dir string) error {
 		if e.IsDir() {
 			continue
 		}
-		lower := strings.ToLower(e.Name())
-		if lower == "skill.md" {
+		if strings.ToLower(e.Name()) == "skill.md" {
 			return nil
 		}
 	}

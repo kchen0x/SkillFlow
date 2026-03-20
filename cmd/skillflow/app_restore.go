@@ -8,7 +8,7 @@ import (
 	"time"
 
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 )
 
 type cloudRestoreState struct {
@@ -76,7 +76,7 @@ func (a *App) handleRestoredCloudState(before cloudRestoreState, source string) 
 	return nil
 }
 
-func (a *App) restoredOrUpdatedSkillsSince(before cloudRestoreState) ([]*skill.Skill, error) {
+func (a *App) restoredOrUpdatedSkillsSince(before cloudRestoreState) ([]*skilldomain.InstalledSkill, error) {
 	if a.storage == nil {
 		return nil, nil
 	}
@@ -85,7 +85,7 @@ func (a *App) restoredOrUpdatedSkillsSince(before cloudRestoreState) ([]*skill.S
 	if err != nil {
 		return nil, err
 	}
-	restored := make([]*skill.Skill, 0, len(skills))
+	restored := make([]*skilldomain.InstalledSkill, 0, len(skills))
 	for _, sk := range skills {
 		key := cloudRestoreSkillKey(sk)
 		if key == "" {
@@ -149,11 +149,11 @@ func (a *App) cloneNewlyRestoredStarredRepos(before cloudRestoreState, source st
 	return cloned, failed, nil
 }
 
-func cloudRestoreSkillKey(sk *skill.Skill) string {
+func cloudRestoreSkillKey(sk *skilldomain.InstalledSkill) string {
 	if sk == nil {
 		return ""
 	}
-	if logicalKey, err := skill.LogicalKey(sk); err == nil && strings.TrimSpace(logicalKey) != "" {
+	if logicalKey, err := skilldomain.LogicalKey(sk); err == nil && strings.TrimSpace(logicalKey) != "" {
 		return "logical:" + logicalKey
 	}
 	if strings.TrimSpace(sk.ID) == "" {

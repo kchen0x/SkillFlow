@@ -8,7 +8,8 @@ import (
 
 	"github.com/shinerio/skillflow/core/config"
 	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/skillkey"
 	agentsync "github.com/shinerio/skillflow/core/sync"
 )
@@ -66,21 +67,21 @@ type agentPresenceIndex struct {
 	agentsByKey map[string][]string
 }
 
-func (a *App) installedIndex() ([]*skill.Skill, *skill.InstalledIndex, error) {
+func (a *App) installedIndex() ([]*skilldomain.InstalledSkill, *skillquery.InstalledIndex, error) {
 	installed, err := a.storage.ListAll()
 	if err != nil {
 		return nil, nil, err
 	}
-	return installed, skill.BuildInstalledIndex(installed), nil
+	return installed, skillquery.BuildInstalledIndex(installed), nil
 }
 
-func (a *App) buildInstalledSkillEntries(installed []*skill.Skill, presence *agentPresenceIndex) []InstalledSkillEntry {
+func (a *App) buildInstalledSkillEntries(installed []*skilldomain.InstalledSkill, presence *agentPresenceIndex) []InstalledSkillEntry {
 	entries := make([]InstalledSkillEntry, 0, len(installed))
 	for _, sk := range installed {
 		if sk == nil {
 			continue
 		}
-		logicalKey, err := skill.LogicalKey(sk)
+		logicalKey, err := skilldomain.LogicalKey(sk)
 		if err != nil {
 			logicalKey = ""
 		}
@@ -101,7 +102,7 @@ func (a *App) buildInstalledSkillEntries(installed []*skill.Skill, presence *age
 	return entries
 }
 
-func resolveStarSkills(skills []coregit.StarSkill, idx *skill.InstalledIndex, presence *agentPresenceIndex) []coregit.StarSkill {
+func resolveStarSkills(skills []coregit.StarSkill, idx *skillquery.InstalledIndex, presence *agentPresenceIndex) []coregit.StarSkill {
 	resolved := make([]coregit.StarSkill, 0, len(skills))
 	for _, candidate := range skills {
 		if strings.TrimSpace(candidate.LogicalKey) == "" {
@@ -123,7 +124,7 @@ func resolveStarSkills(skills []coregit.StarSkill, idx *skill.InstalledIndex, pr
 	return resolved
 }
 
-func resolveAgentSkillCandidates(candidates []*skill.Skill, idx *skill.InstalledIndex, presence *agentPresenceIndex) []AgentSkillCandidate {
+func resolveAgentSkillCandidates(candidates []*skilldomain.InstalledSkill, idx *skillquery.InstalledIndex, presence *agentPresenceIndex) []AgentSkillCandidate {
 	byKey := map[string]AgentSkillCandidate{}
 	for _, candidate := range candidates {
 		if candidate == nil {
@@ -170,7 +171,7 @@ func resolveAgentSkillCandidates(candidates []*skill.Skill, idx *skill.Installed
 	return result
 }
 
-func aggregateAgentSkillEntries(pushSkills, scanSkills []*skill.Skill, idx *skill.InstalledIndex, presence *agentPresenceIndex) []AgentSkillEntry {
+func aggregateAgentSkillEntries(pushSkills, scanSkills []*skilldomain.InstalledSkill, idx *skillquery.InstalledIndex, presence *agentPresenceIndex) []AgentSkillEntry {
 	entries := map[string]AgentSkillEntry{}
 
 	for _, candidate := range resolveAgentSkillCandidates(pushSkills, idx, presence) {
@@ -235,8 +236,8 @@ func resolveAgentSkillSelection(candidates []AgentSkillCandidate, selectedPaths 
 	return result
 }
 
-func scanAgentSkillsRaw(ctx context.Context, adapter agentsync.AgentAdapter, scanDirs []string, maxDepth int) ([]*skill.Skill, error) {
-	var result []*skill.Skill
+func scanAgentSkillsRaw(ctx context.Context, adapter agentsync.AgentAdapter, scanDirs []string, maxDepth int) ([]*skilldomain.InstalledSkill, error) {
+	var result []*skilldomain.InstalledSkill
 	seenPaths := map[string]struct{}{}
 	for _, dir := range scanDirs {
 		if dir == "" {
@@ -266,7 +267,7 @@ func scanAgentSkillsRaw(ctx context.Context, adapter agentsync.AgentAdapter, sca
 	return result, nil
 }
 
-func (a *App) buildAgentPresenceIndex(idx *skill.InstalledIndex) *agentPresenceIndex {
+func (a *App) buildAgentPresenceIndex(idx *skillquery.InstalledIndex) *agentPresenceIndex {
 	presence, _ := measureOperation(a, "build_agent_presence_index", func() (*agentPresenceIndex, error) {
 		cfg, err := a.config.Load()
 		if err != nil {
@@ -285,7 +286,7 @@ func (a *App) buildAgentPresenceIndex(idx *skill.InstalledIndex) *agentPresenceI
 	return presence
 }
 
-func (a *App) indexAgentPushPresence(presence *agentPresenceIndex, idx *skill.InstalledIndex, agent config.AgentConfig) {
+func (a *App) indexAgentPushPresence(presence *agentPresenceIndex, idx *skillquery.InstalledIndex, agent config.AgentConfig) {
 	if presence == nil || strings.TrimSpace(agent.PushDir) == "" {
 		return
 	}
@@ -310,7 +311,7 @@ func (a *App) indexAgentPushPresence(presence *agentPresenceIndex, idx *skill.In
 	}
 }
 
-func resolveSkillState(name, logicalKey string, idx *skill.InstalledIndex, presence *agentPresenceIndex, aliasKeys ...string) resolvedSkillState {
+func resolveSkillState(name, logicalKey string, idx *skillquery.InstalledIndex, presence *agentPresenceIndex, aliasKeys ...string) resolvedSkillState {
 	status := idx.Resolve(name, logicalKey)
 	resolvedKey := coalesceLogicalKey(status.LogicalKey, logicalKey)
 	lookupKeys := []string{resolvedKey}
@@ -332,7 +333,7 @@ func resolveSkillState(name, logicalKey string, idx *skill.InstalledIndex, prese
 	}
 }
 
-func agentPresenceKeys(candidate *skill.Skill, idx *skill.InstalledIndex) []string {
+func agentPresenceKeys(candidate *skilldomain.InstalledSkill, idx *skillquery.InstalledIndex) []string {
 	if candidate == nil {
 		return nil
 	}

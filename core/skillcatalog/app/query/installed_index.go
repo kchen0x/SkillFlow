@@ -1,8 +1,9 @@
-package skill
+package query
 
 import (
 	"strings"
 
+	"github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/skillkey"
 )
 
@@ -25,10 +26,10 @@ type InstalledIndex struct {
 type installedGroup struct {
 	LogicalKey string
 	Name       string
-	Skills     []*Skill
+	Skills     []*domain.InstalledSkill
 }
 
-func BuildInstalledIndex(skills []*Skill) *InstalledIndex {
+func BuildInstalledIndex(skills []*domain.InstalledSkill) *InstalledIndex {
 	idx := &InstalledIndex{
 		byLogical: map[string]*installedGroup{},
 		byContent: map[string][]*installedGroup{},
@@ -41,7 +42,7 @@ func BuildInstalledIndex(skills []*Skill) *InstalledIndex {
 		if sk == nil {
 			continue
 		}
-		logicalKey, _ := LogicalKey(sk)
+		logicalKey, _ := domain.LogicalKey(sk)
 		groupID := logicalKey
 		if groupID == "" {
 			groupID = "instance:" + sk.ID
@@ -117,21 +118,6 @@ func (idx *InstalledIndex) Resolve(name, logicalKey string) CorrelationStatus {
 
 func (idx *InstalledIndex) IsInstalled(name, logicalKey string) bool {
 	return idx.Resolve(name, logicalKey).Installed
-}
-
-func LogicalKey(sk *Skill) (string, error) {
-	if sk == nil {
-		return "", nil
-	}
-	if sk.IsGitHub() {
-		if logicalKey, err := skillkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath); err == nil && strings.TrimSpace(logicalKey) != "" {
-			return logicalKey, nil
-		}
-	}
-	if strings.TrimSpace(sk.Path) == "" {
-		return "", nil
-	}
-	return skillkey.ContentFromDir(sk.Path)
 }
 
 func (g *installedGroup) status(logicalKey string, matchStrength skillkey.MatchStrength) CorrelationStatus {

@@ -1,3 +1,48 @@
+export namespace app {
+	
+	export class ImportPrompt {
+	    name: string;
+	    description?: string;
+	    category: string;
+	    content: string;
+	    imageURLs?: string[];
+	    webLinks?: domain.PromptLink[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportPrompt(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.category = source["category"];
+	        this.content = source["content"];
+	        this.imageURLs = source["imageURLs"];
+	        this.webLinks = this.convertValues(source["webLinks"], domain.PromptLink);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace backup {
 	
 	export class RemoteFile {
@@ -172,6 +217,153 @@ export namespace config {
 	
 	
 	
+
+}
+
+export namespace domain {
+	
+	export class InstalledSkill {
+	    ID: string;
+	    Name: string;
+	    Path: string;
+	    Category: string;
+	    Source: string;
+	    SourceURL: string;
+	    SourceSubPath: string;
+	    SourceSHA: string;
+	    LatestSHA: string;
+	    // Go type: time
+	    InstalledAt: any;
+	    // Go type: time
+	    UpdatedAt: any;
+	    // Go type: time
+	    LastCheckedAt: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new InstalledSkill(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.Name = source["Name"];
+	        this.Path = source["Path"];
+	        this.Category = source["Category"];
+	        this.Source = source["Source"];
+	        this.SourceURL = source["SourceURL"];
+	        this.SourceSubPath = source["SourceSubPath"];
+	        this.SourceSHA = source["SourceSHA"];
+	        this.LatestSHA = source["LatestSHA"];
+	        this.InstalledAt = this.convertValues(source["InstalledAt"], null);
+	        this.UpdatedAt = this.convertValues(source["UpdatedAt"], null);
+	        this.LastCheckedAt = this.convertValues(source["LastCheckedAt"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PromptLink {
+	    label: string;
+	    url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PromptLink(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.url = source["url"];
+	    }
+	}
+	export class Prompt {
+	    name: string;
+	    description?: string;
+	    category: string;
+	    path: string;
+	    filePath: string;
+	    content: string;
+	    imageURLs?: string[];
+	    webLinks?: PromptLink[];
+	    // Go type: time
+	    createdAt: any;
+	    // Go type: time
+	    updatedAt: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Prompt(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.category = source["category"];
+	        this.path = source["path"];
+	        this.filePath = source["filePath"];
+	        this.content = source["content"];
+	        this.imageURLs = source["imageURLs"];
+	        this.webLinks = this.convertValues(source["webLinks"], PromptLink);
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class SkillMeta {
+	    Name: string;
+	    Description: string;
+	    ArgumentHint: string;
+	    AllowedTools: string;
+	    Context: string;
+	    DisableModelInvocation: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Name = source["Name"];
+	        this.Description = source["Description"];
+	        this.ArgumentHint = source["ArgumentHint"];
+	        this.AllowedTools = source["AllowedTools"];
+	        this.Context = source["Context"];
+	        this.DisableModelInvocation = source["DisableModelInvocation"];
+	    }
+	}
 
 }
 
@@ -371,8 +563,8 @@ export namespace main {
 	}
 	export class PromptImportPrepareResult {
 	    sessionId: string;
-	    creates: prompt.ImportPrompt[];
-	    conflicts: prompt.ImportPrompt[];
+	    creates: app.ImportPrompt[];
+	    conflicts: app.ImportPrompt[];
 	
 	    static createFrom(source: any = {}) {
 	        return new PromptImportPrepareResult(source);
@@ -381,8 +573,8 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sessionId = source["sessionId"];
-	        this.creates = this.convertValues(source["creates"], prompt.ImportPrompt);
-	        this.conflicts = this.convertValues(source["conflicts"], prompt.ImportPrompt);
+	        this.creates = this.convertValues(source["creates"], app.ImportPrompt);
+	        this.conflicts = this.convertValues(source["conflicts"], app.ImportPrompt);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -441,197 +633,6 @@ export namespace main {
 	        this.skillPath = source["skillPath"];
 	        this.agentName = source["agentName"];
 	        this.targetPath = source["targetPath"];
-	    }
-	}
-
-}
-
-export namespace prompt {
-	
-	export class PromptLink {
-	    label: string;
-	    url: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new PromptLink(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.label = source["label"];
-	        this.url = source["url"];
-	    }
-	}
-	export class ImportPrompt {
-	    name: string;
-	    description?: string;
-	    category: string;
-	    content: string;
-	    imageURLs?: string[];
-	    webLinks?: PromptLink[];
-	
-	    static createFrom(source: any = {}) {
-	        return new ImportPrompt(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.description = source["description"];
-	        this.category = source["category"];
-	        this.content = source["content"];
-	        this.imageURLs = source["imageURLs"];
-	        this.webLinks = this.convertValues(source["webLinks"], PromptLink);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class Prompt {
-	    name: string;
-	    description?: string;
-	    category: string;
-	    path: string;
-	    filePath: string;
-	    content: string;
-	    imageURLs?: string[];
-	    webLinks?: PromptLink[];
-	    // Go type: time
-	    createdAt: any;
-	    // Go type: time
-	    updatedAt: any;
-	
-	    static createFrom(source: any = {}) {
-	        return new Prompt(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.description = source["description"];
-	        this.category = source["category"];
-	        this.path = source["path"];
-	        this.filePath = source["filePath"];
-	        this.content = source["content"];
-	        this.imageURLs = source["imageURLs"];
-	        this.webLinks = this.convertValues(source["webLinks"], PromptLink);
-	        this.createdAt = this.convertValues(source["createdAt"], null);
-	        this.updatedAt = this.convertValues(source["updatedAt"], null);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-
-}
-
-export namespace skill {
-	
-	export class Skill {
-	    ID: string;
-	    Name: string;
-	    Path: string;
-	    Category: string;
-	    Source: string;
-	    SourceURL: string;
-	    SourceSubPath: string;
-	    SourceSHA: string;
-	    LatestSHA: string;
-	    // Go type: time
-	    InstalledAt: any;
-	    // Go type: time
-	    UpdatedAt: any;
-	    // Go type: time
-	    LastCheckedAt: any;
-	
-	    static createFrom(source: any = {}) {
-	        return new Skill(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ID = source["ID"];
-	        this.Name = source["Name"];
-	        this.Path = source["Path"];
-	        this.Category = source["Category"];
-	        this.Source = source["Source"];
-	        this.SourceURL = source["SourceURL"];
-	        this.SourceSubPath = source["SourceSubPath"];
-	        this.SourceSHA = source["SourceSHA"];
-	        this.LatestSHA = source["LatestSHA"];
-	        this.InstalledAt = this.convertValues(source["InstalledAt"], null);
-	        this.UpdatedAt = this.convertValues(source["UpdatedAt"], null);
-	        this.LastCheckedAt = this.convertValues(source["LastCheckedAt"], null);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class SkillMeta {
-	    Name: string;
-	    Description: string;
-	    ArgumentHint: string;
-	    AllowedTools: string;
-	    Context: string;
-	    DisableModelInvocation: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new SkillMeta(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Name = source["Name"];
-	        this.Description = source["Description"];
-	        this.ArgumentHint = source["ArgumentHint"];
-	        this.AllowedTools = source["AllowedTools"];
-	        this.Context = source["Context"];
-	        this.DisableModelInvocation = source["DisableModelInvocation"];
 	    }
 	}
 

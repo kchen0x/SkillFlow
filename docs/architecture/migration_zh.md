@@ -6,6 +6,18 @@
 
 迁移应采用渐进式方式。目标架构可以严格，但实施过程不应采用高风险的一次性重写。
 
+## 当前进度检查点
+
+截至 2026-03-21：
+
+- `skillcatalog` 已迁出到 `core/skillcatalog/app`、`domain`、`infra`
+- `promptcatalog` 已迁出到 `core/promptcatalog/app`、`domain`、`infra`
+- `cmd/skillflow` 和相关后端包已经不再 import `core/skill`
+- `cmd/skillflow` 已经不再 import `core/prompt`
+- 旧的 `core/skill` 和 `core/prompt` 包已经移除
+
+这意味着阶段 1 现在已经有两个核心上下文完成抽取，后续迁移可以把 `skillcatalog` 和 `promptcatalog` 作为参考模式。
+
 ## 当前到目标的映射
 
 | 当前包 / 区域 | 目标归属 |
@@ -148,4 +160,4 @@
 - 跨上下文读视图通过 `readmodel/`
 - 旧包会被持续废弃，而不是继续悄悄接收新代码
 
-*最后更新：2026-03-20*
+*最后更新：2026-03-21*
