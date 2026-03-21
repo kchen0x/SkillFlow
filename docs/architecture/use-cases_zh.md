@@ -38,7 +38,7 @@
 
 - 对于仓库来源的 Skill，`CreateInstalledSkillFromSource` 必须强制执行 `repo + subpath -> 一个已安装 Skill` 的约束
 - `ImportLocalSkill` 需要在手动导入时基于规范化内容快照生成 `LogicalSkillKey`，并将其持久化保存，因为这类 skill 后续没有 `SkillSourceRef` 可供派生
-- 只刷新版本状态的更新检查，仍然可以留在该上下文，只是来源线索来自 `skillsource`
+- 只刷新版本状态的更新检查仍然留在该上下文，只是来源线索来自 `skillsource`
 
 ## `promptcatalog`
 
@@ -66,7 +66,6 @@
 
 - 导入 session 是应用层流程对象，不是聚合根
 - 当前 Prompt 导入冲突行为是基于名称已存在的覆盖检测
-- 更丰富的 Prompt 语义差异比较属于未来增强方向，不是当前领域行为
 - 导出格式属于应用层或基础设施层，不属于 Prompt 领域模型
 
 ## `agentintegration`
@@ -205,7 +204,7 @@
 3. 刷新派生 read model
 4. 发布恢复后的事件
 
-这些 orchestrator 现在已经落在 `core/orchestration` 中，对应的 Wails transport method 必须走这条路径。
+这些 orchestrator 属于 `core/orchestration`，对应的 Wails transport method 必须走这条路径。
 
 ## 壳层协调
 
@@ -272,7 +271,7 @@
 
 ## Transport Adapter 映射
 
-`cmd/skillflow/` 中对 Wails 暴露的 `App` 方法应持续保持为薄 transport adapter，转调上下文应用服务、orchestration 服务或 read model。
+`cmd/skillflow/` 中对 Wails 暴露的 `App` 方法保持为薄 transport adapter，转调上下文应用服务、orchestration 服务或 read model。
 
 例如：
 

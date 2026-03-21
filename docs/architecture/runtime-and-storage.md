@@ -4,18 +4,18 @@
 
 SkillFlow remains a Wails desktop application.
 
-Current and future architecture must preserve these constraints:
+The backend architecture preserves these constraints:
 
 - repository root contains no Go source files
 - `cmd/skillflow/*.go` stays flat because Wails bindings require a single `package main` directory
 - Wails-bound transport adapters remain in `cmd/skillflow/`
 - the desktop shell binds backend use cases directly to the frontend instead of exposing a REST API
 
-## `cmd/skillflow/` Responsibilities After Refactor
+## `cmd/skillflow/` Responsibilities
 
-`cmd/skillflow/` should become a shell-oriented composition layer.
+`cmd/skillflow/` is the shell-oriented composition layer.
 
-It should contain:
+It contains:
 
 - Wails startup and binding registration
 - Wails-facing transport adapters
@@ -26,28 +26,32 @@ It should contain:
 - settings-save fan-out coordination where multiple contexts must be updated together
 - dependency assembly for backend contexts, orchestration services, and read models
 
-It should not remain the home for reusable business use cases such as skill import rules, prompt CRUD rules, source synchronization rules, or agent push/pull semantics.
+It is not the home for reusable business use cases such as skill import rules, prompt CRUD rules, source synchronization rules, or agent push/pull semantics.
 
 ## Helper and UI Runtime Split
 
-The current helper/UI split remains valid after the DDD refactor:
+SkillFlow uses a helper/UI split:
 
 - the `helper` process owns tray presence, local control endpoints, and UI relaunch/focus
 - the `ui` process hosts Wails, React, and the transport adapters that call backend application services
 - closing the main window exits the UI process without killing the helper shell
 
-The DDD refactor changes where backend logic lives, but not this shell topology.
-
-## Target Repository Shape
+## Repository Shape
 
 ```text
 /
   go.mod
+  go.sum
   Makefile
+  README.md
+  README_zh.md
   docs/
-    architecture.md
-    architecture_zh.md
     architecture/
+    config.md
+    config_zh.md
+    features.md
+    features_zh.md
+    plans/
   core/
     platform/
     shared/
@@ -58,23 +62,28 @@ The DDD refactor changes where backend logic lives, but not this shell topology.
     agentintegration/
     skillsource/
     backup/
+    config/
   cmd/
     skillflow/
       main.go
       bootstrap.go
       app.go
       app_*.go
+      adapters.go
+      providers.go
+      events.go
       process_*.go
       tray_*.go
       window_*.go
+      single_instance_*.go
       frontend/
 ```
 
-## Storage Direction
+## Storage Layout
 
-Logical ownership should be split by bounded context, but physical storage should remain operationally simple.
+Logical ownership is split by bounded context, while physical storage remains operationally simple.
 
-Recommended target layout:
+Current persisted layout:
 
 ```text
 <AppDataDir>/
@@ -94,13 +103,13 @@ Recommended target layout:
   logs/
 ```
 
-Within `config.json` and `config_local.json`, each context should read and write its own namespace through a platform settings store. The physical files do not need to mirror bounded contexts 1:1.
+Within `config.json` and `config_local.json`, each context reads and writes its own namespace through the platform settings store. The physical files do not need to mirror bounded contexts 1:1.
 
 ## Configuration Ownership
 
-The old `AppConfig` structure should be treated as a transitional compatibility structure, not the long-term domain model.
+`config.json` and `config_local.json` are shared storage files. Ownership of the fields inside them is still split by context and platform concern.
 
-Recommended logical ownership:
+Logical ownership:
 
 - `skillcatalog`
   - skill library location
@@ -123,14 +132,14 @@ Recommended logical ownership:
   - skipped update version
   - proxy and log-level preferences
 
-Current migration note:
+Implementation ownership:
 
-- app-data path ownership now lives in `core/platform/appdata`
-- shell proxy, window, log-level, and skipped-update preferences now live in `core/platform/shellsettings` plus `core/platform/settingsstore`
-- skill-status visibility preferences now live in `core/readmodel/preferences`
-- cross-context write flows for import, push/pull, update, and restore compensation now live in `core/orchestration`
-- installed-skill, starred-skill, and agent-presence composition now lives in `core/readmodel/skills` plus `core/readmodel/viewstate`
-- `core/config` remains as the frontend-facing compatibility DTO and split/merge persistence facade around these context- and platform-owned settings components
+- app-data path ownership lives in `core/platform/appdata`
+- shell proxy, window, log-level, and skipped-update preferences live in `core/platform/shellsettings` plus `core/platform/settingsstore`
+- skill-status visibility preferences live in `core/readmodel/preferences`
+- cross-context write flows for import, push/pull, update, and restore compensation live in `core/orchestration`
+- installed-skill, starred-skill, and agent-presence composition lives in `core/readmodel/skills` plus `core/readmodel/viewstate`
+- `core/config` is the frontend-facing settings facade and split/merge persistence adapter around these context- and platform-owned settings components
 
 ## Repository vs Gateway Examples
 
@@ -152,7 +161,7 @@ Gateways:
 
 ## Events and Derived State
 
-Event forwarding to the frontend remains a shell integration concern, but event publication should move closer to application services and orchestration services.
+Event forwarding to the frontend remains a shell integration concern. Event publication belongs close to application services and orchestration services.
 
 Derived snapshots such as installed-skill cards or aggregated agent presence should live under `readmodel/` or context-local `infra/projection/`, not inside domain models.
 

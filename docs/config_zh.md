@@ -57,7 +57,7 @@
 
 `config.json` 只保存可跨设备移动的安全配置，不应包含机器相关绝对路径或敏感凭据。
 
-在真正加载配置之前，SkillFlow 会先执行 `core/upgrade` 里的单次术语割接。旧版基于 `tools` 的键会被原地改写为新版基于 `agents` 的 schema，运行时代码只读取新 schema。
+在真正加载配置之前，SkillFlow 会先执行 `core/platform/upgrade` 里的单次术语割接。旧版基于 `tools` 的键会被原地改写为新版基于 `agents` 的 schema，运行时代码只读取新 schema。
 
 ### 示例
 

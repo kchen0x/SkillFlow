@@ -26,8 +26,6 @@ core/<context>/
 
 ## Transport Adapter
 
-原先的 `controller` 概念，在这里更接近 transport adapter。
-
 当前实现位置：
 
 - `cmd/skillflow/` 中的 Wails `App` 方法
@@ -45,7 +43,7 @@ core/<context>/
 - 直接访问文件系统、Git、云服务或 SDK
 - 隐式的跨上下文业务协调
 
-如果未来增加 CLI 或 API 入口，也应在模块边界承担同样的角色。
+如果增加 CLI 或 API 入口，也应在模块边界承担同样的角色。
 
 ## `app`
 
@@ -141,7 +139,7 @@ core/<context>/
 - HTTP 客户端基础能力
 - 事件总线
 - settings store
-- upgrade / startup cutover 辅助
+- 启动期升级辅助
 - 路径规范化
 - 更新下载基础能力
 
@@ -209,4 +207,4 @@ shared -> 不依赖具体上下文
 5. 在 `infra` 实现这些端口
 6. 通过 transport adapter、orchestration 服务或 read model 对外暴露
 
-*最后更新：2026-03-20*
+*最后更新：2026-03-21*

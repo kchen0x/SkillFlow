@@ -38,7 +38,7 @@ The main rule is:
 
 - `CreateInstalledSkillFromSource` should enforce the `repo + subpath -> one installed skill` constraint for repository-backed skills.
 - `ImportLocalSkill` should generate `LogicalSkillKey` from a canonicalized content snapshot for manually imported skills and persist that key because there is no `SkillSourceRef` to derive from later.
-- update checks that only refresh version state can stay in this context even if source hints come from `skillsource`.
+- update checks that only refresh version state stay in this context even if source hints come from `skillsource`.
 
 ## `promptcatalog`
 
@@ -66,7 +66,6 @@ The main rule is:
 
 - import sessions are application-flow objects, not aggregate roots
 - current prompt import conflict behavior is name-based overwrite detection
-- semantic prompt diffing is a future enhancement, not current domain behavior
 - export formatting belongs to the application layer or infrastructure, not the prompt domain model
 
 ## `agentintegration`
@@ -205,7 +204,7 @@ Typical sequence:
 3. refresh derived read models
 4. emit post-restore events
 
-These orchestrators now exist in `core/orchestration` and are the required path for the corresponding Wails-facing transport methods.
+These orchestrators belong in `core/orchestration` and are the required path for the corresponding Wails-facing transport methods.
 
 ## Shell Coordination
 
@@ -272,7 +271,7 @@ Combines:
 
 ## Transport Adapter Mapping
 
-The Wails-facing `App` methods in `cmd/skillflow/` are expected to stay thin transport adapters that delegate to context application services, orchestration services, or read models.
+The Wails-facing `App` methods in `cmd/skillflow/` stay thin transport adapters that delegate to context application services, orchestration services, or read models.
 
 Examples:
 

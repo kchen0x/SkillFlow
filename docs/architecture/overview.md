@@ -2,7 +2,7 @@
 
 ## Architectural Style
 
-SkillFlow's target backend architecture is a DDD-oriented modular monolith hosted inside a Wails desktop application.
+SkillFlow's backend architecture is a DDD-oriented modular monolith hosted inside a Wails desktop application.
 
 The design goals are:
 
@@ -10,7 +10,7 @@ The design goals are:
 2. Separate domain logic from shell and OS integration concerns.
 3. Replace technology-oriented package boundaries with bounded contexts.
 4. Keep Wails-specific transport and shell code in `cmd/skillflow/` and reusable business code in `core/`.
-5. Support incremental migration from the current package layout without a big-bang rewrite.
+5. Keep cross-context writes in `core/orchestration/` and cross-context reads in `core/readmodel/`.
 
 ## High-Level Shape
 
@@ -53,9 +53,9 @@ Pages such as Dashboard, Settings, My Agents, and Starred Repos are not domain b
 
 ### Transport adapters stay at the module edge
 
-Because Wails requires bound methods to live in `cmd/skillflow/package main`, current transport adapters stay in `cmd/skillflow/`. They translate Wails requests into application use cases and read models.
+Because Wails requires bound methods to live in `cmd/skillflow/package main`, transport adapters stay in `cmd/skillflow/`. They translate Wails requests into application use cases and read models.
 
-If future CLI or API entrypoints are added, they should follow the same transport-adapter role at the module edge rather than introducing Wails-specific code into `core/`.
+If CLI or API entrypoints are added later, they should follow the same transport-adapter role at the module edge rather than introducing Wails-specific code into `core/`.
 
 ### Vertical contexts over horizontal mega-layers
 
@@ -77,4 +77,4 @@ Only stable concepts shared by multiple contexts belong in `shared/`, such as lo
 
 If a unified content view is needed, build it in `readmodel/` or application queries rather than by forcing a common domain parent type.
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*

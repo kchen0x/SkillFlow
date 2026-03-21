@@ -26,8 +26,6 @@ core/<context>/
 
 ## Transport Adapters
 
-The old `controller` concept maps most closely to transport adapters.
-
 Current implementation location:
 
 - `cmd/skillflow/` Wails `App` methods
@@ -45,7 +43,7 @@ Non-responsibilities:
 - direct filesystem, Git, cloud, or SDK access
 - hidden cross-context business coordination
 
-Future CLI or API entrypoints should follow the same role at the module edge.
+CLI or API entrypoints added later should follow the same role at the module edge.
 
 ## `app`
 
@@ -141,7 +139,7 @@ Rules:
 - HTTP client primitives
 - event bus
 - settings store
-- upgrade / startup cutover helpers
+- startup upgrade helpers
 - path normalization
 - update-download primitives
 
@@ -209,4 +207,4 @@ When adding a new capability:
 5. implement the ports in `infra`
 6. expose the use case through a transport adapter, orchestration service, or read model
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*

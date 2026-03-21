@@ -217,8 +217,8 @@ git commit -m "feat: add dashboard skill auto update toggle"
 - Modify: `docs/features_zh.md`
 - Modify: `README.md`
 - Modify: `README_zh.md`
-- Modify: `docs/architecture.md`
-- Modify: `docs/architecture_zh.md`
+- Modify: `docs/architecture/README.md`
+- Modify: `docs/architecture/README_zh.md`
 - Modify: `docs/config.md`
 - Modify: `docs/config_zh.md`
 
@@ -256,6 +256,6 @@ Expected: only intended implementation and docs changes remain.
 **Step 4: Commit**
 
 ```bash
-git add docs/features.md docs/features_zh.md README.md README_zh.md docs/architecture.md docs/architecture_zh.md docs/config.md docs/config_zh.md
+git add docs/features.md docs/features_zh.md README.md README_zh.md docs/architecture/README.md docs/architecture/README_zh.md docs/config.md docs/config_zh.md
 git commit -m "docs: document skill auto update flow"
 ```

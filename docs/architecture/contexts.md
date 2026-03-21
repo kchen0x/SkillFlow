@@ -77,7 +77,6 @@ Shell concerns such as tray, window state, launch-at-login, single-instance beha
 - prompts are first-class content, not a sub-type of skill
 - category is a domain concept, not just a directory name
 - current import conflict semantics are name-based conflicts against existing prompts
-- richer semantic diffing for prompt import is a future enhancement, not current behavior
 
 ### Published Language
 
@@ -97,7 +96,7 @@ Shell concerns such as tray, window state, launch-at-login, single-instance beha
 ### Aggregate Roots
 
 - `AgentProfile`
-- `AgentPushPolicy` when push policy grows into an explicit lifecycle object
+- `AgentPushPolicy`
 
 ### Important Value Objects
 
@@ -138,7 +137,6 @@ Shell concerns such as tray, window state, launch-at-login, single-instance beha
 
 - `StarRepo`
 - `SkillSource`
-- `TrackedSkillSource` as an abstraction only if source types later expand beyond repository-backed sources
 
 ### Important Value Objects
 
@@ -182,7 +180,7 @@ Shell concerns such as tray, window state, launch-at-login, single-instance beha
 ### Aggregate Roots
 
 - `BackupProfile`
-- `GitBackupProfile` when Git backup remains a distinct mode
+- `GitBackupProfile`
 
 ### Important Value Objects
 
@@ -210,7 +208,7 @@ Context-local instance IDs such as `SkillID` and `PromptID` stay inside their ow
 
 ## Unified Skill Identity and State Model
 
-This rule remains normative even after the DDD refactor.
+This rule is normative.
 
 ### Identity Layers
 
@@ -270,4 +268,4 @@ Examples:
 - Settings
 - source candidate list enriched with installed and pushed status
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*

@@ -59,7 +59,7 @@ Path: `<AppDataDir>/config.json`
 
 `config.json` stores settings that are safe to move across devices. It must not contain machine-specific absolute paths or sensitive credentials.
 
-Before config is loaded, SkillFlow runs the one-time terminology cutover in `core/upgrade`. Legacy `tools`-based keys are rewritten in place to the new `agents`-based schema, and runtime code only reads the new schema.
+Before config is loaded, SkillFlow runs the one-time terminology cutover in `core/platform/upgrade`. Legacy `tools`-based keys are rewritten in place to the new `agents`-based schema, and runtime code only reads the new schema.
 
 ### Example
 

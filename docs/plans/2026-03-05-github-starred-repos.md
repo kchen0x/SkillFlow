@@ -4,7 +4,7 @@
 
 **Goal:** Replace the GitHub API-based skill installer with git clone/pull, and add a "GitHub 收藏" page for managing starred repos with auto-sync, dual-view browsing, and batch import.
 
-**Architecture:** New `core/git` package wraps git subprocess calls (clone/update/scan/storage). `App.ScanGitHub` and `App.InstallFromGitHub` are refactored to use local cache. New App methods serve the starred repos frontend. A new `StarredRepos.tsx` page provides folder and flat views with batch import.
+**Implementation:** Git-based local cache handles clone, update, scan, and storage flow. `App.ScanGitHub` and `App.InstallFromGitHub` use the local cache. New App methods serve the starred repos frontend. A new `StarredRepos.tsx` page provides folder and flat views with batch import.
 
 **Tech Stack:** Go `os/exec` (git), `core/git` package, React/TypeScript, Wails v2 bindings, lucide-react icons.
 
@@ -499,12 +499,12 @@ git commit -m "feat: add star sync events to notify package"
 
 ---
 
-### Task 5: Refactor App.ScanGitHub and App.InstallFromGitHub
+### Task 5: Update App.ScanGitHub and App.InstallFromGitHub
 
 **Files:**
 - Modify: `app.go`
 
-The two methods are refactored to use local git cache instead of the GitHub Contents API.
+The two methods use local git cache instead of the GitHub Contents API.
 
 `ScanGitHub` now:
 1. Derives `cacheDir` from `config.AppDataDir()` + `c.Path`
@@ -629,7 +629,7 @@ go build ./...
 
 ```bash
 git add app.go
-git commit -m "refactor: ScanGitHub and InstallFromGitHub use git clone/pull"
+git commit -m "feat: ScanGitHub and InstallFromGitHub use git clone/pull"
 ```
 
 ---
