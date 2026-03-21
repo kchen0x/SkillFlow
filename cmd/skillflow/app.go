@@ -17,10 +17,12 @@ import (
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/orchestration"
 	"github.com/shinerio/skillflow/core/platform/eventbus"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/platform/logging"
 	"github.com/shinerio/skillflow/core/platform/upgrade"
+	readmodelskills "github.com/shinerio/skillflow/core/readmodel/skills"
 	"github.com/shinerio/skillflow/core/readmodel/viewstate"
 	"github.com/shinerio/skillflow/core/shared/logicalkey"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
@@ -476,23 +478,20 @@ func (a *App) gitProxyURL() string {
 
 func (a *App) ListSkills() ([]InstalledSkillEntry, error) {
 	return measureOperation(a, "list_skills", func() ([]InstalledSkillEntry, error) {
-		fingerprint, fingerprintErr := a.installedSkillsFingerprint()
-		if fingerprintErr == nil {
-			var cached []InstalledSkillEntry
-			state, err := a.ensureViewCache().Load(installedSkillsSnapshotName, fingerprint, &cached)
-			if err == nil && state == viewstate.StateHit {
-				return cached, nil
-			}
-		}
-
-		entries, err := a.listSkillsUncached()
+		cfg, err := a.config.Load()
 		if err != nil {
 			return nil, err
 		}
-		if fingerprint, err := a.installedSkillsFingerprint(); err == nil {
-			_ = a.ensureViewCache().Save(installedSkillsSnapshotName, fingerprint, entries)
+		fingerprint, err := a.installedSkillsFingerprint()
+		if err != nil {
+			return nil, err
 		}
-		return entries, nil
+		return a.newSkillsReadmodelService().ListInstalledSkills(a.ctx, readmodelskills.InstalledSkillsInput{
+			DefaultCategory:     defaultCategoryName,
+			RepoScanMaxDepth:    config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+			AgentProfiles:       cfg.Agents,
+			SnapshotFingerprint: fingerprint,
+		})
 	})
 }
 
@@ -660,14 +659,21 @@ func (a *App) PushStarSkillsToAgentsForce(skillPaths []string, agentNames []stri
 }
 
 func (a *App) ImportLocal(dir, category string) (*skilldomain.InstalledSkill, error) {
-	category = normalizeCategoryName(category)
-	sk, err := a.storage.Import(dir, category, skilldomain.SourceManual, "", "")
+	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, err
 	}
-	a.autoPushImportedSkillsToAgents("local.import", []*skilldomain.InstalledSkill{sk})
-	a.scheduleAutoBackup()
-	return sk, nil
+	result, err := a.newOrchestrationService().ImportLocalSkill(a.ctx, orchestration.ImportLocalCommand{
+		SourceDir:          dir,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Skill, nil
 }
 
 func (a *App) autoPushAgentTargets(cfg config.AppConfig) []agentdomain.AgentProfile {
@@ -794,127 +800,84 @@ func (a *App) CheckMissingAgentPushDirs(agentNames []string) ([]agentdomain.Miss
 // PushToAgents pushes selected skills to target agents.
 // Returns structured conflicts that were skipped.
 func (a *App) PushToAgents(skillIDs []string, agentNames []string) ([]agentdomain.PushConflict, error) {
-	a.logInfof("push skills to agents started: skillCount=%d agentCount=%d", len(skillIDs), len(agentNames))
-	cfg, _ := a.config.Load()
-	skills, err := a.storage.ListAll()
+	cfg, err := a.config.Load()
 	if err != nil {
-		a.logErrorf("push skills to agents failed: %v", err)
 		return nil, err
 	}
-	idSet := map[string]bool{}
-	for _, id := range skillIDs {
-		idSet[id] = true
-	}
-	var selected []*skilldomain.InstalledSkill
-	for _, sk := range skills {
-		if idSet[sk.ID] {
-			selected = append(selected, sk)
-		}
-	}
-	conflicts, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, selected, false)
+	result, err := a.newOrchestrationService().PushInstalledSkills(a.ctx, orchestration.PushInstalledSkillsCommand{
+		SkillIDs:      skillIDs,
+		AgentNames:    agentNames,
+		AgentProfiles: cfg.Agents,
+		Force:         false,
+	})
 	if err != nil {
-		a.logErrorf("push skills to agents failed: %v", err)
 		return nil, err
 	}
-	a.logInfof("push skills to agents completed: conflicts=%d", len(conflicts))
-	return conflicts, nil
+	return result.Conflicts, nil
 }
 
 // PushToAgentsForce pushes and overwrites conflicts.
 func (a *App) PushToAgentsForce(skillIDs []string, agentNames []string) error {
-	a.logInfof("force push skills to agents started: skillCount=%d agentCount=%d", len(skillIDs), len(agentNames))
-	cfg, _ := a.config.Load()
-	skills, _ := a.storage.ListAll()
-	idSet := map[string]bool{}
-	for _, id := range skillIDs {
-		idSet[id] = true
-	}
-	var selected []*skilldomain.InstalledSkill
-	for _, sk := range skills {
-		if idSet[sk.ID] {
-			selected = append(selected, sk)
-		}
-	}
-	if _, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, selected, true); err != nil {
-		a.logErrorf("force push skills to agents failed: %v", err)
+	cfg, err := a.config.Load()
+	if err != nil {
 		return err
 	}
-	a.logInfof("force push skills to agents completed")
-	return nil
+	_, err = a.newOrchestrationService().PushInstalledSkills(a.ctx, orchestration.PushInstalledSkillsCommand{
+		SkillIDs:      skillIDs,
+		AgentNames:    agentNames,
+		AgentProfiles: cfg.Agents,
+		Force:         true,
+	})
+	return err
 }
 
 // PullFromAgent imports selected skills from an agent into SkillFlow storage.
 func (a *App) PullFromAgent(agentName string, skillPaths []string, category string) ([]string, error) {
-	category = normalizeCategoryName(category)
-	cfg, _ := a.config.Load()
-	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
-	if !ok {
+	cfg, err := a.config.Load()
+	if err != nil {
+		return nil, err
+	}
+	result, err := a.newOrchestrationService().PullFromAgent(a.ctx, orchestration.PullFromAgentCommand{
+		AgentName:          agentName,
+		SkillPaths:         skillPaths,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		RepoScanMaxDepth:   cfg.RepoScanMaxDepth,
+		Force:              false,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !result.AgentFound {
 		return nil, nil
 	}
-	_, installedIndex, err := a.installedIndex()
-	if err != nil {
-		return nil, err
-	}
-	scanned, err := newAgentIntegrationService().ScanAgentSkills(a.ctx, profile, installedIndex, a.buildAgentPresenceIndex(installedIndex), a.repoScanMaxDepth())
-	if err != nil {
-		return nil, err
-	}
-	candidates := agentapp.SelectAgentSkillCandidates(scanned, skillPaths)
-	var conflicts []string
-	imported := make([]*skilldomain.InstalledSkill, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate.Imported {
-			conflicts = append(conflicts, candidate.Path)
-			continue
-		}
-		sk, err := a.storage.Import(candidate.Path, category, skilldomain.SourceManual, "", "")
-		if err == skillrepo.ErrSkillExists {
-			conflicts = append(conflicts, candidate.Path)
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		imported = append(imported, sk)
-	}
-	a.autoPushImportedSkillsToAgents("agent.pull", imported)
-	a.scheduleAutoBackup()
-	return conflicts, nil
+	return result.Conflicts, nil
 }
 
 // PullFromAgentForce imports selected skills, overwriting existing ones.
 func (a *App) PullFromAgentForce(agentName string, skillPaths []string, category string) error {
-	category = normalizeCategoryName(category)
-	cfg, _ := a.config.Load()
-	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
-	if !ok {
+	cfg, err := a.config.Load()
+	if err != nil {
+		return err
+	}
+	result, err := a.newOrchestrationService().PullFromAgent(a.ctx, orchestration.PullFromAgentCommand{
+		AgentName:          agentName,
+		SkillPaths:         skillPaths,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		RepoScanMaxDepth:   cfg.RepoScanMaxDepth,
+		Force:              true,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.AgentFound {
 		return nil
 	}
-	_, installedIndex, err := a.installedIndex()
-	if err != nil {
-		return err
-	}
-	scanned, err := newAgentIntegrationService().ScanAgentSkills(a.ctx, profile, installedIndex, a.buildAgentPresenceIndex(installedIndex), a.repoScanMaxDepth())
-	if err != nil {
-		return err
-	}
-	imported := make([]*skilldomain.InstalledSkill, 0, len(skillPaths))
-	for _, candidate := range agentapp.SelectAgentSkillCandidates(scanned, skillPaths) {
-		existing, _ := a.storage.ListAll()
-		for _, e := range existing {
-			logicalKey, logicalErr := skilldomain.LogicalKey(e)
-			if (candidate.LogicalKey != "" && logicalErr == nil && logicalKey == candidate.LogicalKey) || (candidate.LogicalKey == "" && e.Name == candidate.Name) {
-				_ = a.storage.Delete(e.ID)
-			}
-		}
-		sk, err := a.storage.Import(candidate.Path, category, skilldomain.SourceManual, "", "")
-		if err != nil {
-			return err
-		}
-		imported = append(imported, sk)
-	}
-	a.autoPushImportedSkillsToAgents("agent.pull.force", imported)
-	a.scheduleAutoBackup()
 	return nil
 }
 
@@ -924,100 +887,6 @@ func (a *App) repoScanMaxDepth() int {
 		return config.DefaultRepoScanMaxDepth
 	}
 	return config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
-}
-
-// --- Config ---
-
-func (a *App) GetConfig() (config.AppConfig, error) {
-	cfg, err := a.config.Load()
-	if err != nil {
-		return cfg, err
-	}
-	cfg.DefaultCategory = defaultCategoryName
-	cfg.LogLevel = config.NormalizeLogLevel(cfg.LogLevel)
-	cfg.RepoScanMaxDepth = config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
-	return cfg, nil
-}
-
-func (a *App) SaveConfig(cfg config.AppConfig) error {
-	a.logInfof("save config requested")
-	prevCfg, err := a.config.Load()
-	if err != nil {
-		a.logErrorf("save config failed: load current config failed: %v", err)
-		return err
-	}
-	cfg.DefaultCategory = defaultCategoryName
-	cfg.LogLevel = config.NormalizeLogLevel(cfg.LogLevel)
-	cfg.RepoScanMaxDepth = config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
-	if err := a.config.Save(cfg); err != nil {
-		a.logErrorf("save config failed: %v", err)
-		return err
-	}
-	a.syncExistingSkillsForNewAutoPushAgents(prevCfg, cfg)
-	if prevCfg.LaunchAtLogin != cfg.LaunchAtLogin {
-		if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
-			persistedCfg := cfg
-			rollbackCfg := cfg
-			rollbackCfg.LaunchAtLogin = prevCfg.LaunchAtLogin
-			if rollbackErr := a.config.Save(rollbackCfg); rollbackErr != nil {
-				a.logErrorf("save config rollback failed: restore launch-at-login setting=%t err=%v", prevCfg.LaunchAtLogin, rollbackErr)
-			} else if rollbackErr := a.syncLaunchAtLogin(prevCfg.LaunchAtLogin); rollbackErr != nil {
-				a.logErrorf("save config rollback failed: restore launch-at-login state=%t err=%v", prevCfg.LaunchAtLogin, rollbackErr)
-				persistedCfg = rollbackCfg
-			} else {
-				persistedCfg = rollbackCfg
-			}
-			a.setLoggerLevel(persistedCfg.LogLevel)
-			a.startAutoSyncTimer(persistedCfg.Cloud.SyncIntervalMinutes)
-			a.logErrorf("save config failed: apply launch-at-login failed: %v", err)
-			return err
-		}
-	}
-	a.setLoggerLevel(cfg.LogLevel)
-	a.logInfof("save config completed: logLevel=%s repoScanMaxDepth=%d launchAtLogin=%t", cfg.LogLevel, cfg.RepoScanMaxDepth, cfg.LaunchAtLogin)
-	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
-	return nil
-}
-
-func (a *App) syncExistingSkillsForNewAutoPushAgents(prevCfg, nextCfg config.AppConfig) {
-	prevTargets := make(map[string]struct{}, len(prevCfg.AutoPushAgents))
-	for _, name := range prevCfg.AutoPushAgents {
-		prevTargets[name] = struct{}{}
-	}
-
-	newTargets := make([]string, 0, len(nextCfg.AutoPushAgents))
-	for _, name := range nextCfg.AutoPushAgents {
-		if _, existed := prevTargets[name]; existed {
-			continue
-		}
-		newTargets = append(newTargets, name)
-	}
-	if len(newTargets) == 0 {
-		return
-	}
-
-	skills, err := a.storage.ListAll()
-	if err != nil {
-		a.logErrorf("sync existing skills to new auto push agents failed: load skills failed: %v", err)
-		return
-	}
-	if len(skills) == 0 {
-		a.logInfof("sync existing skills to new auto push agents skipped: reason=no-skills agentCount=%d", len(newTargets))
-		return
-	}
-
-	skillIDs := make([]string, 0, len(skills))
-	for _, sk := range skills {
-		skillIDs = append(skillIDs, sk.ID)
-	}
-
-	a.logInfof("sync existing skills to new auto push agents started: skillCount=%d agentCount=%d", len(skillIDs), len(newTargets))
-	conflicts, err := a.PushToAgents(skillIDs, newTargets)
-	if err != nil {
-		a.logErrorf("sync existing skills to new auto push agents failed: %v", err)
-		return
-	}
-	a.logInfof("sync existing skills to new auto push agents completed: skillCount=%d agentCount=%d conflicts=%d", len(skillIDs), len(newTargets), len(conflicts))
 }
 
 func (a *App) AddCustomAgent(name, pushDir string) error {
@@ -1217,34 +1086,19 @@ func (a *App) CheckUpdates() error {
 
 // UpdateSkill refreshes an installed GitHub skill from the local cached repo copy.
 func (a *App) UpdateSkill(skillID string) error {
-	a.logInfof("update skill requested: id=%s", skillID)
-	sk, err := a.storage.Get(skillID)
+	cfg, err := a.config.Load()
 	if err != nil {
-		a.logErrorf("update skill failed: %v", err)
 		return err
 	}
-	cacheSourceDir, latestSHA, err := a.cachedSkillSourceDir(sk)
-	if err != nil {
-		a.logErrorf("update skill cache prepare failed: id=%s name=%s repo=%s subPath=%s err=%v", skillID, sk.Name, sk.SourceURL, sk.SourceSubPath, err)
+	if _, err := a.newOrchestrationService().UpdateInstalledSkill(a.ctx, orchestration.UpdateInstalledSkillCommand{
+		SkillID:            skillID,
+		AgentProfiles:      cfg.Agents,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	}); err != nil {
 		return err
 	}
-	a.logInfof("update skill cache copy started: id=%s name=%s source=%s", skillID, sk.Name, cacheSourceDir)
-	if err := a.storage.OverwriteFromDir(skillID, cacheSourceDir); err != nil {
-		a.logErrorf("update skill overwrite failed: %v", err)
-		return err
-	}
-	sk.SourceSHA = latestSHA
-	sk.LatestSHA = ""
-	_ = a.storage.UpdateMeta(sk)
-	if err := a.refreshUpdatedPushedSkillCopies(sk); err != nil {
-		a.logErrorf("update skill refresh pushed copies failed: id=%s name=%s err=%v", skillID, sk.Name, err)
-		a.scheduleAutoBackup()
-		return err
-	}
-	a.autoPushSkillsToConfiguredAgents("skill.update", []*skilldomain.InstalledSkill{sk}, true)
-	a.scheduleAutoBackup()
 	a.hub.Publish(eventbus.Event{Type: eventbus.EventSkillsUpdated})
-	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
 	return nil
 }
 
@@ -1364,26 +1218,6 @@ func (a *App) cachedSkillSourceDir(sk *skilldomain.InstalledSkill) (string, stri
 	return sourceDir, latestSHA, nil
 }
 
-func (a *App) refreshUpdatedPushedSkillCopies(sk *skilldomain.InstalledSkill) error {
-	if sk == nil {
-		return nil
-	}
-
-	cfg, err := a.config.Load()
-	if err != nil {
-		a.logErrorf("refresh updated pushed skill copies failed: skill=%s load config failed: %v", sk.Name, err)
-		return err
-	}
-
-	a.logInfof("refresh updated pushed skill copies started: skill=%s", sk.Name)
-	if err := newAgentIntegrationService().RefreshPushedCopies(a.ctx, cfg.Agents, sk); err != nil {
-		a.logErrorf("refresh updated pushed skill copies failed: skill=%s err=%v", sk.Name, err)
-		return err
-	}
-	a.logInfof("refresh updated pushed skill copies completed: skill=%s", sk.Name)
-	return nil
-}
-
 func (a *App) checkUpdatesOnStartup() {
 	_ = a.CheckUpdates()
 }
@@ -1491,58 +1325,38 @@ func (a *App) ListStarredRepos() ([]sourcedomain.StarRepo, error) {
 
 func (a *App) ListAllStarSkills() ([]StarSkillEntry, error) {
 	return measureOperation(a, "list_all_star_skills", func() ([]StarSkillEntry, error) {
-		fingerprint, fingerprintErr := a.allStarSkillsFingerprint()
-		if fingerprintErr == nil {
-			var cached []StarSkillEntry
-			state, err := a.ensureViewCache().Load(allStarSkillsSnapshotName, fingerprint, &cached)
-			if err == nil && state == viewstate.StateHit {
-				return cached, nil
-			}
-		}
-
-		skills, err := a.listAllStarSkillsUncached()
+		cfg, err := a.config.Load()
 		if err != nil {
 			return nil, err
 		}
-		if fingerprint, err := a.allStarSkillsFingerprint(); err == nil {
-			_ = a.ensureViewCache().Save(allStarSkillsSnapshotName, fingerprint, skills)
+		fingerprint, err := a.allStarSkillsFingerprint()
+		if err != nil {
+			return nil, err
 		}
-		return skills, nil
+		return a.newSkillsReadmodelService().ListAllStarSkills(a.ctx, readmodelskills.StarSkillsInput{
+			RepoScanMaxDepth:    config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+			AgentProfiles:       cfg.Agents,
+			SnapshotFingerprint: fingerprint,
+		})
 	})
 }
 
-func (a *App) listAllStarSkillsUncached() ([]StarSkillEntry, error) {
-	skills, err := a.newSkillsourceService().ListAllSourceCandidates(a.repoScanMaxDepth())
-	if err != nil {
-		return nil, err
-	}
-	_, installedIndex, err := a.installedIndex()
-	if err != nil {
-		return nil, err
-	}
-	presence := a.buildAgentPresenceIndex(installedIndex)
-	all := resolveSourceCandidates(skills, installedIndex, presence)
-	if all == nil {
-		return []StarSkillEntry{}, nil
-	}
-	return all, nil
-}
-
 func (a *App) ListRepoStarSkills(repoURL string) ([]StarSkillEntry, error) {
-	skills, err := a.newSkillsourceService().ListSourceCandidatesByRepo(repoURL, a.repoScanMaxDepth())
+	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, err
 	}
-	_, installedIndex, err := a.installedIndex()
+	skills, err := a.newSkillsReadmodelService().ListRepoStarSkills(a.ctx, repoURL, readmodelskills.StarSkillsInput{
+		RepoScanMaxDepth: config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+		AgentProfiles:    cfg.Agents,
+	})
 	if err != nil {
 		return nil, err
 	}
-	presence := a.buildAgentPresenceIndex(installedIndex)
-	resolved := resolveSourceCandidates(skills, installedIndex, presence)
-	if resolved == nil {
+	if skills == nil {
 		return []StarSkillEntry{}, nil
 	}
-	return resolved, nil
+	return skills, nil
 }
 
 func (a *App) UpdateStarredRepo(repoURL string) error {
@@ -1616,7 +1430,10 @@ func (a *App) UpdateAllStarredRepos() error {
 }
 
 func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) error {
-	category = normalizeCategoryName(category)
+	cfg, err := a.config.Load()
+	if err != nil {
+		return err
+	}
 	repos, _ := a.newSkillsourceService().ListStarRepos()
 	var repoLocalDir string
 	canonicalRepoURL := repoURL
@@ -1635,31 +1452,14 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	if repoLocalDir == "" {
 		return fmt.Errorf("starred repo not found: %s", repoURL)
 	}
-	_, installedIndex, err := a.installedIndex()
-	if err != nil {
-		return err
-	}
-	imported := make([]*skilldomain.InstalledSkill, 0, len(skillPaths))
-	for _, skillPath := range skillPaths {
-		subPath, _ := filepath.Rel(repoLocalDir, skillPath)
-		subPath = filepath.ToSlash(subPath)
-		logicalKey := logicalkey.GitFromRepoURLOrEmpty(canonicalRepoURL, subPath)
-		if installedIndex.IsInstalled(filepath.Base(skillPath), logicalKey) {
-			continue
-		}
-		sk, err := a.storage.Import(skillPath, category, skilldomain.SourceGitHub, canonicalRepoURL, subPath)
-		if err == skillrepo.ErrSkillExists {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		sha, _ := platformgit.GetSubPathSHA(a.ctx, repoLocalDir, subPath)
-		sk.SourceSHA = sha
-		_ = a.storage.UpdateMeta(sk)
-		imported = append(imported, sk)
-	}
-	a.autoPushImportedSkillsToAgents("starred.import", imported)
-	a.scheduleAutoBackup()
-	return nil
+	_, err = a.newOrchestrationService().ImportRepoSourceSkills(a.ctx, orchestration.ImportRepoSourceSkillsCommand{
+		SkillPaths:         skillPaths,
+		RepoRootDir:        repoLocalDir,
+		CanonicalRepoURL:   canonicalRepoURL,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	return err
 }

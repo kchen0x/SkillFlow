@@ -1,10 +1,5 @@
 package settingsstore
 
-import (
-	"encoding/json"
-	"os"
-)
-
 type WindowState struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
@@ -28,17 +23,13 @@ func NormalizeWindowState(state WindowState) WindowState {
 	return state
 }
 
-type localWindowStateDocument struct {
-	Window *WindowState `json:"window,omitempty"`
-}
-
 func (s *Store) LoadWindowState() (WindowState, bool, error) {
-	var doc localWindowStateDocument
-	exists, err := s.ReadLocal(&doc)
-	if err != nil || !exists || doc.Window == nil {
+	var state WindowState
+	exists, err := s.ReadLocalSection("window", &state)
+	if err != nil || !exists {
 		return WindowState{}, false, err
 	}
-	normalized := NormalizeWindowState(*doc.Window)
+	normalized := NormalizeWindowState(state)
 	if normalized.Width == 0 || normalized.Height == 0 {
 		return WindowState{}, false, nil
 	}
@@ -50,20 +41,5 @@ func (s *Store) SaveWindowState(state WindowState) error {
 	if normalized.Width == 0 || normalized.Height == 0 {
 		return nil
 	}
-
-	localDoc := map[string]json.RawMessage{}
-	if data, err := os.ReadFile(s.LocalPath()); err == nil {
-		if unmarshalErr := json.Unmarshal(data, &localDoc); unmarshalErr != nil {
-			localDoc = map[string]json.RawMessage{}
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
-	windowData, err := json.Marshal(normalized)
-	if err != nil {
-		return err
-	}
-	localDoc["window"] = windowData
-	return s.WriteLocal(localDoc)
+	return s.WriteLocalSection("window", normalized)
 }

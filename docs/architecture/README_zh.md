@@ -62,6 +62,6 @@ SkillFlow 的目标后端架构是一个基于 DDD 的模块化单体：
 - `core/backup/domain`
 - `core/backup/infra`
 
-旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify`、`core/applog`、`core/pathutil`、`core/update`、`core/skillkey`、`core/upgrade` 以及 `core/viewstate` 包已经移除。纯 Git 能力现在位于 `core/platform/git`，事件总线现在位于 `core/platform/eventbus`，文件日志现在位于 `core/platform/logging`，路径可移植性辅助现在位于 `core/platform/pathutil`，更新原语现在位于 `core/platform/update`，启动期 cutover 逻辑现在位于 `core/platform/upgrade`，逻辑键辅助现在位于 `core/shared/logicalkey`，读侧快照缓存现在位于 `core/readmodel/viewstate`，通用配置文件 IO 原语现在位于 `core/platform/settingsstore`。`core/config` 仍然作为过渡期兼容层保留，继续承载 `AppConfig` 及 split/merge 语义。其余领域与横切模块仍需继续按同样方式迁移。
+旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify`、`core/applog`、`core/pathutil`、`core/update`、`core/skillkey`、`core/upgrade` 以及 `core/viewstate` 包已经移除。纯 Git 能力现在位于 `core/platform/git`，事件总线现在位于 `core/platform/eventbus`，文件日志现在位于 `core/platform/logging`，路径可移植性辅助现在位于 `core/platform/pathutil`，更新原语现在位于 `core/platform/update`，启动期 cutover 逻辑现在位于 `core/platform/upgrade`，逻辑键辅助现在位于 `core/shared/logicalkey`，读侧快照缓存现在位于 `core/readmodel/viewstate`，通用配置文件 IO 原语现在位于 `core/platform/settingsstore`。`core/config` 现在只保留为兼容门面，继续承载 `AppConfig` 与 split/merge 语义；跨上下文写流程位于 `core/orchestration`，组合读模型位于 `core/readmodel`。
 
 *最后更新：2026-03-21*

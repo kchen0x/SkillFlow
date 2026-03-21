@@ -125,9 +125,12 @@ Recommended logical ownership:
 
 Current migration note:
 
-- window-state persistence now uses `core/platform/settingsstore`
-- log-level normalization now uses `core/platform/logging`
-- `core/config` still exposes compatibility wrappers while the broader settings namespace split is unfinished
+- app-data path ownership now lives in `core/platform/appdata`
+- shell proxy, window, log-level, and skipped-update preferences now live in `core/platform/shellsettings` plus `core/platform/settingsstore`
+- skill-status visibility preferences now live in `core/readmodel/preferences`
+- cross-context write flows for import, push/pull, update, and restore compensation now live in `core/orchestration`
+- installed-skill, starred-skill, and agent-presence composition now lives in `core/readmodel/skills` plus `core/readmodel/viewstate`
+- `core/config` remains as the frontend-facing compatibility DTO and split/merge persistence facade around these context- and platform-owned settings components
 
 ## Repository vs Gateway Examples
 
@@ -162,4 +165,4 @@ Existing constraints remain in force:
 - local-only machine-specific paths stay in local settings namespaces
 - secrets must never be written to logs
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*

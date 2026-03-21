@@ -1,6 +1,7 @@
 package settingsstore_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -90,4 +91,53 @@ func TestStoreSavesAndLoadsWindowStateInLocalConfig(t *testing.T) {
 	assert.Contains(t, string(localData), `"window"`)
 	assert.Contains(t, string(localData), `"width": 1440`)
 	assert.Contains(t, string(localData), `"height": 920`)
+}
+
+func TestStoreWritesLocalSectionWithoutDroppingExistingKeys(t *testing.T) {
+	root := t.TempDir()
+	store := settingsstore.New(root)
+	require.NoError(t, store.WriteLocal(map[string]any{
+		"unchanged": map[string]any{"enabled": true},
+	}))
+
+	require.NoError(t, store.WriteLocalSection("window", settingsstore.WindowState{Width: 1440, Height: 920}))
+
+	raw, err := os.ReadFile(store.LocalPath())
+	require.NoError(t, err)
+
+	doc := map[string]json.RawMessage{}
+	require.NoError(t, json.Unmarshal(raw, &doc))
+	_, hasUnchanged := doc["unchanged"]
+	_, hasWindow := doc["window"]
+	assert.True(t, hasUnchanged)
+	assert.True(t, hasWindow)
+}
+
+func TestStoreWriteLocalSectionRepairsMalformedDocument(t *testing.T) {
+	root := t.TempDir()
+	store := settingsstore.New(root)
+	require.NoError(t, os.WriteFile(store.LocalPath(), []byte(`{"bad":`), 0o644))
+
+	require.NoError(t, store.WriteLocalSection("window", settingsstore.WindowState{Width: 1440, Height: 920}))
+
+	state, ok, err := store.LoadWindowState()
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, settingsstore.WindowState{Width: 1440, Height: 920}, state)
+}
+
+func TestStoreReadsSharedSection(t *testing.T) {
+	root := t.TempDir()
+	store := settingsstore.New(root)
+	require.NoError(t, store.WriteShared(map[string]any{
+		"shell": map[string]any{"logLevel": "debug"},
+	}))
+
+	var shell struct {
+		LogLevel string `json:"logLevel"`
+	}
+	exists, err := store.ReadSharedSection("shell", &shell)
+	require.NoError(t, err)
+	require.True(t, exists)
+	assert.Equal(t, "debug", shell.LogLevel)
 }

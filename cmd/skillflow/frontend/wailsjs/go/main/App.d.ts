@@ -3,6 +3,8 @@
 import {domain} from '../models';
 import {main} from '../models';
 import {config} from '../models';
+import {skills} from '../models';
+import {shellsettings} from '../models';
 
 export function AddCustomAgent(arg1:string,arg2:string):Promise<void>;
 
@@ -54,7 +56,7 @@ export function GetAppVersion():Promise<string>;
 
 export function GetConfig():Promise<config.AppConfig>;
 
-export function GetEnabledAgents():Promise<Array<config.AgentConfig>>;
+export function GetEnabledAgents():Promise<Array<domain.AgentProfile>>;
 
 export function GetGitConflictPending():Promise<boolean>;
 
@@ -80,7 +82,7 @@ export function ImportStarSkills(arg1:Array<string>,arg2:string,arg3:string):Pro
 
 export function ListAgentSkills(arg1:string):Promise<Array<domain.AgentSkillEntry>>;
 
-export function ListAllStarSkills():Promise<Array<main.StarSkillEntry>>;
+export function ListAllStarSkills():Promise<Array<skills.StarSkillEntry>>;
 
 export function ListCategories():Promise<Array<string>>;
 
@@ -92,9 +94,9 @@ export function ListPromptCategories():Promise<Array<string>>;
 
 export function ListPrompts():Promise<Array<domain.Prompt>>;
 
-export function ListRepoStarSkills(arg1:string):Promise<Array<main.StarSkillEntry>>;
+export function ListRepoStarSkills(arg1:string):Promise<Array<skills.StarSkillEntry>>;
 
-export function ListSkills():Promise<Array<main.InstalledSkillEntry>>;
+export function ListSkills():Promise<Array<skills.InstalledSkillEntry>>;
 
 export function ListStarredRepos():Promise<Array<domain.StarRepo>>;
 
@@ -148,7 +150,7 @@ export function ScanAgentSkills(arg1:string):Promise<Array<domain.AgentSkillCand
 
 export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 
-export function TestProxyConnection(arg1:string,arg2:config.ProxyConfig):Promise<main.ProxyConnectionTestResult>;
+export function TestProxyConnection(arg1:string,arg2:shellsettings.ProxyConfig):Promise<main.ProxyConnectionTestResult>;
 
 export function UpdateAllStarredRepos():Promise<void>;
 

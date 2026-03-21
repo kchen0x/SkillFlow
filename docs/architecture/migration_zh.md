@@ -31,12 +31,17 @@
 - `cmd/skillflow` 已经不再 import `core/registry`
 - 旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify`、`core/applog`、`core/pathutil`、`core/update`、`core/skillkey`、`core/upgrade`、`core/viewstate` 以及 `core/registry` 包已经移除
 - `core/config` 已经把通用文件路径与 JSON 持久化能力下沉到 `core/platform/settingsstore`
+- app data 路径归属现在位于 `core/platform/appdata`
+- 壳层 proxy 与 window 偏好现在位于 `core/platform/shellsettings`
+- Skill 状态可见性偏好现在位于 `core/readmodel/preferences`
+- import / push / pull / update / restore 的跨上下文写协调现在位于 `core/orchestration`
+- installed skill、starred skill、agent presence 的组合现在位于 `core/readmodel/skills`
 - 内建 agent 名单以及默认扫描/推送目录已经下沉到 `core/agentintegration/domain`
 - `config.AppConfig.Agents` 现在直接复用上下文拥有的 `agentintegration/domain.AgentProfile` 类型
 - window state 类型与持久化 helper 已下沉到 `core/platform/settingsstore`，`core/config` 保留兼容包装
 - log level 字符串常量与归一化规则已下沉到 `core/platform/logging`，`core/config` 保留兼容包装
 
-这意味着第一批 bounded context 抽取已经就位，后续平台层与横切能力迁移可以把 `skillcatalog`、`promptcatalog`、`agentintegration`、`skillsource` 和 `backup` 作为参考模式。
+这意味着后端 DDD cutover 目标已经落地。`cmd/skillflow` 现在把重业务逻辑委托给各上下文 `app`、`core/orchestration` 与 `core/readmodel`，而 `core/config` 只保留为持久化设置与 Wails DTO 的兼容门面。
 
 ## 当前到目标的映射
 

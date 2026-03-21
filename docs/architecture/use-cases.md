@@ -205,6 +205,8 @@ Typical sequence:
 3. refresh derived read models
 4. emit post-restore events
 
+These orchestrators now exist in `core/orchestration` and are the required path for the corresponding Wails-facing transport methods.
+
 ## Shell Coordination
 
 These flows are coordination concerns, but they are better owned by the shell composition layer than by `core/orchestration/`.
@@ -270,13 +272,15 @@ Combines:
 
 ## Transport Adapter Mapping
 
-The current Wails-facing `App` methods in `cmd/skillflow/` should gradually become thin transport adapters that delegate to context application services, orchestration services, or read models.
+The Wails-facing `App` methods in `cmd/skillflow/` are expected to stay thin transport adapters that delegate to context application services, orchestration services, or read models.
 
 Examples:
 
-- `ListSkills` -> `readmodel/dashboard` or `skillcatalog/query`
+- `ListSkills` -> `readmodel/skills`
+- `ListAllStarSkills` / `ListRepoStarSkills` -> `readmodel/skills`
+- `ImportLocal` / `PushToAgents` / `PullFromAgent` / `UpdateSkill` -> `core/orchestration`
 - `ImportStarSkills` -> `orchestration/ImportSkillFromSourceOrchestrator`
-- `PushToAgents` -> `agentintegration/app`
+- `SaveConfig` -> shell `SettingsSaveCoordinator`, then context-owned settings components
 - `CreatePrompt` -> `promptcatalog/app`
 - `CheckAppUpdate` -> shell/platform update service
 
@@ -287,4 +291,4 @@ Examples:
 - cross-context writes must remain explicit
 - UI labels such as `imported` may differ from internal semantics such as `installed`, but the mapping belongs outside the domain layer
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*

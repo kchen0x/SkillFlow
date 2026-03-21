@@ -1,45 +1,42 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
-	"runtime"
-
-	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
+	backupapp "github.com/shinerio/skillflow/core/backup/app"
+	"github.com/shinerio/skillflow/core/platform/appdata"
+	"github.com/shinerio/skillflow/core/platform/shellsettings"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 )
 
 func AppDataDir() string {
-	switch runtime.GOOS {
-	case "windows":
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".skillflow")
-	default: // darwin / linux
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "SkillFlow")
-	}
+	return appdata.Dir()
 }
 
 func DefaultConfig(dataDir string) AppConfig {
-	names := agentdomain.BuiltinAgentNames()
-	agents := make([]AgentConfig, 0, len(names))
-	for _, name := range names {
-		profile := agentdomain.DefaultProfile(name)
+	skillSettings := skillcatalogapp.DefaultSettings(dataDir)
+	agentSettings := agentapp.DefaultSettings()
+	backupSettings := backupapp.DefaultSettings()
+	shellSharedSettings := shellsettings.DefaultSharedSettings()
+	shellLocalSettings := shellsettings.DefaultLocalSettings()
+
+	agents := make([]AgentConfig, 0, len(agentSettings.Local.Agents))
+	for _, agent := range agentSettings.Local.Agents {
 		agents = append(agents, AgentConfig{
-			Name:     profile.Name,
-			ScanDirs: profile.ScanDirs,
-			PushDir:  profile.PushDir,
-			Enabled:  profile.Enabled,
-			Custom:   profile.Custom,
+			Name:     agent.Name,
+			ScanDirs: append([]string(nil), agent.ScanDirs...),
+			PushDir:  agent.PushDir,
+			Enabled:  true,
+			Custom:   agent.Custom,
 		})
 	}
 	return AppConfig{
-		SkillsStorageDir:      filepath.Join(dataDir, "skills"),
-		DefaultCategory:       "Default",
-		LogLevel:              DefaultLogLevel,
-		RepoScanMaxDepth:      DefaultRepoScanMaxDepth,
+		SkillsStorageDir:      skillSettings.Local.SkillsStorageDir,
+		DefaultCategory:       skillSettings.Shared.DefaultCategory,
+		LogLevel:              shellSharedSettings.LogLevel,
+		RepoScanMaxDepth:      agentSettings.Shared.RepoScanMaxDepth,
 		SkillStatusVisibility: DefaultSkillStatusVisibility(),
 		Agents:                agents,
-		Cloud:                 CloudConfig{RemotePath: DefaultCloudRemotePath},
-		Proxy:                 ProxyConfig{Mode: ProxyModeNone},
+		Cloud:                 backupSettings.Cloud,
+		Proxy:                 shellLocalSettings.Proxy,
 	}
 }

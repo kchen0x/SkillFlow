@@ -31,12 +31,17 @@ As of 2026-03-21:
 - `cmd/skillflow` no longer imports `core/registry`
 - the old `core/skill`, `core/prompt`, `core/sync`, `core/git`, flat `core/backup`, `core/notify`, `core/applog`, `core/pathutil`, `core/update`, `core/skillkey`, `core/upgrade`, `core/viewstate`, and `core/registry` packages have been removed
 - `core/config` now delegates generic file-path and JSON persistence mechanics to `core/platform/settingsstore`
+- app-data path ownership now lives in `core/platform/appdata`
+- shell proxy and window preferences now live in `core/platform/shellsettings`
+- skill-status visibility preferences now live in `core/readmodel/preferences`
+- cross-context write coordination for import/push/pull/update/restore now lives in `core/orchestration`
+- installed-skill, starred-skill, and agent-presence composition now lives in `core/readmodel/skills`
 - built-in agent names and default scan/push directories now live in `core/agentintegration/domain`
 - `config.AppConfig.Agents` now reuses the context-owned `agentintegration/domain.AgentProfile` type
 - window-state type and persistence helpers now live in `core/platform/settingsstore` with `core/config` compatibility wrappers
 - log-level string constants and normalization now live in `core/platform/logging` with `core/config` compatibility wrappers
 
-This means the initial bounded-context extraction set is in place. `skillcatalog`, `promptcatalog`, `agentintegration`, `skillsource`, and `backup` are now the reference patterns for the remaining platform and cross-cutting migrations.
+This means the backend DDD cutover target is in place. `cmd/skillflow` now delegates business-heavy flows to context `app`, `core/orchestration`, and `core/readmodel`, while `core/config` remains only as a compatibility facade for persisted settings and Wails-facing DTOs.
 
 ## Current-to-Target Mapping
 

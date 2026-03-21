@@ -5,11 +5,13 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
+	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	"github.com/shinerio/skillflow/core/platform/settingsstore"
+	"github.com/shinerio/skillflow/core/platform/shellsettings"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 )
 
 // sharedConfig is stored in config.json and safe to sync across platforms.
@@ -229,20 +231,20 @@ func (s *Service) loadLocal() localConfig {
 	if err != nil || !exists {
 		return s.defaultLocal()
 	}
-	if lc.SkillsStorageDir == "" {
-		lc.SkillsStorageDir = filepath.Join(s.DataDir(), "skills")
-	}
-	lc.AutoPushAgents = NormalizeAgentNameList(lc.AutoPushAgents)
+	lc.SkillsStorageDir = skillcatalogapp.NormalizeLocalSettings(
+		skillcatalogapp.LocalSettings{SkillsStorageDir: lc.SkillsStorageDir},
+		s.DataDir(),
+	).SkillsStorageDir
+	lc.AutoPushAgents = agentapp.NormalizeAutoPushAgentNames(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
-	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
-	if lc.Window != nil {
-		normalized := NormalizeWindowState(*lc.Window)
-		if normalized.Width == 0 || normalized.Height == 0 {
-			lc.Window = nil
-		} else {
-			lc.Window = &normalized
-		}
-	}
+	normalizedShell := shellsettings.NormalizeLocalSettings(shellsettings.LocalSettings{
+		LaunchAtLogin: lc.LaunchAtLogin,
+		Proxy:         lc.Proxy,
+		Window:        lc.Window,
+	})
+	lc.LaunchAtLogin = normalizedShell.LaunchAtLogin
+	lc.Proxy = normalizedShell.Proxy
+	lc.Window = normalizedShell.Window
 	return lc
 }
 
@@ -256,17 +258,20 @@ func (s *Service) saveShared(sc sharedConfig) error {
 
 func (s *Service) saveLocal(lc localConfig) error {
 	lc.CloudCredentials = nil
-	lc.AutoPushAgents = NormalizeAgentNameList(lc.AutoPushAgents)
+	lc.SkillsStorageDir = skillcatalogapp.NormalizeLocalSettings(
+		skillcatalogapp.LocalSettings{SkillsStorageDir: lc.SkillsStorageDir},
+		s.DataDir(),
+	).SkillsStorageDir
+	lc.AutoPushAgents = agentapp.NormalizeAutoPushAgentNames(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
-	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
-	if lc.Window != nil {
-		normalized := NormalizeWindowState(*lc.Window)
-		if normalized.Width == 0 || normalized.Height == 0 {
-			lc.Window = nil
-		} else {
-			lc.Window = &normalized
-		}
-	}
+	normalizedShell := shellsettings.NormalizeLocalSettings(shellsettings.LocalSettings{
+		LaunchAtLogin: lc.LaunchAtLogin,
+		Proxy:         lc.Proxy,
+		Window:        lc.Window,
+	})
+	lc.LaunchAtLogin = normalizedShell.LaunchAtLogin
+	lc.Proxy = normalizedShell.Proxy
+	lc.Window = normalizedShell.Window
 	return s.store.WriteLocal(lc)
 }
 
@@ -283,35 +288,42 @@ func (s *Service) SaveWindowState(state WindowState) error {
 }
 
 func (s *Service) defaultShared() sharedConfig {
-	names := agentdomain.BuiltinAgentNames()
-	agents := make([]sharedAgentConfig, 0, len(names))
-	for _, name := range names {
-		agents = append(agents, sharedAgentConfig{Name: name, Enabled: true})
+	defaultAgentSettings := agentapp.DefaultSharedSettings()
+	defaultSkillSettings := skillcatalogapp.DefaultSharedSettings()
+	defaultShellSettings := shellsettings.DefaultSharedSettings()
+
+	agents := make([]sharedAgentConfig, 0, len(defaultAgentSettings.Agents))
+	for _, agent := range defaultAgentSettings.Agents {
+		agents = append(agents, sharedAgentConfig{Name: agent.Name, Enabled: agent.Enabled})
 	}
 	return sharedConfig{
-		DefaultCategory:       "Default",
-		LogLevel:              DefaultLogLevel,
-		RepoScanMaxDepth:      DefaultRepoScanMaxDepth,
+		DefaultCategory:       defaultSkillSettings.DefaultCategory,
+		LogLevel:              defaultShellSettings.LogLevel,
+		RepoScanMaxDepth:      defaultAgentSettings.RepoScanMaxDepth,
 		SkillStatusVisibility: DefaultSkillStatusVisibility(),
 		Agents:                agents,
 	}
 }
 
 func (s *Service) defaultLocal() localConfig {
-	names := agentdomain.BuiltinAgentNames()
-	agents := make([]localAgentConfig, 0, len(names))
-	for _, name := range names {
-		profile := agentdomain.DefaultProfile(name)
+	defaultAgentSettings := agentapp.DefaultLocalSettings()
+	defaultSkillSettings := skillcatalogapp.DefaultLocalSettings(s.DataDir())
+	defaultShellSettings := shellsettings.DefaultLocalSettings()
+
+	agents := make([]localAgentConfig, 0, len(defaultAgentSettings.Agents))
+	for _, agent := range defaultAgentSettings.Agents {
 		agents = append(agents, localAgentConfig{
-			Name:     profile.Name,
-			ScanDirs: profile.ScanDirs,
-			PushDir:  profile.PushDir,
+			Name:     agent.Name,
+			ScanDirs: append([]string(nil), agent.ScanDirs...),
+			PushDir:  agent.PushDir,
+			Custom:   agent.Custom,
+			Enabled:  agent.Enabled,
 		})
 	}
 	return localConfig{
-		SkillsStorageDir: filepath.Join(s.DataDir(), "skills"),
+		SkillsStorageDir: defaultSkillSettings.SkillsStorageDir,
 		Agents:           agents,
-		Proxy:            ProxyConfig{Mode: ProxyModeNone},
+		Proxy:            defaultShellSettings.Proxy,
 	}
 }
 
@@ -435,7 +447,7 @@ func (s *Service) migrateCloudStorage(shared *sharedConfig, local *localConfig) 
 	changed := shared.legacyCloudMigrated
 
 	if shared.legacyProxyMigrated {
-		if isZeroProxyConfig(local.Proxy) {
+		if shellsettings.IsZeroProxyConfig(local.Proxy) {
 			local.Proxy = NormalizeProxyConfig(shared.legacyProxy)
 		}
 		changed = true
@@ -894,12 +906,6 @@ func credentialMapsEqual(left, right map[string]string) bool {
 		}
 	}
 	return true
-}
-
-func isZeroProxyConfig(proxy ProxyConfig) bool {
-	mode := ProxyMode(strings.ToLower(strings.TrimSpace(string(proxy.Mode))))
-	url := strings.TrimSpace(proxy.URL)
-	return url == "" && (mode == "" || mode == ProxyModeNone)
 }
 
 func isSharedCloudCredentialKey(key string) bool {

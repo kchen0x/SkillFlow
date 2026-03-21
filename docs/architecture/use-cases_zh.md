@@ -205,6 +205,8 @@
 3. 刷新派生 read model
 4. 发布恢复后的事件
 
+这些 orchestrator 现在已经落在 `core/orchestration` 中，对应的 Wails transport method 必须走这条路径。
+
 ## 壳层协调
 
 下面这些流程属于协调逻辑，但更适合由壳层组合层负责，而不是落进 `core/orchestration/`。
@@ -270,13 +272,15 @@
 
 ## Transport Adapter 映射
 
-当前 `cmd/skillflow/` 中对 Wails 暴露的 `App` 方法，应逐步收缩成薄 transport adapter，转调 context application service、orchestration service 或 read model。
+`cmd/skillflow/` 中对 Wails 暴露的 `App` 方法应持续保持为薄 transport adapter，转调上下文应用服务、orchestration 服务或 read model。
 
 例如：
 
-- `ListSkills` -> `readmodel/dashboard` 或 `skillcatalog/query`
+- `ListSkills` -> `readmodel/skills`
+- `ListAllStarSkills` / `ListRepoStarSkills` -> `readmodel/skills`
+- `ImportLocal` / `PushToAgents` / `PullFromAgent` / `UpdateSkill` -> `core/orchestration`
 - `ImportStarSkills` -> `orchestration/ImportSkillFromSourceOrchestrator`
-- `PushToAgents` -> `agentintegration/app`
+- `SaveConfig` -> 壳层 `SettingsSaveCoordinator`，再拆发到各上下文拥有的设置组件
 - `CreatePrompt` -> `promptcatalog/app`
 - `CheckAppUpdate` -> 壳层 / platform update service
 
@@ -287,4 +291,4 @@
 - 跨上下文写流程必须显式存在
 - UI 文案如 `imported` 可以与内部语义 `installed` 不同，但这种映射不属于领域层
 
-*最后更新：2026-03-20*
+*最后更新：2026-03-21*
