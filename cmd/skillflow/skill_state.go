@@ -5,10 +5,10 @@ import (
 
 	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
-	coregit "github.com/shinerio/skillflow/core/git"
 	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/skillkey"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 )
 
 type InstalledSkillEntry struct {
@@ -19,6 +19,21 @@ type InstalledSkillEntry struct {
 	Source       string   `json:"source"`
 	SourceSHA    string   `json:"sourceSha"`
 	LatestSHA    string   `json:"latestSha"`
+	Updatable    bool     `json:"updatable"`
+	Pushed       bool     `json:"pushed"`
+	PushedAgents []string `json:"pushedAgents"`
+}
+
+type StarSkillEntry struct {
+	Name         string   `json:"name"`
+	Path         string   `json:"path"`
+	SubPath      string   `json:"subPath"`
+	RepoURL      string   `json:"repoUrl"`
+	RepoName     string   `json:"repoName"`
+	Source       string   `json:"source"`
+	LogicalKey   string   `json:"logicalKey"`
+	Installed    bool     `json:"installed"`
+	Imported     bool     `json:"imported"`
 	Updatable    bool     `json:"updatable"`
 	Pushed       bool     `json:"pushed"`
 	PushedAgents []string `json:"pushedAgents"`
@@ -59,8 +74,8 @@ func (a *App) buildInstalledSkillEntries(installed []*skilldomain.InstalledSkill
 	return entries
 }
 
-func resolveStarSkills(skills []coregit.StarSkill, idx *skillquery.InstalledIndex, presence *agentdomain.AgentPresenceIndex) []coregit.StarSkill {
-	resolved := make([]coregit.StarSkill, 0, len(skills))
+func resolveSourceCandidates(skills []sourcedomain.SourceSkillCandidate, idx *skillquery.InstalledIndex, presence *agentdomain.AgentPresenceIndex) []StarSkillEntry {
+	resolved := make([]StarSkillEntry, 0, len(skills))
 	for _, candidate := range skills {
 		if strings.TrimSpace(candidate.LogicalKey) == "" {
 			candidate.LogicalKey = skillkey.Git(candidate.Source, candidate.SubPath)
@@ -70,13 +85,20 @@ func resolveStarSkills(skills []coregit.StarSkill, idx *skillquery.InstalledInde
 			contentKey = ""
 		}
 		state := agentapp.ResolveSkillStatus(candidate.Name, candidate.LogicalKey, idx, presence, contentKey)
-		candidate.LogicalKey = coalesceLogicalKey(candidate.LogicalKey, state.LogicalKey)
-		candidate.Installed = state.Installed
-		candidate.Imported = state.Imported
-		candidate.Updatable = state.Updatable
-		candidate.Pushed = state.Pushed
-		candidate.PushedAgents = state.PushedAgents
-		resolved = append(resolved, candidate)
+		resolved = append(resolved, StarSkillEntry{
+			Name:         candidate.Name,
+			Path:         candidate.Path,
+			SubPath:      candidate.SubPath,
+			RepoURL:      candidate.RepoURL,
+			RepoName:     candidate.RepoName,
+			Source:       candidate.Source,
+			LogicalKey:   coalesceLogicalKey(candidate.LogicalKey, state.LogicalKey),
+			Installed:    state.Installed,
+			Imported:     state.Imported,
+			Updatable:    state.Updatable,
+			Pushed:       state.Pushed,
+			PushedAgents: state.PushedAgents,
+		})
 	}
 	return resolved
 }

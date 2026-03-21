@@ -1,18 +1,23 @@
-package git
+package discovery
 
 import (
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 )
 
 const defaultMaxRecursiveScanDepth = 5
 
-// scanTree walks a directory tree and returns every directory that contains a
-// skill.md file (case-insensitive). Once a directory is identified as a skill,
-// the walk stops descending into that subtree.
-func scanTree(repoDir, dir, repoURL, repoName, source string, depth, maxDepth int) ([]StarSkill, error) {
+type RepoScanner struct{}
+
+func NewRepoScanner() *RepoScanner {
+	return &RepoScanner{}
+}
+
+func scanTree(repoDir, dir, repoURL, repoName, source string, depth, maxDepth int) ([]sourcedomain.SourceSkillCandidate, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -26,7 +31,7 @@ func scanTree(repoDir, dir, repoURL, repoName, source string, depth, maxDepth in
 		if err != nil {
 			return nil, err
 		}
-		return []StarSkill{{
+		return []sourcedomain.SourceSkillCandidate{{
 			Name:     filepath.Base(dir),
 			Path:     dir,
 			SubPath:  filepath.ToSlash(rel),
@@ -39,7 +44,7 @@ func scanTree(repoDir, dir, repoURL, repoName, source string, depth, maxDepth in
 		return nil, nil
 	}
 
-	var result []StarSkill
+	var result []sourcedomain.SourceSkillCandidate
 	for _, e := range entries {
 		if !e.IsDir() || shouldSkipScanDir(e.Name()) {
 			continue
@@ -69,17 +74,11 @@ func shouldSkipScanDir(name string) bool {
 	return strings.HasPrefix(name, ".")
 }
 
-// ScanSkills looks for skill directories anywhere inside the given repo clone
-// using the default recursive depth limit.
-func ScanSkills(repoDir, repoURL, repoName, source string) ([]StarSkill, error) {
-	return ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source, defaultMaxRecursiveScanDepth)
+func (RepoScanner) ScanSkills(repoDir, repoURL, repoName, source string) ([]sourcedomain.SourceSkillCandidate, error) {
+	return RepoScanner{}.ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source, defaultMaxRecursiveScanDepth)
 }
 
-// ScanSkillsWithMaxDepth looks for skill directories anywhere inside the given
-// repo clone. It scans recursively, supports skill.md in any casing, stops
-// descending once a directory is identified as a skill, and bounds recursion
-// depth to protect against pathological nested trees.
-func ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source string, maxDepth int) ([]StarSkill, error) {
+func (RepoScanner) ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source string, maxDepth int) ([]sourcedomain.SourceSkillCandidate, error) {
 	if maxDepth < 0 {
 		maxDepth = 0
 	}
@@ -110,7 +109,7 @@ func ScanSkillsWithMaxDepth(repoDir, repoURL, repoName, source string, maxDepth 
 		roots = append(roots, dir)
 	}
 
-	var result []StarSkill
+	var result []sourcedomain.SourceSkillCandidate
 	for _, root := range roots {
 		skills, err := scanTree(repoDir, root, repoURL, repoName, source, 0, maxDepth)
 		if err != nil {

@@ -11,11 +11,10 @@ import (
 )
 
 type RepoRef struct {
-	Host string // e.g. github.com, gitee.com, git.example.com:2222
-	Path string // e.g. owner/repo or group/subgroup/repo
+	Host string
+	Path string
 }
 
-// CheckGitInstalled returns nil if git is in PATH, or a user-friendly error.
 func CheckGitInstalled() error {
 	_, err := exec.LookPath("git")
 	if err != nil {
@@ -24,7 +23,6 @@ func CheckGitInstalled() error {
 	return nil
 }
 
-// ParseRepoRef extracts remote host + repository path from a git remote URL.
 func ParseRepoRef(repoURL string) (RepoRef, error) {
 	u := strings.TrimSpace(repoURL)
 	if u == "" {
@@ -47,7 +45,6 @@ func ParseRepoRef(repoURL string) (RepoRef, error) {
 	}, nil
 }
 
-// ParseRepoName extracts repository path from a remote URL, e.g. "owner/repo".
 func ParseRepoName(repoURL string) (string, error) {
 	ref, err := ParseRepoRef(repoURL)
 	if err != nil {
@@ -69,7 +66,6 @@ func CanonicalRepoURL(repoURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Strip port — SSH ports (e.g. 22) are not valid for HTTPS; use default 443.
 	host := ref.Host
 	if i := strings.LastIndex(host, ":"); i >= 0 {
 		host = host[:i]
@@ -87,7 +83,6 @@ func SameRepo(repoA, repoB string) bool {
 }
 
 func splitRemoteHostPath(remote string) (host, path string, ok bool) {
-	// URL form: https://host/owner/repo.git, ssh://git@host/owner/repo.git
 	if strings.Contains(remote, "://") {
 		parsed, err := url.Parse(remote)
 		if err != nil {
@@ -103,7 +98,6 @@ func splitRemoteHostPath(remote string) (host, path string, ok bool) {
 		return host, parsed.Path, host != "" && parsed.Path != ""
 	}
 
-	// SCP-like SSH form: git@host:owner/repo.git
 	if strings.Contains(remote, "@") && strings.Contains(remote, ":") {
 		parts := strings.SplitN(remote, ":", 2)
 		if len(parts) != 2 {
@@ -116,7 +110,6 @@ func splitRemoteHostPath(remote string) (host, path string, ok bool) {
 		return hostPart, parts[1], hostPart != "" && parts[1] != ""
 	}
 
-	// Host/path form without scheme: gitee.com/owner/repo
 	parts := strings.SplitN(strings.Trim(remote, "/"), "/", 2)
 	if len(parts) != 2 {
 		return "", "", false
@@ -133,7 +126,6 @@ func normalizeRepoPath(path string) (string, bool) {
 		return "", false
 	}
 
-	// GitHub/Gitea-like API path: /repos/{owner}/{repo}
 	if strings.EqualFold(parts[0], "repos") {
 		if len(parts) < 3 {
 			return "", false
@@ -141,7 +133,6 @@ func normalizeRepoPath(path string) (string, bool) {
 		parts = parts[1:3]
 	}
 
-	// Web URL variants like /owner/repo/tree/main or /owner/repo/blob/main/...
 	if len(parts) >= 4 {
 		switch strings.ToLower(parts[2]) {
 		case "tree", "blob", "raw", "commit":
@@ -156,7 +147,6 @@ func normalizeRepoPath(path string) (string, bool) {
 	return strings.Join(parts, "/"), true
 }
 
-// CacheDir returns the local clone directory for a repo URL under dataDir/cache/.
 func CacheDir(dataDir, repoURL string) (string, error) {
 	source, err := RepoSource(repoURL)
 	if err != nil {
@@ -171,8 +161,6 @@ func CacheDir(dataDir, repoURL string) (string, error) {
 	return filepath.Join(dataDir, "cache", hostPart, filepath.FromSlash(repoPath)), nil
 }
 
-// CloneOrUpdate clones repoURL into dir, or force-updates it if already present.
-// proxyURL is optional (empty = inherit environment).
 func CloneOrUpdate(ctx context.Context, repoURL, dir, proxyURL string) error {
 	if err := CheckGitInstalled(); err != nil {
 		return err
@@ -181,7 +169,6 @@ func CloneOrUpdate(ctx context.Context, repoURL, dir, proxyURL string) error {
 		if err := syncOriginURL(ctx, dir, proxyURL, repoURL); err != nil {
 			return err
 		}
-		// already cloned — force-pull (handles force-push on remote)
 		if err := runGit(ctx, dir, proxyURL, "fetch", "origin"); err != nil {
 			return fmt.Errorf("git fetch: %w", err)
 		}
@@ -210,7 +197,6 @@ func syncOriginURL(ctx context.Context, dir, proxyURL, repoURL string) error {
 	return nil
 }
 
-// GetSubPathSHA returns the latest commit SHA for a path within a local git repo.
 func GetSubPathSHA(ctx context.Context, repoDir, subPath string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "log", "-n", "1", "--format=%H", "--", subPath)
 	cmd.Dir = repoDir
@@ -222,7 +208,6 @@ func GetSubPathSHA(ctx context.Context, repoDir, subPath string) (string, error)
 	return strings.TrimSpace(string(out)), nil
 }
 
-// IsAuthError reports whether err looks like an HTTP authentication failure from git.
 func IsAuthError(err error) bool {
 	if err == nil {
 		return false
@@ -238,7 +223,6 @@ func IsAuthError(err error) bool {
 		strings.Contains(msg, "the requested url returned error: 401")
 }
 
-// IsSSHAuthError reports whether err looks like an SSH key authentication failure.
 func IsSSHAuthError(err error) bool {
 	if err == nil {
 		return false
@@ -250,8 +234,6 @@ func IsSSHAuthError(err error) bool {
 			!strings.Contains(msg, "http"))
 }
 
-// CloneOrUpdateWithCreds clones or updates a repo using embedded username/password for HTTP(S) URLs.
-// It always removes any partial clone directory first to ensure a clean state.
 func CloneOrUpdateWithCreds(ctx context.Context, repoURL, dir, proxyURL, username, password string) error {
 	cloneURL := repoURL
 	if (username != "" || password != "") && strings.Contains(repoURL, "://") {
@@ -261,7 +243,6 @@ func CloneOrUpdateWithCreds(ctx context.Context, repoURL, dir, proxyURL, usernam
 			cloneURL = parsed.String()
 		}
 	}
-	// Remove any partial clone so CloneOrUpdate always does a fresh clone.
 	_ = os.RemoveAll(dir)
 	return CloneOrUpdate(ctx, cloneURL, dir, proxyURL)
 }

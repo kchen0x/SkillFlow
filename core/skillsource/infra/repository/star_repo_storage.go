@@ -1,4 +1,4 @@
-package git
+package repository
 
 import (
 	"encoding/json"
@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/shinerio/skillflow/core/pathutil"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 )
 
-type StarStorage struct {
+type StarRepoStorage struct {
 	path            string
 	localPath       string
 	dataDir         string
@@ -20,15 +22,15 @@ type StarStorage struct {
 	mu              sync.Mutex
 }
 
-func NewStarStorage(path string) *StarStorage {
-	return NewStarStorageWithBuiltins(path, nil)
+func NewStarRepoStorage(path string) *StarRepoStorage {
+	return NewStarRepoStorageWithBuiltins(path, nil)
 }
 
-func NewStarStorageWithBuiltins(path string, builtinRepoURLs []string) *StarStorage {
+func NewStarRepoStorageWithBuiltins(path string, builtinRepoURLs []string) *StarRepoStorage {
 	cleanPath := filepath.Clean(path)
 	builtins := append([]string(nil), builtinRepoURLs...)
 	dataDir := filepath.Dir(cleanPath)
-	return &StarStorage{
+	return &StarRepoStorage{
 		path:            cleanPath,
 		localPath:       filepath.Join(dataDir, "star_repos_local.json"),
 		dataDir:         dataDir,
@@ -36,7 +38,7 @@ func NewStarStorageWithBuiltins(path string, builtinRepoURLs []string) *StarStor
 	}
 }
 
-func (s *StarStorage) Load() ([]StarredRepo, error) {
+func (s *StarRepoStorage) Load() ([]sourcedomain.StarRepo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	data, err := os.ReadFile(s.path)
@@ -56,7 +58,7 @@ func (s *StarStorage) Load() ([]StarredRepo, error) {
 	if err != nil {
 		return nil, err
 	}
-	var repos []StarredRepo
+	var repos []sourcedomain.StarRepo
 	if err := json.Unmarshal(data, &repos); err != nil {
 		return repos, err
 	}
@@ -85,17 +87,17 @@ func (s *StarStorage) Load() ([]StarredRepo, error) {
 	return repos, nil
 }
 
-func (s *StarStorage) Save(repos []StarredRepo) error {
+func (s *StarRepoStorage) Save(repos []sourcedomain.StarRepo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.saveLocked(repos)
 }
 
-func (s *StarStorage) saveLocked(repos []StarredRepo) error {
+func (s *StarRepoStorage) saveLocked(repos []sourcedomain.StarRepo) error {
 	if repos == nil {
-		repos = []StarredRepo{}
+		repos = []sourcedomain.StarRepo{}
 	}
-	snapshot := make([]syncedStarredRepo, len(repos))
+	snapshot := make([]syncedStarRepo, len(repos))
 	for i := range repos {
 		snapshot[i] = s.serializedRepo(repos[i])
 	}
@@ -128,15 +130,15 @@ func (s *StarStorage) saveLocked(repos []StarredRepo) error {
 	return s.saveLocalStateLocked(repos)
 }
 
-type syncedStarredRepo struct {
+type syncedStarRepo struct {
 	URL      string `json:"url"`
 	Name     string `json:"name"`
 	Source   string `json:"source"`
 	LocalDir string `json:"localDir"`
 }
 
-func (s *StarStorage) serializedRepo(repo StarredRepo) syncedStarredRepo {
-	return syncedStarredRepo{
+func (s *StarRepoStorage) serializedRepo(repo sourcedomain.StarRepo) syncedStarRepo {
+	return syncedStarRepo{
 		URL:      repo.URL,
 		Name:     repo.Name,
 		Source:   repo.Source,
@@ -149,22 +151,22 @@ type localRepoState struct {
 	SyncError string    `json:"syncError,omitempty"`
 }
 
-type starredReposLocalSnapshot struct {
+type starReposLocalSnapshot struct {
 	Repos map[string]localRepoState `json:"repos"`
 }
 
-func (s *StarStorage) localStateKey(repo StarredRepo) string {
+func (s *StarRepoStorage) localStateKey(repo sourcedomain.StarRepo) string {
 	if source := strings.TrimSpace(repo.Source); source != "" {
 		return strings.ToLower(source)
 	}
-	if source, err := RepoSource(repo.URL); err == nil && strings.TrimSpace(source) != "" {
+	if source, err := platformgit.RepoSource(repo.URL); err == nil && strings.TrimSpace(source) != "" {
 		return strings.ToLower(strings.TrimSpace(source))
 	}
 	return strings.ToLower(strings.TrimSpace(repo.URL))
 }
 
-func (s *StarStorage) saveLocalStateLocked(repos []StarredRepo) error {
-	snapshot := starredReposLocalSnapshot{Repos: map[string]localRepoState{}}
+func (s *StarRepoStorage) saveLocalStateLocked(repos []sourcedomain.StarRepo) error {
+	snapshot := starReposLocalSnapshot{Repos: map[string]localRepoState{}}
 	for _, repo := range repos {
 		if repo.LastSync.IsZero() && strings.TrimSpace(repo.SyncError) == "" {
 			continue
@@ -210,7 +212,7 @@ func (s *StarStorage) saveLocalStateLocked(repos []StarredRepo) error {
 	return os.Rename(tmpName, s.localPath)
 }
 
-func (s *StarStorage) loadLocalStateLocked() (map[string]localRepoState, error) {
+func (s *StarRepoStorage) loadLocalStateLocked() (map[string]localRepoState, error) {
 	data, err := os.ReadFile(s.localPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string]localRepoState{}, nil
@@ -218,7 +220,7 @@ func (s *StarStorage) loadLocalStateLocked() (map[string]localRepoState, error) 
 	if err != nil {
 		return nil, err
 	}
-	var snapshot starredReposLocalSnapshot
+	var snapshot starReposLocalSnapshot
 	if err := json.Unmarshal(data, &snapshot); err != nil {
 		return nil, err
 	}
@@ -228,32 +230,32 @@ func (s *StarStorage) loadLocalStateLocked() (map[string]localRepoState, error) 
 	return snapshot.Repos, nil
 }
 
-func (s *StarStorage) resolveLocalDir(repo *StarredRepo) bool {
+func (s *StarRepoStorage) resolveLocalDir(repo *sourcedomain.StarRepo) bool {
 	resolved, needsMigration := pathutil.ResolveStoredPath(s.dataDir, repo.LocalDir, s.derivedLocalDir(repo.URL))
 	repo.LocalDir = resolved
 	return needsMigration
 }
 
-func (s *StarStorage) derivedLocalDir(repoURL string) string {
-	dir, err := CacheDir(s.dataDir, repoURL)
+func (s *StarRepoStorage) derivedLocalDir(repoURL string) string {
+	dir, err := platformgit.CacheDir(s.dataDir, repoURL)
 	if err != nil {
 		return ""
 	}
 	return dir
 }
 
-func (s *StarStorage) buildBuiltinReposLocked() ([]StarredRepo, error) {
-	repos := make([]StarredRepo, 0, len(s.builtinRepoURLs))
+func (s *StarRepoStorage) buildBuiltinReposLocked() ([]sourcedomain.StarRepo, error) {
+	repos := make([]sourcedomain.StarRepo, 0, len(s.builtinRepoURLs))
 	for _, repoURL := range s.builtinRepoURLs {
-		name, err := ParseRepoName(repoURL)
+		name, err := platformgit.ParseRepoName(repoURL)
 		if err != nil {
 			return nil, err
 		}
-		source, err := RepoSource(repoURL)
+		source, err := platformgit.RepoSource(repoURL)
 		if err != nil {
 			return nil, err
 		}
-		repos = append(repos, StarredRepo{
+		repos = append(repos, sourcedomain.StarRepo{
 			URL:      repoURL,
 			Name:     name,
 			Source:   source,

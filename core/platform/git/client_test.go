@@ -9,7 +9,6 @@ import (
 	"testing"
 )
 
-// makeLocalRepo creates a bare-minimum local git repo in dir with one commit.
 func makeLocalRepo(t *testing.T, dir string) {
 	t.Helper()
 	for _, args := range [][]string{
@@ -64,7 +63,6 @@ func TestCloneOrUpdate(t *testing.T) {
 
 	dst := filepath.Join(t.TempDir(), "clone")
 
-	// First call: clone
 	if err := CloneOrUpdate(context.Background(), src, dst, ""); err != nil {
 		t.Fatalf("clone: %v", err)
 	}
@@ -72,7 +70,6 @@ func TestCloneOrUpdate(t *testing.T) {
 		t.Fatal("README.md missing after clone")
 	}
 
-	// Add a new file to source
 	if err := os.WriteFile(filepath.Join(src, "NEW.md"), []byte("new"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +79,6 @@ func TestCloneOrUpdate(t *testing.T) {
 		}
 	}
 
-	// Second call: update
 	if err := CloneOrUpdate(context.Background(), src, dst, ""); err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -134,17 +130,14 @@ func TestCloneOrUpdateForceOverwrite(t *testing.T) {
 	makeLocalRepo(t, src)
 	dst := filepath.Join(t.TempDir(), "clone")
 
-	// Clone
 	if err := CloneOrUpdate(context.Background(), src, dst, ""); err != nil {
 		t.Fatalf("clone: %v", err)
 	}
 
-	// Locally modify a file in dst
 	if err := os.WriteFile(filepath.Join(dst, "README.md"), []byte("local modification"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Update should overwrite local change (force-push safety)
 	if err := CloneOrUpdate(context.Background(), src, dst, ""); err != nil {
 		t.Fatalf("update: %v", err)
 	}

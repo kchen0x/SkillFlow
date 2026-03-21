@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
+	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,7 +55,7 @@ func TestHandleRestoredCloudStateAutoPushesUpdatedExistingSkills(t *testing.T) {
 }
 
 func TestHandleRestoredCloudStateClonesNewlyRestoredStarredRepos(t *testing.T) {
-	if err := coregit.CheckGitInstalled(); err != nil {
+	if err := platformgit.CheckGitInstalled(); err != nil {
 		t.Skip("git not installed")
 	}
 
@@ -62,7 +64,7 @@ func TestHandleRestoredCloudStateClonesNewlyRestoredStarredRepos(t *testing.T) {
 	sourceRepo := newLocalGitRepo(t)
 	cloneDir := filepath.Join(filepath.Dir(starsPath), "cache", "restored-repo")
 
-	require.NoError(t, app.starStorage.Save([]coregit.StarredRepo{{
+	require.NoError(t, app.starStorage.Save([]sourcedomain.StarRepo{{
 		URL:      sourceRepo,
 		Name:     "local/test-repo",
 		Source:   "local/test-repo",
@@ -105,7 +107,7 @@ func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, str
 	app.config = svc
 	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = filepath.Join(dataDir, "cache")
-	app.starStorage = coregit.NewStarStorage(starsPath)
+	app.starStorage = sourcerepo.NewStarRepoStorage(starsPath)
 	return app, pushDir, skillsDir, starsPath
 }
 

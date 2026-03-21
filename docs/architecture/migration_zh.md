@@ -13,12 +13,15 @@
 - `skillcatalog` 已迁出到 `core/skillcatalog/app`、`domain`、`infra`
 - `promptcatalog` 已迁出到 `core/promptcatalog/app`、`domain`、`infra`
 - `agentintegration` 已迁出到 `core/agentintegration/app`、`domain`、`infra`
+- `skillsource` 已迁出到 `core/skillsource/app`、`domain`、`infra`
+- 纯 Git 基础能力已经迁到 `core/platform/git`
 - `cmd/skillflow` 和相关后端包已经不再 import `core/skill`
 - `cmd/skillflow` 已经不再 import `core/prompt`
 - `cmd/skillflow` 和相关后端包已经不再 import `core/sync`
-- 旧的 `core/skill`、`core/prompt` 和 `core/sync` 包已经移除
+- `cmd/skillflow` 和相关后端包已经不再 import `core/git`
+- 旧的 `core/skill`、`core/prompt`、`core/sync` 和 `core/git` 包已经移除
 
-这意味着核心域抽取现在已经有三个参考上下文，后续迁移可以把 `skillcatalog`、`promptcatalog` 和 `agentintegration` 作为参考模式。
+这意味着支撑域抽取已经开始，后续迁移可以把 `skillcatalog`、`promptcatalog`、`agentintegration` 和 `skillsource` 作为参考模式。
 
 ## 当前到目标的映射
 
@@ -82,6 +85,11 @@
 
 1. `skillsource`
 2. `backup`
+
+当前状态：
+
+- `skillsource` 已完成抽取
+- `backup` 是下一个仍待迁出的 bounded context
 
 启动时序、tray、窗口状态、开机自启、应用更新等壳层与 platform 关注点，应保留在 `cmd/skillflow` 与 `platform/`，而不是强行塞进 bounded context。
 

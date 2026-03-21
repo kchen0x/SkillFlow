@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	coregit "github.com/shinerio/skillflow/core/git"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 )
 
 type MatchStrength string
@@ -37,7 +37,7 @@ func Git(repoSource, subPath string) string {
 
 // GitFromRepoURL derives a git logical key from a remote URL and subpath.
 func GitFromRepoURL(repoURL, subPath string) (string, error) {
-	repoSource, err := coregit.RepoSource(repoURL)
+	repoSource, err := platformgit.RepoSource(repoURL)
 	if err != nil {
 		return "", err
 	}

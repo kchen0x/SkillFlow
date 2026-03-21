@@ -9,10 +9,12 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
+	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -171,9 +173,9 @@ func TestUpdateAllStarredReposAutoUpdatesOnlySuccessfulRepos(t *testing.T) {
 	prevCloneOrUpdateRepo := cloneOrUpdateRepo
 	cloneOrUpdateRepo = func(ctx context.Context, repoURL, dir, proxyURL string) error {
 		switch {
-		case coregit.SameRepo(repoURL, good.repoURL):
-			return coregit.CloneOrUpdate(ctx, good.remoteRepoDir, dir, proxyURL)
-		case coregit.SameRepo(repoURL, bad.repoURL):
+		case platformgit.SameRepo(repoURL, good.repoURL):
+			return platformgit.CloneOrUpdate(ctx, good.remoteRepoDir, dir, proxyURL)
+		case platformgit.SameRepo(repoURL, bad.repoURL):
 			return fmt.Errorf("forced sync failure for %s", repoURL)
 		default:
 			return fmt.Errorf("unexpected repo url: %s", repoURL)
@@ -255,9 +257,9 @@ func setupStarredRepoAutoUpdateFixture(t *testing.T, app *App, dataDir, repoURL,
 	remoteRepoDir := t.TempDir()
 	oldSHA := seedLocalRemoteSkillRepo(t, remoteRepoDir, skillSubPath, oldContent)
 
-	cacheDir, err := coregit.CacheDir(dataDir, repoURL)
+	cacheDir, err := platformgit.CacheDir(dataDir, repoURL)
 	require.NoError(t, err)
-	require.NoError(t, coregit.CloneOrUpdate(context.Background(), remoteRepoDir, cacheDir, ""))
+	require.NoError(t, platformgit.CloneOrUpdate(context.Background(), remoteRepoDir, cacheDir, ""))
 
 	sourceDir := writeTestSkillDir(t, t.TempDir(), filepath.Base(filepath.FromSlash(skillSubPath)), oldContent)
 	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceGitHub, repoURL, skillSubPath)
@@ -267,11 +269,11 @@ func setupStarredRepoAutoUpdateFixture(t *testing.T, app *App, dataDir, repoURL,
 	require.NoError(t, app.storage.UpdateMeta(sk))
 
 	if app.starStorage == nil {
-		app.starStorage = coregit.NewStarStorage(filepath.Join(dataDir, "star_repos.json"))
+		app.starStorage = sourcerepo.NewStarRepoStorage(filepath.Join(dataDir, "star_repos.json"))
 	}
 	repos, err := app.starStorage.Load()
 	require.NoError(t, err)
-	repos = append(repos, coregit.StarredRepo{
+	repos = append(repos, sourcedomain.StarRepo{
 		URL:      repoURL,
 		Name:     "octo/" + filepath.Base(filepath.FromSlash(skillSubPath)),
 		LocalDir: cacheDir,
@@ -291,24 +293,25 @@ func seedCachedSkillRepo(t *testing.T, dataDir, repoURL, skillSubPath, oldConten
 	t.Helper()
 	requireGitAvailable(t)
 
-	repoDir, err := coregit.CacheDir(dataDir, repoURL)
+	repoDir, err := platformgit.CacheDir(dataDir, repoURL)
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(repoDir, 0755))
 
 	runGitCmd(t, repoDir, "init")
 	runGitCmd(t, repoDir, "config", "user.name", "SkillFlow Tests")
 	runGitCmd(t, repoDir, "config", "user.email", "tests@skillflow.local")
+	runGitCmd(t, repoDir, "config", "commit.gpgsign", "false")
 
 	writeCachedSkillFiles(t, repoDir, skillSubPath, oldContent)
 	runGitCmd(t, repoDir, "add", ".")
 	runGitCmd(t, repoDir, "commit", "-m", "initial cache")
-	oldSHA, err := coregit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
+	oldSHA, err := platformgit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
 	require.NoError(t, err)
 
 	writeCachedSkillFiles(t, repoDir, skillSubPath, newContent)
 	runGitCmd(t, repoDir, "add", ".")
 	runGitCmd(t, repoDir, "commit", "-m", "update cache")
-	newSHA, err := coregit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
+	newSHA, err := platformgit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
 	require.NoError(t, err)
 
 	return repoDir, oldSHA, newSHA
@@ -322,11 +325,12 @@ func seedLocalRemoteSkillRepo(t *testing.T, repoDir, skillSubPath, content strin
 	runGitCmd(t, repoDir, "init")
 	runGitCmd(t, repoDir, "config", "user.name", "SkillFlow Tests")
 	runGitCmd(t, repoDir, "config", "user.email", "tests@skillflow.local")
+	runGitCmd(t, repoDir, "config", "commit.gpgsign", "false")
 	writeCachedSkillFiles(t, repoDir, skillSubPath, content)
 	runGitCmd(t, repoDir, "add", ".")
 	runGitCmd(t, repoDir, "commit", "-m", "initial remote")
 
-	sha, err := coregit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
+	sha, err := platformgit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
 	require.NoError(t, err)
 	return sha
 }
@@ -338,7 +342,7 @@ func commitLocalRemoteSkillRepoUpdate(t *testing.T, repoDir, skillSubPath, conte
 	runGitCmd(t, repoDir, "add", ".")
 	runGitCmd(t, repoDir, "commit", "-m", "update remote")
 
-	sha, err := coregit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
+	sha, err := platformgit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
 	require.NoError(t, err)
 	return sha
 }
@@ -348,10 +352,10 @@ func stubCloneOrUpdateRepo(t *testing.T, wantRepoURL, sourceRepoDir string) {
 
 	prevCloneOrUpdateRepo := cloneOrUpdateRepo
 	cloneOrUpdateRepo = func(ctx context.Context, repoURL, dir, proxyURL string) error {
-		if !coregit.SameRepo(repoURL, wantRepoURL) {
+		if !platformgit.SameRepo(repoURL, wantRepoURL) {
 			return fmt.Errorf("unexpected repo url: %s", repoURL)
 		}
-		return coregit.CloneOrUpdate(ctx, sourceRepoDir, dir, proxyURL)
+		return platformgit.CloneOrUpdate(ctx, sourceRepoDir, dir, proxyURL)
 	}
 	t.Cleanup(func() {
 		cloneOrUpdateRepo = prevCloneOrUpdateRepo

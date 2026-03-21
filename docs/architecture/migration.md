@@ -13,12 +13,15 @@ As of 2026-03-21:
 - `skillcatalog` is extracted under `core/skillcatalog/app`, `domain`, and `infra`
 - `promptcatalog` is extracted under `core/promptcatalog/app`, `domain`, and `infra`
 - `agentintegration` is extracted under `core/agentintegration/app`, `domain`, and `infra`
+- `skillsource` is extracted under `core/skillsource/app`, `domain`, and `infra`
+- pure Git helpers now live under `core/platform/git`
 - `cmd/skillflow` and supporting backend packages no longer import `core/skill`
 - `cmd/skillflow` no longer imports `core/prompt`
 - `cmd/skillflow` and supporting backend packages no longer import `core/sync`
-- the old `core/skill`, `core/prompt`, and `core/sync` packages have been removed
+- `cmd/skillflow` and supporting backend packages no longer import `core/git`
+- the old `core/skill`, `core/prompt`, `core/sync`, and `core/git` packages have been removed
 
-This means the core-domain extraction phase now has three reference contexts. `skillcatalog`, `promptcatalog`, and `agentintegration` are the extraction patterns for the remaining migrations.
+This means the supporting-domain extraction phase has started. `skillcatalog`, `promptcatalog`, `agentintegration`, and `skillsource` are now the extraction patterns for the remaining migrations.
 
 ## Current-to-Target Mapping
 
@@ -82,6 +85,11 @@ Recommended order:
 
 1. `skillsource`
 2. `backup`
+
+Current status:
+
+- `skillsource` is already extracted
+- `backup` is the next remaining bounded-context extraction target
 
 Shell and platform concerns such as startup, tray, window state, launch-at-login, and app update should remain in `cmd/skillflow` plus `platform/` rather than being forced into a bounded context.
 

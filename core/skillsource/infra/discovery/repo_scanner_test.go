@@ -1,4 +1,4 @@
-package git
+package discovery
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 
 func TestScanSkillsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	skills, err := ScanSkills(dir, "https://github.com/a/b", "a/b", "github.com/a/b")
+	skills, err := NewRepoScanner().ScanSkills(dir, "https://github.com/a/b", "a/b", "github.com/a/b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,6 @@ func TestScanSkillsEmpty(t *testing.T) {
 func TestScanSkills(t *testing.T) {
 	dir := t.TempDir()
 	skillsDir := filepath.Join(dir, "skills")
-	// create two valid skills and one invalid (no skill.md)
 	for _, name := range []string{"alpha", "beta"} {
 		d := filepath.Join(skillsDir, name)
 		os.MkdirAll(d, 0755)
@@ -28,7 +27,7 @@ func TestScanSkills(t *testing.T) {
 	}
 	os.MkdirAll(filepath.Join(skillsDir, "no-skills-md"), 0755)
 
-	skills, err := ScanSkills(dir, "https://github.com/a/b", "a/b", "github.com/a/b")
+	skills, err := NewRepoScanner().ScanSkills(dir, "https://github.com/a/b", "a/b", "github.com/a/b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,20 +50,16 @@ func TestScanSkills(t *testing.T) {
 	}
 }
 
-// TestScanSkillsRootFallback covers repos where skill dirs live at the repo
-// root (no skills/ subdirectory), e.g. github.com/anthropics/skills.
 func TestScanSkillsRootFallback(t *testing.T) {
 	dir := t.TempDir()
-	// Skills placed directly under repo root.
 	for _, name := range []string{"gamma", "delta"} {
 		d := filepath.Join(dir, name)
 		os.MkdirAll(d, 0755)
 		os.WriteFile(filepath.Join(d, "skill.md"), []byte("# "+name), 0644)
 	}
-	// A dir without skill.mdshould be ignored.
 	os.MkdirAll(filepath.Join(dir, "docs"), 0755)
 
-	skills, err := ScanSkills(dir, "https://github.com/a/skills", "a/skills", "github.com/a/skills")
+	skills, err := NewRepoScanner().ScanSkills(dir, "https://github.com/a/skills", "a/skills", "github.com/a/skills")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +79,7 @@ func TestScanSkillsRepoRootSkill(t *testing.T) {
 		t.Fatalf("write repo root skill: %v", err)
 	}
 
-	skills, err := ScanSkills(dir, "https://github.com/a/root-skill", "a/root-skill", "github.com/a/root-skill")
+	skills, err := NewRepoScanner().ScanSkills(dir, "https://github.com/a/root-skill", "a/root-skill", "github.com/a/root-skill")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +112,7 @@ func TestScanSkillsNestedPluginSkills(t *testing.T) {
 		t.Fatalf("write top-level skill: %v", err)
 	}
 
-	skills, err := ScanSkills(dir, "https://github.com/shinerio/shinerio-marketplace", "shinerio/shinerio-marketplace", "github.com/shinerio/shinerio-marketplace")
+	skills, err := NewRepoScanner().ScanSkills(dir, "https://github.com/shinerio/shinerio-marketplace", "shinerio/shinerio-marketplace", "github.com/shinerio/shinerio-marketplace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +150,7 @@ func TestScanSkillsRespectsMaxDepth(t *testing.T) {
 		t.Fatalf("write shallow skill: %v", err)
 	}
 
-	skills, err := ScanSkillsWithMaxDepth(dir, "https://github.com/shinerio/shinerio-marketplace", "shinerio/shinerio-marketplace", "github.com/shinerio/shinerio-marketplace", 2)
+	skills, err := NewRepoScanner().ScanSkillsWithMaxDepth(dir, "https://github.com/shinerio/shinerio-marketplace", "shinerio/shinerio-marketplace", "github.com/shinerio/shinerio-marketplace", 2)
 	if err != nil {
 		t.Fatal(err)
 	}

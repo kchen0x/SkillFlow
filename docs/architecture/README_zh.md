@@ -44,7 +44,7 @@ SkillFlow 的目标后端架构是一个基于 DDD 的模块化单体：
 
 当前代码尚未完全迁移到这套架构。除非文中明确说明，这组文档描述的是后续重构要收敛到的目标结构。
 
-截至 2026-03-21，已经有三个端到端 bounded context 落地到 `core/` 下：
+截至 2026-03-21，已经有四个端到端 bounded context 落地到 `core/` 下：
 
 - `core/skillcatalog/app`
 - `core/skillcatalog/domain`
@@ -55,7 +55,10 @@ SkillFlow 的目标后端架构是一个基于 DDD 的模块化单体：
 - `core/agentintegration/app`
 - `core/agentintegration/domain`
 - `core/agentintegration/infra`
+- `core/skillsource/app`
+- `core/skillsource/domain`
+- `core/skillsource/infra`
 
-旧的 `core/skill`、`core/prompt` 和 `core/sync` 包已经移除。其余领域与横切模块仍需继续按同样方式迁移。
+旧的 `core/skill`、`core/prompt`、`core/sync` 和 `core/git` 包已经移除。纯 Git 能力现在位于 `core/platform/git`。其余领域与横切模块仍需继续按同样方式迁移。
 
 *最后更新：2026-03-21*

@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	coregit "github.com/shinerio/skillflow/core/git"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/skillkey"
 )
@@ -72,7 +72,7 @@ func (c *Checker) Check(ctx context.Context, sk *domain.InstalledSkill) (CheckRe
 }
 
 func parseSourceURL(sourceURL, subPath string) (owner, repo, path string) {
-	name, err := coregit.ParseRepoName(sourceURL)
+	name, err := platformgit.ParseRepoName(sourceURL)
 	if err != nil {
 		return "", "", subPath
 	}

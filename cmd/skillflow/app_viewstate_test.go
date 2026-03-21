@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
+	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,7 +63,7 @@ func TestListAllStarSkillsUsesCachedSnapshotWhenFingerprintMatches(t *testing.T)
 
 	fingerprint, err := app.allStarSkillsFingerprint()
 	require.NoError(t, err)
-	cached := []coregit.StarSkill{{Name: "cached-skill", Path: "/tmp/cached"}}
+	cached := []StarSkillEntry{{Name: "cached-skill", Path: "/tmp/cached"}}
 	require.NoError(t, app.viewCache.Save(allStarSkillsSnapshotName, fingerprint, cached))
 
 	skills, err := app.ListAllStarSkills()
@@ -74,14 +75,14 @@ func TestListAllStarSkillsRebuildsWhenCachedSnapshotIsStale(t *testing.T) {
 	app, dataDir, _, _ := newViewStateTestApp(t)
 	repoDir := filepath.Join(dataDir, "repos", "demo")
 	writeTestSkillDir(t, repoDir, "repo-skill", "# Repo Skill\n")
-	require.NoError(t, app.starStorage.Save([]coregit.StarredRepo{{
+	require.NoError(t, app.starStorage.Save([]sourcedomain.StarRepo{{
 		URL:      "https://example.com/demo.git",
 		Name:     "demo/repo",
 		Source:   "demo/repo",
 		LocalDir: repoDir,
 	}}))
 
-	require.NoError(t, app.viewCache.Save(allStarSkillsSnapshotName, "stale-fingerprint", []coregit.StarSkill{{
+	require.NoError(t, app.viewCache.Save(allStarSkillsSnapshotName, "stale-fingerprint", []StarSkillEntry{{
 		Name: "cached-skill",
 		Path: "/tmp/cached",
 	}}))
@@ -121,6 +122,6 @@ func newViewStateTestApp(t *testing.T) (*App, string, string, string) {
 	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = cacheDir
 	app.viewCache = viewstate.NewManager(filepath.Join(cacheDir, "viewstate"))
-	app.starStorage = coregit.NewStarStorage(starsPath)
+	app.starStorage = sourcerepo.NewStarRepoStorage(starsPath)
 	return app, dataDir, skillsDir, pushDir
 }

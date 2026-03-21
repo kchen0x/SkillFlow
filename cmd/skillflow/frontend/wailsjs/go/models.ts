@@ -456,46 +456,7 @@ export namespace domain {
 	        this.DisableModelInvocation = source["DisableModelInvocation"];
 	    }
 	}
-
-}
-
-export namespace git {
-	
-	export class StarSkill {
-	    name: string;
-	    path: string;
-	    subPath: string;
-	    repoUrl: string;
-	    repoName: string;
-	    source: string;
-	    logicalKey: string;
-	    installed: boolean;
-	    imported: boolean;
-	    updatable: boolean;
-	    pushed: boolean;
-	    pushedAgents: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new StarSkill(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.path = source["path"];
-	        this.subPath = source["subPath"];
-	        this.repoUrl = source["repoUrl"];
-	        this.repoName = source["repoName"];
-	        this.source = source["source"];
-	        this.logicalKey = source["logicalKey"];
-	        this.installed = source["installed"];
-	        this.imported = source["imported"];
-	        this.updatable = source["updatable"];
-	        this.pushed = source["pushed"];
-	        this.pushedAgents = source["pushedAgents"];
-	    }
-	}
-	export class StarredRepo {
+	export class StarRepo {
 	    url: string;
 	    name: string;
 	    source: string;
@@ -505,7 +466,7 @@ export namespace git {
 	    syncError?: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new StarredRepo(source);
+	        return new StarRepo(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -647,6 +608,40 @@ export namespace main {
 	        this.statusCode = source["statusCode"];
 	        this.elapsedMs = source["elapsedMs"];
 	        this.message = source["message"];
+	    }
+	}
+	export class StarSkillEntry {
+	    name: string;
+	    path: string;
+	    subPath: string;
+	    repoUrl: string;
+	    repoName: string;
+	    source: string;
+	    logicalKey: string;
+	    installed: boolean;
+	    imported: boolean;
+	    updatable: boolean;
+	    pushed: boolean;
+	    pushedAgents: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new StarSkillEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.subPath = source["subPath"];
+	        this.repoUrl = source["repoUrl"];
+	        this.repoName = source["repoName"];
+	        this.source = source["source"];
+	        this.logicalKey = source["logicalKey"];
+	        this.installed = source["installed"];
+	        this.imported = source["imported"];
+	        this.updatable = source["updatable"];
+	        this.pushed = source["pushed"];
+	        this.pushedAgents = source["pushedAgents"];
 	    }
 	}
 

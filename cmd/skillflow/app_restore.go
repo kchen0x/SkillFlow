@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	coregit "github.com/shinerio/skillflow/core/git"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 )
 
@@ -126,7 +126,7 @@ func (a *App) cloneNewlyRestoredStarredRepos(before cloudRestoreState, source st
 		}
 
 		a.logInfof("restore starred repo clone started: source=%s repo=%s localDir=%s", source, repos[i].URL, repos[i].LocalDir)
-		if err := coregit.CloneOrUpdate(a.cloneContext(), repos[i].URL, repos[i].LocalDir, a.gitProxyURL()); err != nil {
+		if err := platformgit.CloneOrUpdate(a.cloneContext(), repos[i].URL, repos[i].LocalDir, a.gitProxyURL()); err != nil {
 			failed++
 			changed = true
 			repos[i].SyncError = err.Error()
@@ -163,7 +163,7 @@ func cloudRestoreSkillKey(sk *skilldomain.InstalledSkill) string {
 }
 
 func cloudRestoreRepoKey(repoURL string) string {
-	if normalized, err := coregit.CanonicalRepoURL(repoURL); err == nil && strings.TrimSpace(normalized) != "" {
+	if normalized, err := platformgit.CanonicalRepoURL(repoURL); err == nil && strings.TrimSpace(normalized) != "" {
 		return normalized
 	}
 	return strings.TrimSpace(repoURL)

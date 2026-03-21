@@ -10,8 +10,8 @@ import (
 
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
 	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 	"github.com/shinerio/skillflow/core/viewstate"
 )
 
@@ -111,8 +111,8 @@ func (a *App) allStarSkillsFingerprint() (string, error) {
 	}
 
 	repoData, err := json.Marshal(struct {
-		RepoScanMaxDepth int                   `json:"repoScanMaxDepth"`
-		Repos            []coregit.StarredRepo `json:"repos"`
+		RepoScanMaxDepth int                     `json:"repoScanMaxDepth"`
+		Repos            []sourcedomain.StarRepo `json:"repos"`
 	}{
 		RepoScanMaxDepth: a.repoScanMaxDepth(),
 		Repos:            repos,

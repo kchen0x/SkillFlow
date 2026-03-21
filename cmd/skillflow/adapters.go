@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
+
 	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	agentgateway "github.com/shinerio/skillflow/core/agentintegration/app/port/gateway"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	agentgatewayinfra "github.com/shinerio/skillflow/core/agentintegration/infra/gateway"
 	"github.com/shinerio/skillflow/core/config"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/registry"
+	skillsourceapp "github.com/shinerio/skillflow/core/skillsource/app"
+	sourcediscovery "github.com/shinerio/skillflow/core/skillsource/infra/discovery"
 )
 
 func registerAdapters() {
@@ -61,4 +66,46 @@ func resolveAgentGateway(profile agentdomain.AgentProfile) agentgateway.AgentGat
 
 func newAgentIntegrationService() *agentapp.Service {
 	return agentapp.NewService(resolveAgentGateway)
+}
+
+type appSkillsourceGitClient struct{}
+
+func (appSkillsourceGitClient) CheckGitInstalled() error {
+	return platformgit.CheckGitInstalled()
+}
+
+func (appSkillsourceGitClient) ParseRepoName(repoURL string) (string, error) {
+	return platformgit.ParseRepoName(repoURL)
+}
+
+func (appSkillsourceGitClient) RepoSource(repoURL string) (string, error) {
+	return platformgit.RepoSource(repoURL)
+}
+
+func (appSkillsourceGitClient) CacheDir(dataDir, repoURL string) (string, error) {
+	return platformgit.CacheDir(dataDir, repoURL)
+}
+
+func (appSkillsourceGitClient) SameRepo(repoA, repoB string) bool {
+	return platformgit.SameRepo(repoA, repoB)
+}
+
+func (appSkillsourceGitClient) CloneOrUpdate(ctx context.Context, repoURL, dir, proxyURL string) error {
+	return cloneOrUpdateRepo(ctx, repoURL, dir, proxyURL)
+}
+
+func (appSkillsourceGitClient) CloneOrUpdateWithCreds(ctx context.Context, repoURL, dir, proxyURL, username, password string) error {
+	return platformgit.CloneOrUpdateWithCreds(ctx, repoURL, dir, proxyURL, username, password)
+}
+
+func (appSkillsourceGitClient) IsAuthError(err error) bool {
+	return platformgit.IsAuthError(err)
+}
+
+func (appSkillsourceGitClient) IsSSHAuthError(err error) bool {
+	return platformgit.IsSSHAuthError(err)
+}
+
+func (a *App) newSkillsourceService() *skillsourceapp.Service {
+	return skillsourceapp.NewService(a.starStorage, sourcediscovery.NewRepoScanner(), appSkillsourceGitClient{})
 }

@@ -1,4 +1,4 @@
-package git
+package repository
 
 import (
 	"encoding/json"
@@ -8,11 +8,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 )
 
-func TestStarStorageLoadEmpty(t *testing.T) {
+func TestStarRepoStorageLoadEmpty(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "star_repos.json")
-	s := NewStarStorage(path)
+	s := NewStarRepoStorage(path)
 	repos, err := s.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -22,15 +24,12 @@ func TestStarStorageLoadEmpty(t *testing.T) {
 	}
 }
 
-func TestStarStorageSaveLoad(t *testing.T) {
+func TestStarRepoStorageSaveLoad(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
-	s := NewStarStorage(path)
-	localDir, err := CacheDir(dir, "https://github.com/a/b")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []StarredRepo{
+	s := NewStarRepoStorage(path)
+	localDir := filepath.Join(dir, "cache", "github.com", "a", "b")
+	want := []sourcedomain.StarRepo{
 		{URL: "https://github.com/a/b", Name: "a/b", LocalDir: localDir, LastSync: time.Time{}},
 	}
 	if err := s.Save(want); err != nil {
@@ -55,16 +54,13 @@ func TestStarStorageSaveLoad(t *testing.T) {
 	}
 }
 
-func TestStarStorageSaveLoadPersistsLocalStateInLocalFileOnly(t *testing.T) {
+func TestStarRepoStorageSaveLoadPersistsLocalStateInLocalFileOnly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
-	s := NewStarStorage(path)
-	localDir, err := CacheDir(dir, "https://github.com/a/b")
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := NewStarRepoStorage(path)
+	localDir := filepath.Join(dir, "cache", "github.com", "a", "b")
 	lastSync := time.Now().UTC().Truncate(time.Second)
-	want := []StarredRepo{
+	want := []sourcedomain.StarRepo{
 		{
 			URL:       "https://github.com/a/b",
 			Name:      "a/b",
@@ -109,10 +105,10 @@ func TestStarStorageSaveLoadPersistsLocalStateInLocalFileOnly(t *testing.T) {
 	}
 }
 
-func TestStarStorageLoadMigratesLegacyLocalFieldsToLocalFile(t *testing.T) {
+func TestStarRepoStorageLoadMigratesLegacyLocalFieldsToLocalFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
-	legacy := []StarredRepo{{
+	legacy := []sourcedomain.StarRepo{{
 		URL:       "https://github.com/a/b",
 		Name:      "a/b",
 		Source:    "github.com/a/b",
@@ -128,7 +124,7 @@ func TestStarStorageLoadMigratesLegacyLocalFieldsToLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := NewStarStorage(path)
+	s := NewStarRepoStorage(path)
 	got, err := s.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -152,26 +148,23 @@ func TestStarStorageLoadMigratesLegacyLocalFieldsToLocalFile(t *testing.T) {
 	}
 }
 
-func TestStarStorageLoadCorrupt(t *testing.T) {
+func TestStarRepoStorageLoadCorrupt(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "star_repos.json")
 	if err := os.WriteFile(path, []byte("{not valid json"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	s := NewStarStorage(path)
+	s := NewStarRepoStorage(path)
 	_, err := s.Load()
 	if err == nil {
 		t.Fatal("expected error for corrupt JSON, got nil")
 	}
 }
 
-func TestStarStorageLoadMigratesAbsoluteLocalDir(t *testing.T) {
+func TestStarRepoStorageLoadMigratesAbsoluteLocalDir(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
-	localDir, err := CacheDir(dir, "https://github.com/a/b")
-	if err != nil {
-		t.Fatal(err)
-	}
-	repos := []StarredRepo{{URL: "https://github.com/a/b", Name: "a/b", LocalDir: localDir}}
+	localDir := filepath.Join(dir, "cache", "github.com", "a", "b")
+	repos := []sourcedomain.StarRepo{{URL: "https://github.com/a/b", Name: "a/b", LocalDir: localDir}}
 	data, err := json.MarshalIndent(repos, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +173,7 @@ func TestStarStorageLoadMigratesAbsoluteLocalDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := NewStarStorage(path)
+	s := NewStarRepoStorage(path)
 	got, err := s.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +190,7 @@ func TestStarStorageLoadMigratesAbsoluteLocalDir(t *testing.T) {
 	}
 }
 
-func TestStarStorageLoadSeedsBuiltinsOnlyOnFirstInit(t *testing.T) {
+func TestStarRepoStorageLoadSeedsBuiltinsOnlyOnFirstInit(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
 	builtins := []string{
@@ -205,7 +198,7 @@ func TestStarStorageLoadSeedsBuiltinsOnlyOnFirstInit(t *testing.T) {
 		"https://github.com/ComposioHQ/awesome-claude-skills.git",
 		"https://github.com/affaan-m/everything-claude-code.git",
 	}
-	s := NewStarStorageWithBuiltins(path, builtins)
+	s := NewStarRepoStorageWithBuiltins(path, builtins)
 
 	first, err := s.Load()
 	if err != nil {
@@ -217,7 +210,7 @@ func TestStarStorageLoadSeedsBuiltinsOnlyOnFirstInit(t *testing.T) {
 	for _, wantURL := range builtins {
 		found := false
 		for _, gotRepo := range first {
-			if SameRepo(gotRepo.URL, wantURL) {
+			if gotRepo.URL == wantURL {
 				found = true
 				break
 			}
@@ -227,7 +220,7 @@ func TestStarStorageLoadSeedsBuiltinsOnlyOnFirstInit(t *testing.T) {
 		}
 	}
 
-	if err := s.Save([]StarredRepo{}); err != nil {
+	if err := s.Save([]sourcedomain.StarRepo{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -240,9 +233,9 @@ func TestStarStorageLoadSeedsBuiltinsOnlyOnFirstInit(t *testing.T) {
 	}
 }
 
-func TestStarStorageLoadDoesNotSeedWhenBuiltinsEmpty(t *testing.T) {
+func TestStarRepoStorageLoadDoesNotSeedWhenBuiltinsEmpty(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "star_repos.json")
-	s := NewStarStorageWithBuiltins(path, nil)
+	s := NewStarRepoStorageWithBuiltins(path, nil)
 	repos, err := s.Load()
 	if err != nil {
 		t.Fatal(err)

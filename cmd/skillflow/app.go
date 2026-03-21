@@ -18,13 +18,15 @@ import (
 	"github.com/shinerio/skillflow/core/applog"
 	"github.com/shinerio/skillflow/core/backup"
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
 	"github.com/shinerio/skillflow/core/notify"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/registry"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/shinerio/skillflow/core/skillkey"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
+	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/shinerio/skillflow/core/upgrade"
 	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -36,7 +38,7 @@ type App struct {
 	sysLog             *applog.Logger
 	storage            *skillcatalogapp.Service
 	config             *config.Service
-	starStorage        *coregit.StarStorage
+	starStorage        *sourcerepo.StarRepoStorage
 	cacheDir           string
 	viewCache          *viewstate.Manager
 	promptImports      *promptImportSessionStore
@@ -72,7 +74,7 @@ var appDataDirFunc = config.AppDataDir
 
 var runStartupUpgrade = upgrade.Run
 
-var cloneOrUpdateRepo = coregit.CloneOrUpdate
+var cloneOrUpdateRepo = platformgit.CloneOrUpdate
 
 var loadStartupConfig = func(dataDir string) (*config.Service, config.AppConfig, error) {
 	svc := config.NewService(dataDir)
@@ -126,7 +128,7 @@ func (a *App) startup(ctx context.Context) {
 	a.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(cfg.SkillsStorageDir))
 	a.cacheDir = filepath.Join(dataDir, "cache")
 	a.viewCache = viewstate.NewManager(filepath.Join(a.cacheDir, "viewstate"))
-	a.starStorage = coregit.NewStarStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
+	a.starStorage = sourcerepo.NewStarRepoStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
 	registerAdapters()
 	registerProviders()
 	if ctx != nil {
@@ -731,7 +733,7 @@ func (a *App) ReadSkillFileContent(path string) (string, error) {
 func (a *App) OpenURL(rawURL string) error {
 	target := rawURL
 	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
-		if canonical, err := coregit.CanonicalRepoURL(rawURL); err == nil {
+		if canonical, err := platformgit.CanonicalRepoURL(rawURL); err == nil {
 			target = canonical
 		}
 	}
@@ -1418,7 +1420,7 @@ func (a *App) autoUpdateInstalledSkillsForRepos(source string, repoURLs []string
 
 	repoSources := make(map[string]struct{}, len(repoURLs))
 	for _, repoURL := range repoURLs {
-		repoSource, err := coregit.RepoSource(repoURL)
+		repoSource, err := platformgit.RepoSource(repoURL)
 		if err != nil || strings.TrimSpace(repoSource) == "" {
 			if err != nil {
 				a.logErrorf("auto update installed skills failed: source=%s repo=%s err=%v", source, repoURL, err)
@@ -1443,7 +1445,7 @@ func (a *App) autoUpdateInstalledSkillsForRepos(source string, repoURLs []string
 		if sk == nil || !sk.IsGitHub() {
 			continue
 		}
-		repoSource, err := coregit.RepoSource(sk.SourceURL)
+		repoSource, err := platformgit.RepoSource(sk.SourceURL)
 		if err != nil {
 			a.logErrorf("auto update installed skills failed: source=%s skillID=%s name=%s err=%v", source, sk.ID, sk.Name, err)
 			continue
@@ -1481,7 +1483,7 @@ func (a *App) cachedSkillSourceDir(sk *skilldomain.InstalledSkill) (string, stri
 		return "", "", fmt.Errorf("config service is not initialized")
 	}
 
-	cacheDir, err := coregit.CacheDir(a.config.DataDir(), sk.SourceURL)
+	cacheDir, err := platformgit.CacheDir(a.config.DataDir(), sk.SourceURL)
 	if err != nil {
 		return "", "", err
 	}
@@ -1514,7 +1516,7 @@ func (a *App) cachedSkillSourceDir(sk *skilldomain.InstalledSkill) (string, stri
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	latestSHA, err := coregit.GetSubPathSHA(ctx, cacheDir, shaPath)
+	latestSHA, err := platformgit.GetSubPathSHA(ctx, cacheDir, shaPath)
 	if err != nil {
 		return "", "", err
 	}
@@ -1600,131 +1602,41 @@ func (a *App) Greet(name string) string {
 
 // --- Starred Repos ---
 
-func (a *App) AddStarredRepo(repoURL string) (*coregit.StarredRepo, error) {
+func (a *App) AddStarredRepo(repoURL string) (*sourcedomain.StarRepo, error) {
 	a.logInfof("add starred repo requested: %s", repoURL)
-	if err := coregit.CheckGitInstalled(); err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	repos, err := a.starStorage.Load()
+	repo, err := a.newSkillsourceService().TrackStarRepo(a.cloneContext(), filepath.Dir(a.cacheDir), repoURL, a.gitProxyURL())
 	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	for i, r := range repos {
-		if coregit.SameRepo(r.URL, repoURL) {
-			if repos[i].Source == "" {
-				if source, err := coregit.RepoSource(repos[i].URL); err == nil {
-					repos[i].Source = source
-					_ = a.starStorage.Save(repos)
-				}
-			}
-			return &repos[i], nil // already starred
+		if platformgit.IsSSHAuthError(err) {
+			a.logErrorf("add starred repo failed: %v", err)
+			return nil, fmt.Errorf("AUTH_SSH:%s", err.Error())
 		}
-	}
-	name, err := coregit.ParseRepoName(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	dataDir := filepath.Dir(a.cacheDir)
-	localDir, err := coregit.CacheDir(dataDir, repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	source, err := coregit.RepoSource(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	repo := coregit.StarredRepo{URL: repoURL, Name: name, Source: source, LocalDir: localDir}
-	if cloneErr := coregit.CloneOrUpdate(a.ctx, repoURL, localDir, a.gitProxyURL()); cloneErr != nil {
-		// Return typed errors for auth failures so the frontend can show the right dialog.
-		if coregit.IsSSHAuthError(cloneErr) {
-			return nil, fmt.Errorf("AUTH_SSH:%s", cloneErr.Error())
+		if platformgit.IsAuthError(err) {
+			a.logErrorf("add starred repo failed: %v", err)
+			return nil, fmt.Errorf("AUTH_HTTP:%s", err.Error())
 		}
-		if coregit.IsAuthError(cloneErr) {
-			return nil, fmt.Errorf("AUTH_HTTP:%s", cloneErr.Error())
-		}
-		repo.SyncError = cloneErr.Error()
-	} else {
-		repo.LastSync = time.Now()
-	}
-	repos = append(repos, repo)
-	if err := a.starStorage.Save(repos); err != nil {
 		a.logErrorf("add starred repo failed: %v", err)
 		return nil, err
 	}
 	a.logInfof("add starred repo completed: %s", repoURL)
-	return &repos[len(repos)-1], nil
+	return repo, nil
 }
 
 // AddStarredRepoWithCredentials clones a repo using the provided HTTP username/password,
 // removing any previously failed entry for the same URL first.
-func (a *App) AddStarredRepoWithCredentials(repoURL, username, password string) (*coregit.StarredRepo, error) {
+func (a *App) AddStarredRepoWithCredentials(repoURL, username, password string) (*sourcedomain.StarRepo, error) {
 	a.logInfof("add starred repo with credentials requested: %s", repoURL)
-	if err := coregit.CheckGitInstalled(); err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	repos, err := a.starStorage.Load()
+	repo, err := a.newSkillsourceService().TrackStarRepoWithCredentials(a.cloneContext(), filepath.Dir(a.cacheDir), repoURL, a.gitProxyURL(), username, password)
 	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	// Remove any existing (possibly failed) entry for this URL.
-	filtered := repos[:0]
-	for _, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			filtered = append(filtered, r)
-		}
-	}
-	name, err := coregit.ParseRepoName(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	dataDir := filepath.Dir(a.cacheDir)
-	localDir, err := coregit.CacheDir(dataDir, repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	source, err := coregit.RepoSource(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	repo := coregit.StarredRepo{URL: repoURL, Name: name, Source: source, LocalDir: localDir}
-	if cloneErr := coregit.CloneOrUpdateWithCreds(a.ctx, repoURL, localDir, a.gitProxyURL(), username, password); cloneErr != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", cloneErr)
-		return nil, cloneErr
-	}
-	repo.LastSync = time.Now()
-	filtered = append(filtered, repo)
-	if err := a.starStorage.Save(filtered); err != nil {
 		a.logErrorf("add starred repo with credentials failed: %v", err)
 		return nil, err
 	}
 	a.logInfof("add starred repo with credentials completed: %s", repoURL)
-	return &filtered[len(filtered)-1], nil
+	return repo, nil
 }
 
 func (a *App) RemoveStarredRepo(repoURL string) error {
 	a.logInfof("remove starred repo requested: %s", repoURL)
-	repos, err := a.starStorage.Load()
-	if err != nil {
-		a.logErrorf("remove starred repo failed: %v", err)
-		return err
-	}
-	filtered := make([]coregit.StarredRepo, 0, len(repos))
-	for _, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			filtered = append(filtered, r)
-		}
-	}
-	if err := a.starStorage.Save(filtered); err != nil {
+	if err := a.newSkillsourceService().UntrackStarRepo(repoURL); err != nil {
 		a.logErrorf("remove starred repo failed: %v", err)
 		return err
 	}
@@ -1732,32 +1644,15 @@ func (a *App) RemoveStarredRepo(repoURL string) error {
 	return nil
 }
 
-func (a *App) ListStarredRepos() ([]coregit.StarredRepo, error) {
-	repos, err := a.starStorage.Load()
-	if repos == nil {
-		return []coregit.StarredRepo{}, err
-	}
-	changed := false
-	for i := range repos {
-		if repos[i].Source != "" {
-			continue
-		}
-		if source, parseErr := coregit.RepoSource(repos[i].URL); parseErr == nil {
-			repos[i].Source = source
-			changed = true
-		}
-	}
-	if changed {
-		_ = a.starStorage.Save(repos)
-	}
-	return repos, err
+func (a *App) ListStarredRepos() ([]sourcedomain.StarRepo, error) {
+	return a.newSkillsourceService().ListStarRepos()
 }
 
-func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
-	return measureOperation(a, "list_all_star_skills", func() ([]coregit.StarSkill, error) {
+func (a *App) ListAllStarSkills() ([]StarSkillEntry, error) {
+	return measureOperation(a, "list_all_star_skills", func() ([]StarSkillEntry, error) {
 		fingerprint, fingerprintErr := a.allStarSkillsFingerprint()
 		if fingerprintErr == nil {
-			var cached []coregit.StarSkill
+			var cached []StarSkillEntry
 			state, err := a.ensureViewCache().Load(allStarSkillsSnapshotName, fingerprint, &cached)
 			if err == nil && state == viewstate.StateHit {
 				return cached, nil
@@ -1775,62 +1670,38 @@ func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
 	})
 }
 
-func (a *App) listAllStarSkillsUncached() ([]coregit.StarSkill, error) {
-	repos, err := a.starStorage.Load()
+func (a *App) listAllStarSkillsUncached() ([]StarSkillEntry, error) {
+	skills, err := a.newSkillsourceService().ListAllSourceCandidates(a.repoScanMaxDepth())
 	if err != nil {
 		return nil, err
 	}
-	maxDepth := a.repoScanMaxDepth()
 	_, installedIndex, err := a.installedIndex()
 	if err != nil {
 		return nil, err
 	}
 	presence := a.buildAgentPresenceIndex(installedIndex)
-	var all []coregit.StarSkill
-	for _, r := range repos {
-		source := r.Source
-		if source == "" {
-			source, _ = coregit.RepoSource(r.URL)
-		}
-		skills, _ := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
-		all = append(all, resolveStarSkills(skills, installedIndex, presence)...)
-	}
+	all := resolveSourceCandidates(skills, installedIndex, presence)
 	if all == nil {
-		return []coregit.StarSkill{}, nil
+		return []StarSkillEntry{}, nil
 	}
 	return all, nil
 }
 
-func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
-	repos, err := a.starStorage.Load()
+func (a *App) ListRepoStarSkills(repoURL string) ([]StarSkillEntry, error) {
+	skills, err := a.newSkillsourceService().ListSourceCandidatesByRepo(repoURL, a.repoScanMaxDepth())
 	if err != nil {
 		return nil, err
 	}
-	maxDepth := a.repoScanMaxDepth()
 	_, installedIndex, err := a.installedIndex()
 	if err != nil {
 		return nil, err
 	}
 	presence := a.buildAgentPresenceIndex(installedIndex)
-	for _, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			continue
-		}
-		source := r.Source
-		if source == "" {
-			source, _ = coregit.RepoSource(r.URL)
-		}
-		skills, err := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
-		if err != nil {
-			return nil, err
-		}
-		skills = resolveStarSkills(skills, installedIndex, presence)
-		if skills == nil {
-			return []coregit.StarSkill{}, nil
-		}
-		return skills, nil
+	resolved := resolveSourceCandidates(skills, installedIndex, presence)
+	if resolved == nil {
+		return []StarSkillEntry{}, nil
 	}
-	return []coregit.StarSkill{}, nil
+	return resolved, nil
 }
 
 func (a *App) UpdateStarredRepo(repoURL string) error {
@@ -1839,43 +1710,29 @@ func (a *App) UpdateStarredRepo(repoURL string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	repos, err := a.starStorage.Load()
+	repo, err := a.newSkillsourceService().RefreshStarRepo(ctx, repoURL, a.gitProxyURL())
 	if err != nil {
 		a.logErrorf("update starred repo failed: repo=%s err=%v", repoURL, err)
 		return err
 	}
-	for i, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			continue
-		}
-		syncErr := cloneOrUpdateRepo(ctx, r.URL, r.LocalDir, a.gitProxyURL())
-		if syncErr != nil {
-			a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, syncErr)
-			repos[i].SyncError = syncErr.Error()
-		} else {
-			a.logInfof("update starred repo completed: repo=%s", r.URL)
-			repos[i].SyncError = ""
-			repos[i].LastSync = time.Now()
-		}
-		err = a.starStorage.Save(repos)
-		if err != nil {
-			a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, err)
-			return err
-		}
-		if syncErr == nil {
-			a.autoUpdateInstalledSkillsForRepos("starred.refresh.one", []string{r.URL})
-		}
-		a.hub.Publish(notify.Event{
-			Type: notify.EventStarSyncProgress,
-			Payload: notify.StarSyncProgressPayload{
-				RepoURL:   repos[i].URL,
-				RepoName:  repos[i].Name,
-				SyncError: repos[i].SyncError,
-			},
-		})
+	if repo == nil {
+		a.logErrorf("update starred repo failed: repo=%s err=starred repo not found", repoURL)
 		return nil
 	}
-	a.logErrorf("update starred repo failed: repo=%s err=starred repo not found", repoURL)
+	if strings.TrimSpace(repo.SyncError) != "" {
+		a.logErrorf("update starred repo failed: repo=%s err=%s", repo.URL, repo.SyncError)
+	} else {
+		a.logInfof("update starred repo completed: repo=%s", repo.URL)
+		a.autoUpdateInstalledSkillsForRepos("starred.refresh.one", []string{repo.URL})
+	}
+	a.hub.Publish(notify.Event{
+		Type: notify.EventStarSyncProgress,
+		Payload: notify.StarSyncProgressPayload{
+			RepoURL:   repo.URL,
+			RepoName:  repo.Name,
+			SyncError: repo.SyncError,
+		},
+	})
 	return nil
 }
 
@@ -1885,49 +1742,31 @@ func (a *App) UpdateAllStarredRepos() error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	repos, err := a.starStorage.Load()
+	results, err := a.newSkillsourceService().RefreshAllStarRepos(ctx, a.gitProxyURL())
 	if err != nil {
 		a.logErrorf("update all starred repos failed: %v", err)
 		return err
 	}
-	if len(repos) == 0 {
+	if len(results) == 0 {
 		return nil
 	}
-	var wg sync.WaitGroup
-	mu := &sync.Mutex{}
-	successfulRepoURLs := make([]string, 0, len(repos))
-	for i := range repos {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			r := repos[idx]
-			a.logInfof("update starred repo started: repo=%s", r.URL)
-			syncErr := cloneOrUpdateRepo(ctx, r.URL, r.LocalDir, a.gitProxyURL())
-			mu.Lock()
-			if syncErr != nil {
-				a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, syncErr)
-				repos[idx].SyncError = syncErr.Error()
-			} else {
-				a.logInfof("update starred repo completed: repo=%s", r.URL)
-				repos[idx].SyncError = ""
-				repos[idx].LastSync = time.Now()
-				successfulRepoURLs = append(successfulRepoURLs, r.URL)
-			}
-			mu.Unlock()
-			a.hub.Publish(notify.Event{
-				Type: notify.EventStarSyncProgress,
-				Payload: notify.StarSyncProgressPayload{
-					RepoURL:   repos[idx].URL,
-					RepoName:  repos[idx].Name,
-					SyncError: repos[idx].SyncError,
-				},
-			})
-		}(i)
-	}
-	wg.Wait()
-	if err := a.starStorage.Save(repos); err != nil {
-		a.logErrorf("update all starred repos failed: %v", err)
-		return err
+	successfulRepoURLs := make([]string, 0, len(results))
+	for _, result := range results {
+		repo := result.Repo
+		if strings.TrimSpace(repo.SyncError) != "" {
+			a.logErrorf("update starred repo failed: repo=%s err=%s", repo.URL, repo.SyncError)
+		} else {
+			a.logInfof("update starred repo completed: repo=%s", repo.URL)
+			successfulRepoURLs = append(successfulRepoURLs, repo.URL)
+		}
+		a.hub.Publish(notify.Event{
+			Type: notify.EventStarSyncProgress,
+			Payload: notify.StarSyncProgressPayload{
+				RepoURL:   repo.URL,
+				RepoName:  repo.Name,
+				SyncError: repo.SyncError,
+			},
+		})
 	}
 	a.autoUpdateInstalledSkillsForRepos("starred.refresh.all", successfulRepoURLs)
 	a.hub.Publish(notify.Event{Type: notify.EventStarSyncDone})
@@ -1937,16 +1776,16 @@ func (a *App) UpdateAllStarredRepos() error {
 
 func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) error {
 	category = normalizeCategoryName(category)
-	repos, _ := a.starStorage.Load()
+	repos, _ := a.newSkillsourceService().ListStarRepos()
 	var repoLocalDir string
 	canonicalRepoURL := repoURL
-	if normalized, err := coregit.CanonicalRepoURL(repoURL); err == nil {
+	if normalized, err := platformgit.CanonicalRepoURL(repoURL); err == nil {
 		canonicalRepoURL = normalized
 	}
 	for _, r := range repos {
-		if coregit.SameRepo(r.URL, repoURL) {
+		if platformgit.SameRepo(r.URL, repoURL) {
 			repoLocalDir = r.LocalDir
-			if normalized, err := coregit.CanonicalRepoURL(r.URL); err == nil {
+			if normalized, err := platformgit.CanonicalRepoURL(r.URL); err == nil {
 				canonicalRepoURL = normalized
 			}
 			break
@@ -1974,7 +1813,7 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 		if err != nil {
 			return err
 		}
-		sha, _ := coregit.GetSubPathSHA(a.ctx, repoLocalDir, subPath)
+		sha, _ := platformgit.GetSubPathSHA(a.ctx, repoLocalDir, subPath)
 		sk.SourceSHA = sha
 		_ = a.storage.UpdateMeta(sk)
 		imported = append(imported, sk)
