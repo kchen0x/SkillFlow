@@ -45,13 +45,17 @@ SkillFlow 采用 helper/UI 双进程模型：
   Makefile
   README.md
   README_zh.md
+  contributing.md
+  contributing_zh.md
   docs/
+    agents/
     architecture/
     config.md
     config_zh.md
     features.md
     features_zh.md
     plans/
+    superpowers/
   core/
     platform/
     shared/
@@ -66,9 +70,9 @@ SkillFlow 采用 helper/UI 双进程模型：
   cmd/
     skillflow/
       main.go
-      bootstrap.go
       app.go
       app_*.go
+      app_startup.go
       adapters.go
       providers.go
       events.go
@@ -83,27 +87,30 @@ SkillFlow 采用 helper/UI 双进程模型：
 
 逻辑归属按 bounded context 拆分，物理存储保持简单可运维。
 
-当前持久化布局：
+当前持久化布局分为应用数据根目录和当前同步根目录两部分：
 
 ```text
 <AppDataDir>/
-  config.json          # shared，按上下文 namespace 分段
-  config_local.json    # local-only，按上下文与壳层关注点 namespace 分段
+  config.json          # shared 的可同步设置负载
+  config_local.json    # local-only 设置、路径、密钥与运行时状态
   star_repos.json      # skillsource 的仓库跟踪状态
-  skills/
-    library/
-    meta/
-    meta_local/
-  prompts/
-    library/
+  star_repos_local.json
   cache/
-    sources/
-    readmodel/
+    viewstate/
+    <git-cache-hosts...>
   runtime/
   logs/
+
+<SyncRoot>/            # 默认等于 <AppDataDir>；当 SkillsStorageDir 位于外部目录时，会切到 skills/、meta/、meta_local/、prompts/ 的共享父目录
+  skills/
+    <category>/<skill>/
+  meta/
+  meta_local/
+  prompts/
+    <category>/<name>/
 ```
 
-`config.json` 和 `config_local.json` 内部按上下文 namespace 划分，每个上下文通过 platform settings store 读取和写入自己的视图。物理文件不需要与 bounded context 做 1:1 映射。
+`config.json` 和 `config_local.json` 是通过 `core/config` 管理的扁平 shared/local 负载。字段归属是逻辑上的，而不是字面上的顶层 namespace，因此物理文件不需要与 bounded context 做 1:1 映射。
 
 ## 配置归属
 
@@ -114,23 +121,29 @@ SkillFlow 采用 helper/UI 双进程模型：
 - `skillcatalog`
   - 技能库路径
   - 默认技能分类
-- `promptcatalog`
-  - Prompt 库路径
-  - Prompt 导入导出默认策略
 - `agentintegration`
   - Agent 配置
   - 自动推送策略
-- `skillsource`
-  - 来源凭据元数据
-  - 来源刷新默认策略
+  - 仓库/智能体递归扫描深度
 - `backup`
   - 当前备份配置
   - provider 与同步间隔
+  - shared/local 配置中的云配置与凭据拆分
+- `readmodel/preferences`
+  - 卡片状态可见性策略
 - 壳层 / platform
   - 开机自启
   - 窗口状态
   - 跳过更新版本
   - 代理与日志级别偏好
+
+位于 `config*.json` 之外的额外持久化归属：
+
+- `promptcatalog`
+  - `prompts/` 下的 Prompt 内容与元数据
+- `skillsource`
+  - `star_repos.json` / `star_repos_local.json` 中的收藏仓库状态
+  - `<AppDataDir>/cache/` 下的 repo cache
 
 实现归属：
 
@@ -149,7 +162,7 @@ Repository：
 - Prompt 库存储
 - Agent 配置存储
 - 来源跟踪存储
-- 按 namespace 提供视图的 settings store
+- 设置门面的持久化视图
 
 Gateway：
 

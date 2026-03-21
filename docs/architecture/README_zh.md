@@ -9,6 +9,7 @@ SkillFlow 的后端是一个基于 DDD 的模块化单体：
 - 每个上下文内部统一组织为 `app`、`domain`、`infra`
 - 跨上下文写协调通过 `core/orchestration/`
 - 跨上下文读组合通过 `core/readmodel/`
+- `core/config/` 是面向前端的设置门面，承接上下文与 platform 拥有的设置
 - 纯技术能力位于 `core/platform/`
 - 只有高度稳定的共享内核概念位于 `core/shared/`
 
@@ -33,6 +34,7 @@ SkillFlow 的后端是一个基于 DDD 的模块化单体：
 - 由于 Wails 绑定限制，当前 transport entrypoint 保留在 `cmd/skillflow/`。
 - `Skill` 和 `Prompt` 是并列的核心业务概念。
 - `Settings` 是 UI 组合视图，不是独立 bounded context。
+- `core/config/` 是设置门面，不是业务真相归属的 bounded context。
 
 ## 范围
 

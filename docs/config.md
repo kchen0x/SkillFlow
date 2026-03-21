@@ -7,11 +7,11 @@ This document explains the on-disk format of SkillFlow's persisted configuration
 Examples below use placeholders such as `<AppDataDir>` and `<SyncRoot>`:
 
 - `<AppDataDir>`: the app data directory returned by `config.AppDataDir()`
-- `<SyncRoot>`: the root that contains `skills/` and `meta/`; by default it is the same as `<AppDataDir>`, but it can move when `skillsStorageDir` is relocated outside the default app data directory
+- `<SyncRoot>`: the active backup root that contains `skills/`, `meta/`, `meta_local/`, and `prompts/`; by default it is the same as `<AppDataDir>`, but it moves to the shared parent of those directories when `skillsStorageDir` is relocated outside the default app data directory
 
 The actual starred-repository file name is `star_repos.json` (plural), not `star_repo.json`.
 
-Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, and `star_repos.json` remain under `<AppDataDir>`. Only `skills/` and `meta/` move together.
+Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, `star_repos.json`, and `star_repos_local.json` remain under `<AppDataDir>`. The `skills/`, `meta/`, `meta_local/`, and `prompts/` trees move under `<SyncRoot>`.
 
 ## Quick Summary
 
@@ -26,6 +26,8 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, and `star_repo
 | `meta_local/<skill-id>.local.json` | Local-only per-skill volatile metadata overlay | No |
 | `cache/viewstate/*.json` | Local derived UI/cache snapshots | No |
 | `runtime/*.json`, `runtime/helper.lock` | Local helper/UI process coordination state | No |
+
+The table describes file roles. When `skillsStorageDir` points outside `<AppDataDir>`, the content trees under `<SyncRoot>` move together, while the config and starred-repo JSON files remain in `<AppDataDir>`.
 
 ## `cache/viewstate/*.json`
 

@@ -11,11 +11,17 @@ The root directory must contain **no Go source files**. All code lives in clearl
   go.mod, go.sum
   Makefile
   README.md, README_zh.md
+  contributing.md, contributing_zh.md
   LICENSE, .gitignore, .github/
   docs/
+    agents/
+      skill_directory.md
+      memory_directory.md
     architecture/
       README.md
       README_zh.md
+      overview.md
+      overview_zh.md
       contexts.md
       contexts_zh.md
       layers.md
@@ -29,8 +35,9 @@ The root directory must contain **no Go source files**. All code lives in clearl
     config.md
     config_zh.md
     plans/
-    skill_directory.md
+    superpowers/
   core/
+    config/
     platform/
     shared/
     orchestration/
@@ -58,7 +65,6 @@ The root directory must contain **no Go source files**. All code lives in clearl
   cmd/
     skillflow/
       main.go
-      bootstrap.go
       app.go, app_*.go
       adapters.go, providers.go, events.go, version.go
       process_*.go
@@ -76,6 +82,7 @@ The root directory must contain **no Go source files**. All code lives in clearl
 - Cross-context write coordination belongs in `core/orchestration/`.
 - Cross-context read composition belongs in `core/readmodel/`.
 - Pure technical capabilities with no business ownership belong in `core/platform/`.
+- `core/config/` is a frontend-facing settings facade and split/merge persistence adapter. Do not treat it as a bounded context.
 - `core/shared/` is only for highly stable shared kernel concepts. Do not move context-local IDs or business rules there unless they are genuinely cross-context.
 - `cmd/skillflow/` remains the Wails desktop shell, transport adapter layer, process host, and composition root.
 - `wails.json` must stay co-located with `frontend/` inside `cmd/skillflow/`.
@@ -92,25 +99,30 @@ The root directory must contain **no Go source files**. All code lives in clearl
 
 ## Documentation Organization Rule - MANDATORY
 
-**Root directory must contain only `README.md` and `README_zh.md` as documentation files.**
+**Root directory may contain only `README.md`, `README_zh.md`, `contributing.md`, and `contributing_zh.md` as documentation files.**
 
 All other documentation lives under `docs/`:
 
 | File | Purpose |
 |------|---------|
+| `docs/agents/skill_directory.md` | Built-in agent scan/push directory reference |
+| `docs/agents/memory_directory.md` | Common agent memory-file reference |
 | `docs/features.md` | Complete UI/UX feature reference in English |
 | `docs/features_zh.md` | Complete UI/UX feature reference in Chinese |
 | `docs/architecture/README.md` | Architecture index and reading order (English) |
 | `docs/architecture/README_zh.md` | Architecture index and reading order (Chinese) |
-| `docs/architecture/` | Detailed DDD architecture set: contexts, layers, use cases, and storage |
+| `docs/architecture/overview.md` | High-level architecture overview (English) |
+| `docs/architecture/overview_zh.md` | High-level architecture overview (Chinese) |
+| `docs/architecture/` | Detailed DDD architecture set: overview, contexts, layers, use cases, and storage |
 | `docs/config.md` | Persisted config and metadata file reference (English) |
 | `docs/config_zh.md` | Same in Chinese |
 | `docs/plans/` | Design and implementation plans |
-| `docs/skill_directory.md` | Skill directory format specification |
+| `docs/<module>/...` | Module-scoped design notes, plans, and reference docs such as `docs/superpowers/` |
 
 **Rules:**
 - `README.md` / `README_zh.md` are user-facing only: features overview, download/install links, skill format, cloud backup config, contributing/build instructions. No internal code snippets, no package tables, no architecture diagrams.
-- Never add new standalone `.md` files to the root directory. If you need new documentation, put it under `docs/`.
+- `contributing.md` / `contributing_zh.md` are contributor-facing only: prerequisites, build/test/generate commands, and pointers to deeper architecture docs.
+- Never add new standalone `.md` files to the root directory beyond those four entrypoint documents. If you need new documentation, put it under `docs/`.
 
 ## Documentation Sync Rule - MANDATORY
 
@@ -244,7 +256,7 @@ Any Python-related work in this repository must use `uv` for interpreter managem
 ```bash
 make dev              # Run in dev mode (hot-reload for Go + frontend)
 make build            # Build production binary
-make test             # Run all Go tests
+make test             # Run core Go tests and frontend unit tests
 make tidy             # Sync Go module dependencies
 make generate         # Regenerate TypeScript bindings after App method changes
 make install-frontend # Install frontend npm dependencies
@@ -301,6 +313,7 @@ The target backend architecture is a DDD-oriented modular monolith:
 - each bounded context is organized as `app`, `domain`, and `infra`
 - cross-context write coordination goes through `core/orchestration/`
 - cross-context read composition goes through `core/readmodel/`
+- `core/config/` is a frontend-facing settings facade
 - pure technical capabilities live in `core/platform/`
 - only highly stable shared kernel concepts live in `core/shared/`
 
@@ -323,10 +336,11 @@ Any change touching skill identity, install/import/push/pull state, starred repo
 ### Key Design Decisions
 
 - Wails-bound transport adapters remain in `cmd/skillflow/` because bindings require a single `package main` directory.
-- `cmd/skillflow/App` methods should stay thin and delegate to one bounded context, `core/orchestration/`, or `core/readmodel/`.
+- `cmd/skillflow/App` methods should stay thin and delegate to one bounded context, `core/orchestration/`, `core/readmodel/`, or `core/config`.
 - Bounded contexts are `skillcatalog`, `promptcatalog`, `agentintegration`, `skillsource`, and `backup`.
 - `Skill` and `Prompt` are parallel core business concepts.
 - `Settings`, `Dashboard`, and `My Agents` are composed UI read surfaces, not bounded contexts.
+- `core/config` is a settings facade for transport and shell coordination, not a source-of-truth bounded context.
 - Shell concerns such as tray, window state, launch-at-login, single-instance behavior, and app update stay in `cmd/skillflow/` and `core/platform/`.
 - In `skillsource`, `StarRepo` is the repository-level model and `SkillSource` is the skill-level source model identified by `repo + subpath`.
 - The long-term settings model is context-owned configuration namespaces stored through a platform settings store, not one global domain config object.
@@ -335,7 +349,7 @@ Any change touching skill identity, install/import/push/pull state, starred repo
 ### Adding a New App Method (Frontend-callable)
 
 1. Add an exported method to `App` in `cmd/skillflow/app.go` or another flat `package main` file under `cmd/skillflow/`.
-2. Keep that method as a thin transport adapter: validate inputs, convert DTOs, and delegate to one bounded context application service, `core/orchestration/`, or `core/readmodel/`.
+2. Keep that method as a thin transport adapter: validate inputs, convert DTOs, and delegate to one bounded context application service, `core/orchestration/`, `core/readmodel/`, or `core/config`.
 3. Run `make generate` or `cd cmd/skillflow && wails generate module` to update `cmd/skillflow/frontend/wailsjs/go/main/App.{js,d.ts}`.
 4. Import and call it from the frontend via `../../wailsjs/go/main/App`.
 

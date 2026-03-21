@@ -45,13 +45,17 @@ SkillFlow uses a helper/UI split:
   Makefile
   README.md
   README_zh.md
+  contributing.md
+  contributing_zh.md
   docs/
+    agents/
     architecture/
     config.md
     config_zh.md
     features.md
     features_zh.md
     plans/
+    superpowers/
   core/
     platform/
     shared/
@@ -66,9 +70,9 @@ SkillFlow uses a helper/UI split:
   cmd/
     skillflow/
       main.go
-      bootstrap.go
       app.go
       app_*.go
+      app_startup.go
       adapters.go
       providers.go
       events.go
@@ -83,27 +87,30 @@ SkillFlow uses a helper/UI split:
 
 Logical ownership is split by bounded context, while physical storage remains operationally simple.
 
-Current persisted layout:
+Current persisted layout is split between the app-data root and the active sync root:
 
 ```text
 <AppDataDir>/
-  config.json          # shared, namespaced by context
-  config_local.json    # local-only, namespaced by context and shell concerns
+  config.json          # shared sync-safe settings payload
+  config_local.json    # local-only settings, paths, secrets, and runtime state
   star_repos.json      # tracked repository state for skillsource
-  skills/
-    library/
-    meta/
-    meta_local/
-  prompts/
-    library/
+  star_repos_local.json
   cache/
-    sources/
-    readmodel/
+    viewstate/
+    <git-cache-hosts...>
   runtime/
   logs/
+
+<SyncRoot>/            # same as <AppDataDir> by default; moves to the shared parent of skills/, meta/, meta_local/, and prompts/ when SkillsStorageDir is external
+  skills/
+    <category>/<skill>/
+  meta/
+  meta_local/
+  prompts/
+    <category>/<name>/
 ```
 
-Within `config.json` and `config_local.json`, each context reads and writes its own namespace through the platform settings store. The physical files do not need to mirror bounded contexts 1:1.
+`config.json` and `config_local.json` are flat shared/local payloads managed through `core/config`. Ownership is logical rather than literal top-level namespacing, so the physical files do not mirror bounded contexts 1:1.
 
 ## Configuration Ownership
 
@@ -114,23 +121,29 @@ Logical ownership:
 - `skillcatalog`
   - skill library location
   - default skill category
-- `promptcatalog`
-  - prompt library location
-  - prompt-specific import/export defaults
 - `agentintegration`
   - agent profiles
   - auto-push policy
-- `skillsource`
-  - source credentials metadata
-  - source refresh defaults
+  - recursive repo/agent scan depth
 - `backup`
   - active backup profile
   - provider selection and interval
+  - cloud profile / credential split across shared and local config
+- `readmodel/preferences`
+  - card-status visibility policy
 - shell/platform
   - launch-at-login
   - window state
   - skipped update version
   - proxy and log-level preferences
+
+Additional persisted ownership outside `config*.json`:
+
+- `promptcatalog`
+  - prompt content and metadata under `prompts/`
+- `skillsource`
+  - tracked repo state in `star_repos.json` / `star_repos_local.json`
+  - repo cache directories under `<AppDataDir>/cache/`
 
 Implementation ownership:
 
@@ -149,7 +162,7 @@ Repositories:
 - prompt library store
 - agent profile store
 - source-tracking store
-- namespaced settings store views
+- settings facade persistence views
 
 Gateways:
 

@@ -15,12 +15,13 @@ The design goals are:
 ## High-Level Shape
 
 ```text
-cmd/skillflow/          Wails shell, transport adapters, OS integration, bootstrap
+cmd/skillflow/          Wails shell, transport adapters, OS integration, startup sequencing
 core/
   platform/             pure technical capabilities
   shared/               minimal shared kernel
   orchestration/        cross-context write coordination
   readmodel/            cross-context read composition
+  config/               frontend-facing settings facade
   skillcatalog/         core domain
   promptcatalog/        core domain
   agentintegration/     core domain
@@ -35,6 +36,7 @@ core/
 - `agentintegration` owns the truth for agent profiles, push/pull semantics, and agent-side presence rules.
 - `skillsource` owns tracked repositories, logical skill sources, and source-side discovery state.
 - `backup` owns backup and restore planning, not the business truth of skills or prompts.
+- `core/config` is a settings facade for transport and shell coordination. It does not own business truth by itself.
 - shell concerns such as tray, window state, single-instance behavior, launch-at-login, and app update belong to `cmd/skillflow/` plus `platform/`, not to a bounded context.
 - `Settings` is not a bounded context. It is a UI composition surface over multiple contexts.
 

@@ -14,6 +14,7 @@ import {
   type SkillStatusKey,
   type SkillStatusPageKey,
 } from '../lib/skillStatusVisibility'
+import { orderCloudProviders } from '../lib/cloudProviderOrder'
 import { DEFAULT_PROXY_TEST_URL, buildProxyConnectionPayload } from '../lib/proxyConnection'
 
 type Tab = 'agents' | 'cloud' | 'general' | 'network'
@@ -61,11 +62,6 @@ const CLOUD_PROVIDER_LABEL_KEYS: Record<string, TranslationKey> = {
   tencent: 'settings.cloudProviderTencent',
   huawei: 'settings.cloudProviderHuawei',
   git: 'settings.cloudProviderGit',
-}
-
-const CLOUD_PROVIDER_PRIORITY: Record<string, number> = {
-  git: 0,
-  huawei: 1,
 }
 
 const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
@@ -140,20 +136,6 @@ function getCloudProviderDisplayName(name: string, t: (key: TranslationKey) => s
 function getCloudFieldLabel(providerName: string | undefined, fieldKey: string, fallback: string, t: (key: TranslationKey) => string) {
   const key = providerName ? CLOUD_FIELD_LABEL_KEYS[providerName]?.[fieldKey] : undefined
   return key ? t(key) : fallback
-}
-
-function orderCloudProviders(providerList: any[]) {
-  return providerList
-    .map((provider, index) => ({ provider, index }))
-    .sort((left, right) => {
-      const leftPriority = CLOUD_PROVIDER_PRIORITY[left.provider?.name] ?? Number.MAX_SAFE_INTEGER
-      const rightPriority = CLOUD_PROVIDER_PRIORITY[right.provider?.name] ?? Number.MAX_SAFE_INTEGER
-      if (leftPriority !== rightPriority) {
-        return leftPriority - rightPriority
-      }
-      return left.index - right.index
-    })
-    .map(({ provider }) => provider)
 }
 
 function splitCloudRemoteSegments(value: string | undefined) {

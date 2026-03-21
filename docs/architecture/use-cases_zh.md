@@ -212,18 +212,19 @@
 
 ### `SettingsSaveCoordinator`
 
-`Settings` 是组合界面，因此保存时应拆发到多个上下文：
+`Settings` 是组合界面。当前实现里，它会先经过壳层协调与 `core/config`，再拆发到各自的归属组件：
 
-- 技能库设置 -> `skillcatalog`
-- Prompt 库设置 -> `promptcatalog`
-- Agent 配置与自动推送 -> `agentintegration`
-- 来源凭据与跟踪设置 -> `skillsource`
-- 备份 provider 设置 -> `backup`
-- 壳层偏好 -> `cmd/skillflow` 与 `platform/`
+- 技能库设置，例如 `skillsStorageDir`、`defaultCategory` -> `skillcatalog`
+- Agent 配置、自动推送和递归扫描深度 -> `agentintegration`
+- 备份 provider 选择、同步间隔与云配置拆分 -> `backup`
+- 卡片状态可见性 -> `readmodel/preferences`
+- 开机自启、代理、日志级别、跳过更新版本、窗口状态等壳层偏好 -> `cmd/skillflow` 与 `platform/`
+
+Prompt 持久化目前直接位于 `prompts/` 目录树；收藏仓库跟踪状态位于 `star_repos*.json` 与 repo cache。这两部分当前都不通过 Settings 页面编辑。
 
 ### `StartupBootstrapSequence`
 
-启动时序应保留在 `cmd/skillflow/bootstrap.go` 或等价的 shell bootstrap 代码中：
+启动时序应保留在 `cmd/skillflow/app_startup.go`、`cmd/skillflow/main.go`、`cmd/skillflow/process_bootstrap_mode*.go` 这类壳层启动文件中：
 
 - 加载设置
 - 初始化壳层适配器
@@ -250,17 +251,6 @@
 - `agentintegration` 的 Agent 扫描结果
 - `skillcatalog` 的已安装状态覆盖信息
 
-### `SettingsReadModel`
-
-组合以下上下文拥有的设置：
-
-- `skillcatalog`
-- `promptcatalog`
-- `agentintegration`
-- `skillsource`
-- `backup`
-- 壳层 / platform settings namespace
-
 ### `StarRepoReadModel`
 
 组合：
@@ -268,6 +258,20 @@
 - `skillsource` 的 StarRepo 与 SkillSource
 - `skillcatalog` 的已安装状态覆盖
 - `agentintegration` 的已推送状态覆盖
+
+## Settings Facade
+
+`Settings` 是“UI 组合一般走 `readmodel/`”这条规则的一个例外。
+
+当前实现使用 `core/config` 作为 `GetConfig` / `SaveConfig` 的设置门面，统一合并：
+
+- `skillcatalog` 的技能库设置
+- `agentintegration` 的 Agent 与自动推送设置
+- `backup` 的备份设置
+- `readmodel/preferences` 的卡片状态可见性
+- 壳层 / platform 设置
+
+除非未来新增专门的设置字段，否则 Prompt 存储与收藏仓库跟踪不会进入这个门面。
 
 ## Transport Adapter 映射
 
@@ -279,7 +283,7 @@
 - `ListAllStarSkills` / `ListRepoStarSkills` -> `readmodel/skills`
 - `ImportLocal` / `PushToAgents` / `PullFromAgent` / `UpdateSkill` -> `core/orchestration`
 - `ImportStarSkills` -> `orchestration/ImportSkillFromSourceOrchestrator`
-- `SaveConfig` -> 壳层 `SettingsSaveCoordinator`，再拆发到各上下文拥有的设置组件
+- `GetConfig` / `SaveConfig` -> `core/config` 门面 + 壳层 `SettingsSaveCoordinator`
 - `CreatePrompt` -> `promptcatalog/app`
 - `CheckAppUpdate` -> 壳层 / platform update service
 

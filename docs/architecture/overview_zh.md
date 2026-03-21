@@ -15,12 +15,13 @@ SkillFlow 的后端架构是一个运行在 Wails 桌面应用中的、基于 DD
 ## 高层结构
 
 ```text
-cmd/skillflow/          Wails 壳层、transport adapter、OS 集成、bootstrap
+cmd/skillflow/          Wails 壳层、transport adapter、OS 集成、启动时序
 core/
   platform/             纯技术能力
   shared/               最小共享内核
   orchestration/        跨上下文写协调
   readmodel/            跨上下文读视图组合
+  config/               面向前端的设置门面
   skillcatalog/         核心域
   promptcatalog/        核心域
   agentintegration/     核心域
@@ -35,6 +36,7 @@ core/
 - `agentintegration` 拥有 Agent 配置、推送/拉取语义和 Agent 侧存在状态的真相。
 - `skillsource` 拥有被跟踪的仓库、逻辑上的技能来源以及来源发现状态的真相。
 - `backup` 拥有备份与恢复规划的真相，不拥有 Skill 或 Prompt 的业务真相。
+- `core/config` 只是 transport / 壳层使用的设置门面，本身不拥有业务真相。
 - tray、窗口状态、单实例、开机自启、应用更新等壳层关注点应归于 `cmd/skillflow/` 与 `platform/`，而不是单独的 bounded context。
 - `Settings` 不是 bounded context，而是多个上下文在 UI 层的组合面。
 

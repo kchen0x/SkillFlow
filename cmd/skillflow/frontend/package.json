@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test:unit": "node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\" && tsc src/lib/clipboardCore.ts src/lib/dashboardSkillSettings.ts src/lib/listLoadState.ts src/lib/starredRepoListState.ts src/lib/skillStatusStrip.ts src/lib/motionVariants.ts src/lib/promptRichContent.ts src/lib/promptExport.ts src/lib/promptImportConflicts.ts src/lib/proxyConnection.ts src/lib/wailsEvents.ts --module ESNext --target ES2020 --moduleResolution Node --outDir .tmp-tests && tsc src/hooks/useTheme.ts --module ESNext --target ES2020 --moduleResolution Node --outDir .tmp-tests/theme --rootDir src/hooks && node --test tests/*.test.mjs && node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\""
+    "test:unit": "node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\" && tsc src/lib/clipboardCore.ts src/lib/cloudProviderOrder.ts src/lib/dashboardSkillSettings.ts src/lib/listLoadState.ts src/lib/starredRepoListState.ts src/lib/skillStatusStrip.ts src/lib/motionVariants.ts src/lib/promptRichContent.ts src/lib/promptExport.ts src/lib/promptImportConflicts.ts src/lib/proxyConnection.ts src/lib/wailsEvents.ts --module ESNext --target ES2020 --moduleResolution Node --outDir .tmp-tests && tsc src/hooks/useTheme.ts --module ESNext --target ES2020 --moduleResolution Node --outDir .tmp-tests/theme --rootDir src/hooks && node --test tests/*.test.mjs && node -e \"require('fs').rmSync('.tmp-tests',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

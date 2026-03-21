@@ -212,18 +212,19 @@ These flows are coordination concerns, but they are better owned by the shell co
 
 ### `SettingsSaveCoordinator`
 
-`Settings` is a composition surface. Saving it should dispatch to multiple contexts:
+`Settings` is a composition surface. In the current implementation, saving it goes through shell coordination plus `core/config`, then dispatches to the owning components:
 
-- skill-library settings -> `skillcatalog`
-- prompt-library settings -> `promptcatalog`
-- agent profiles and auto-push -> `agentintegration`
-- source credentials and tracking settings -> `skillsource`
-- backup provider settings -> `backup`
-- shell preferences -> `cmd/skillflow` and `platform/`
+- skill-library settings such as `skillsStorageDir` and `defaultCategory` -> `skillcatalog`
+- agent profiles, auto-push, and recursive scan depth -> `agentintegration`
+- backup provider selection, sync interval, and cloud profile split -> `backup`
+- card-status visibility -> `readmodel/preferences`
+- shell preferences such as launch-at-login, proxy, log level, skipped update version, and window state -> `cmd/skillflow` and `platform/`
+
+Prompt persistence currently lives under `prompts/`, and starred-repo tracking lives under `star_repos*.json` plus repo cache state. Neither is currently edited through the Settings page.
 
 ### `StartupBootstrapSequence`
 
-Startup sequencing should live in `cmd/skillflow/bootstrap.go` or equivalent shell bootstrap code:
+Startup sequencing should live in shell startup files such as `cmd/skillflow/app_startup.go`, `cmd/skillflow/main.go`, and `cmd/skillflow/process_bootstrap_mode*.go`:
 
 - load settings
 - initialize shell adapters
@@ -250,17 +251,6 @@ Combines:
 - agent-side scan results from `agentintegration`
 - installed-state overlays from `skillcatalog`
 
-### `SettingsReadModel`
-
-Combines context-owned settings from:
-
-- `skillcatalog`
-- `promptcatalog`
-- `agentintegration`
-- `skillsource`
-- `backup`
-- shell/platform settings namespaces
-
 ### `StarRepoReadModel`
 
 Combines:
@@ -268,6 +258,20 @@ Combines:
 - tracked repositories and skill sources from `skillsource`
 - installed-state overlays from `skillcatalog`
 - pushed-state overlays from `agentintegration`
+
+## Settings Facade
+
+`Settings` is the main exception to the "UI composition belongs in `readmodel/`" rule.
+
+Current implementation uses `core/config` as a settings facade for `GetConfig` / `SaveConfig`. It merges:
+
+- skill-library settings from `skillcatalog`
+- agent and auto-push settings from `agentintegration`
+- backup settings from `backup`
+- card-status visibility from `readmodel/preferences`
+- shell/platform settings
+
+Prompt storage and starred-repo tracking remain outside this facade unless they gain dedicated settings keys later.
 
 ## Transport Adapter Mapping
 
@@ -279,7 +283,7 @@ Examples:
 - `ListAllStarSkills` / `ListRepoStarSkills` -> `readmodel/skills`
 - `ImportLocal` / `PushToAgents` / `PullFromAgent` / `UpdateSkill` -> `core/orchestration`
 - `ImportStarSkills` -> `orchestration/ImportSkillFromSourceOrchestrator`
-- `SaveConfig` -> shell `SettingsSaveCoordinator`, then context-owned settings components
+- `GetConfig` / `SaveConfig` -> `core/config` facade plus shell `SettingsSaveCoordinator`
 - `CreatePrompt` -> `promptcatalog/app`
 - `CheckAppUpdate` -> shell/platform update service
 

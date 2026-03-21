@@ -22,6 +22,10 @@ core/<context>/
     repository/
     gateway/
     projection/
+
+core/config/
+  面向前端的设置门面
+  shared/local split-merge 持久化适配器
 ```
 
 ## Transport Adapter
@@ -110,7 +114,7 @@ core/<context>/
 - 更新已安装技能后刷新已推送副本
 - 恢复备份后重建派生状态
 
-壳层启动时序不属于领域编排，它应保留在 `cmd/skillflow/bootstrap.go` 或等价的 shell bootstrap 代码中。
+壳层启动时序不属于领域编排，它应保留在 `cmd/skillflow/app_startup.go`、`cmd/skillflow/main.go`、`cmd/skillflow/process_bootstrap_mode*.go` 这类壳层启动文件中。
 
 ## `readmodel/`
 
@@ -119,7 +123,6 @@ core/<context>/
 例如：
 
 - Dashboard
-- Settings 页面
 - My Agents 聚合视图
 - 带安装状态的来源候选技能列表
 
@@ -128,6 +131,21 @@ core/<context>/
 - `readmodel/` 只能依赖显式发布的 query provider 或 published language DTO
 - `readmodel/` 不能直接依赖其他上下文的 repository 或未发布的 query 内部实现
 - `readmodel/` 可以维护 projection 缓存，但不拥有业务真相
+
+## `core/config`
+
+`core/config` 是面向前端的设置门面，不是 bounded context，也不是 read model。
+
+职责：
+
+- 合并/拆分共享 `config.json` 与本地 `config_local.json`
+- 把字段逻辑归属委托给上下文拥有的设置组件与 platform 设置组件
+- 为 `GetConfig` / `SaveConfig` 暴露一个 transport 友好的统一设置 DTO
+
+规则：
+
+- 业务真相仍归属于对应上下文与 `platform/`
+- 不要把无关的业务规则堆进这个门面包
 
 ## `platform/`
 
@@ -163,9 +181,11 @@ core/<context>/
 transport adapters -> app
 transport adapters -> orchestration
 transport adapters -> readmodel
+transport adapters -> core/config
 orchestration -> app -> domain
 readmodel -> published query providers / published language
 infra -> app/port + domain
+core/config -> 上下文设置组件 + platform 设置组件
 platform -> 不依赖业务
 shared -> 不依赖具体上下文
 ```

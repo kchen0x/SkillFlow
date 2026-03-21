@@ -420,7 +420,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - Deleted entries show a deletion label instead of a file size.
 - Refresh reloads the latest in-memory backup result for the current app session.
 - Scrollable, max-height container.
-- **Unified backup scope (all providers)** — backup root is the app data root (`skills/`, `meta/`, `prompts/`, `config.json`, etc.); local-only `cache/`, `runtime/`, and `.git/` are excluded.
+- **Unified backup scope (all providers)** — backup uses the active backup root. By default that is the app data root; when `SkillsStorageDir` is moved outside it, SkillFlow switches to the shared parent of `skills/`, `meta/`, `meta_local/`, and `prompts/`. Local-only `cache/`, `runtime/`, `logs/`, `meta_local/`, `.git/`, `config_local.json`, and `star_repos_local.json` are excluded.
 - **Custom object-storage prefix** — object storage providers let the user choose a parent `remotePath`; SkillFlow always writes under `<bucket>/<remotePath>/skillflow/` (or `<bucket>/skillflow/` when the parent path is empty).
 - **Provider-specific cloud profiles** — each cloud provider keeps its own bucket/path/credential set; switching providers in Settings restores that provider's saved values instead of overwriting another provider's form state.
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json` and `star_repos.json`) are stored as forward-slash relative paths under the synchronized root, so restores continue to work across macOS and Windows.
@@ -502,7 +502,7 @@ For each built-in or custom agent:
 
 | Control | Description |
 |---------|-------------|
-| **Provider buttons** | Responsive provider cards shown in a wrapping grid. The order is fixed to **git** first, then the remaining providers in their backend order. Each provider restores its own saved bucket/path/credential draft when selected |
+| **Provider buttons** | Responsive provider cards shown in a wrapping grid. **Git Repo** is always pinned first; the remaining providers keep the backend-returned order. Each provider restores its own saved bucket/path/credential draft when selected |
 | **Bucket name** | Object storage bucket name (hidden when git provider is selected) |
 | **Remote path** | Object storage parent path (optional). Users enter the parent folder only; SkillFlow always appends `/skillflow/` to build the final backup prefix |
 | **Final backup path preview** | Real-time rendered object-storage destination shown as `<bucket>/<remotePath>/skillflow/` so users can verify the exact remote backup location before saving |
@@ -854,4 +854,4 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*

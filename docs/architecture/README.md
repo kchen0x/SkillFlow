@@ -9,6 +9,7 @@ SkillFlow's backend is a DDD-oriented modular monolith:
 - each bounded context is organized as `app`, `domain`, and `infra`
 - cross-context write coordination goes through `core/orchestration/`
 - cross-context read composition goes through `core/readmodel/`
+- `core/config/` is a frontend-facing settings facade over context- and platform-owned settings
 - pure technical capabilities live in `core/platform/`
 - only highly stable shared kernel concepts live in `core/shared/`
 
@@ -33,6 +34,7 @@ SkillFlow's backend is a DDD-oriented modular monolith:
 - Current transport entrypoints live in `cmd/skillflow/` because of Wails binding constraints.
 - `Skill` and `Prompt` are parallel core business concepts.
 - `Settings` is a UI composition surface, not a bounded context.
+- `core/config/` is a settings facade, not a source-of-truth bounded context.
 
 ## Scope
 

@@ -22,6 +22,10 @@ core/<context>/
     repository/
     gateway/
     projection/
+
+core/config/
+  frontend-facing settings facade
+  shared/local split-merge persistence adapter
 ```
 
 ## Transport Adapters
@@ -110,7 +114,7 @@ Examples:
 - update installed skill and refresh pushed copies
 - restore backup and then rebuild derived state
 
-Shell startup sequencing is not part of domain orchestration. It stays in `cmd/skillflow/bootstrap.go` or equivalent shell bootstrap code.
+Shell startup sequencing is not part of domain orchestration. It stays in shell startup files such as `cmd/skillflow/app_startup.go`, `cmd/skillflow/main.go`, and `cmd/skillflow/process_bootstrap_mode*.go`.
 
 ## `readmodel/`
 
@@ -119,7 +123,6 @@ Use `readmodel/` for composed read views spanning multiple contexts.
 Examples:
 
 - Dashboard
-- Settings page
 - My Agents aggregated view
 - source candidate list enriched with installed state
 
@@ -128,6 +131,21 @@ Rules:
 - `readmodel/` must depend only on explicit published query providers or published language DTOs from contexts
 - `readmodel/` must not depend directly on another context's repositories or unpublished query internals
 - `readmodel/` may cache projections, but it never owns business truth
+
+## `core/config`
+
+`core/config` is a frontend-facing settings facade rather than a bounded context or read model.
+
+Responsibilities:
+
+- merge/split shared `config.json` and local `config_local.json`
+- delegate logical ownership to context-owned settings and platform settings components
+- expose one transport-friendly settings DTO for `GetConfig` / `SaveConfig`
+
+Rules:
+
+- keep business ownership in the owning contexts and `platform/`
+- do not move unrelated business rules into the facade
 
 ## `platform/`
 
@@ -163,9 +181,11 @@ Allowed direction:
 transport adapters -> app
 transport adapters -> orchestration
 transport adapters -> readmodel
+transport adapters -> core/config
 orchestration -> app -> domain
 readmodel -> published query providers / published language
 infra -> app/port + domain
+core/config -> context settings + platform settings
 platform -> no business dependencies
 shared -> no context-specific dependencies
 ```

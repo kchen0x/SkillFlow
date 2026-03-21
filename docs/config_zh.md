@@ -7,9 +7,9 @@
 下文使用了 `<AppDataDir>` 与 `<SyncRoot>` 这类占位符：
 
 - `<AppDataDir>`：`config.AppDataDir()` 返回的应用数据目录
-- `<SyncRoot>`：包含 `skills/` 与 `meta/` 的同步根目录；默认等于 `<AppDataDir>`，但当 `skillsStorageDir` 被移到外部目录时会随之变化
+- `<SyncRoot>`：当前生效的备份根目录，包含 `skills/`、`meta/`、`meta_local/`、`prompts/`；默认等于 `<AppDataDir>`，但当 `skillsStorageDir` 被移到外部目录时，会切换到这些目录的共享父目录
 
-即使 `<SyncRoot>` 发生变化，`config.json`、`config_local.json`、`star_repos.json` 仍然保留在 `<AppDataDir>` 下；只有 `skills/` 与 `meta/` 会一起移动。
+即使 `<SyncRoot>` 发生变化，`config.json`、`config_local.json`、`star_repos.json`、`star_repos_local.json` 仍然保留在 `<AppDataDir>` 下；`skills/`、`meta/`、`meta_local/`、`prompts/` 这几棵目录树会一起移动到 `<SyncRoot>` 下。
 
 ## 快速概览
 
@@ -24,6 +24,8 @@
 | `meta_local/<skill-id>.local.json` | 每个 Skill 的本地易变元数据覆盖文件 | 否 |
 | `cache/viewstate/*.json` | 本地派生 UI / 缓存快照 | 否 |
 | `runtime/*.json`、`runtime/helper.lock` | 本地 helper/UI 进程协调状态 | 否 |
+
+这个表描述的是文件职责。若 `skillsStorageDir` 指向 `<AppDataDir>` 外部，则 `<SyncRoot>` 下的内容目录会一起迁移，而配置与收藏仓库相关 JSON 仍保留在 `<AppDataDir>`。
 
 ## `cache/viewstate/*.json`
 
