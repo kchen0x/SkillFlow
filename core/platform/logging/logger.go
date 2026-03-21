@@ -1,4 +1,4 @@
-package applog
+package logging
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	DefaultMaxFileBytes int64 = 1 << 20 // 1MB
+	DefaultMaxFileBytes int64 = 1 << 20
 	activeLogName             = "skillflow.log"
 	backupLogName             = "skillflow.log.1"
 )
@@ -53,7 +53,7 @@ type Logger struct {
 }
 
 func New(dir, level string) (*Logger, error) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
 	return &Logger{
@@ -121,7 +121,7 @@ func (l *Logger) log(level Level, message string) {
 	if err := l.rotateIfNeeded(int64(len(line))); err != nil {
 		return
 	}
-	file, err := os.OpenFile(filepath.Join(l.dir, activeLogName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(filepath.Join(l.dir, activeLogName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return
 	}

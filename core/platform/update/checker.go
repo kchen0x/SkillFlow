@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
-	"github.com/shinerio/skillflow/core/skillcatalog/domain"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	"github.com/shinerio/skillflow/core/skillkey"
 )
 
@@ -25,7 +25,6 @@ type Checker struct {
 	client  *http.Client
 }
 
-// NewChecker creates a Checker. Pass nil for client to use http.DefaultClient.
 func NewChecker(baseURL string, client *http.Client) *Checker {
 	if baseURL == "" {
 		baseURL = "https://api.github.com"
@@ -36,7 +35,7 @@ func NewChecker(baseURL string, client *http.Client) *Checker {
 	return &Checker{baseURL: baseURL, client: client}
 }
 
-func (c *Checker) Check(ctx context.Context, sk *domain.InstalledSkill) (CheckResult, error) {
+func (c *Checker) Check(ctx context.Context, sk *skilldomain.InstalledSkill) (CheckResult, error) {
 	if !sk.IsGitHub() {
 		return CheckResult{}, nil
 	}

@@ -62,6 +62,6 @@ SkillFlow 的目标后端架构是一个基于 DDD 的模块化单体：
 - `core/backup/domain`
 - `core/backup/infra`
 
-旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup` 以及 `core/notify` 包已经移除。纯 Git 能力现在位于 `core/platform/git`，事件总线现在位于 `core/platform/eventbus`。其余领域与横切模块仍需继续按同样方式迁移。
+旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify`、`core/applog`、`core/pathutil` 以及 `core/update` 包已经移除。纯 Git 能力现在位于 `core/platform/git`，事件总线现在位于 `core/platform/eventbus`，文件日志现在位于 `core/platform/logging`，路径可移植性辅助现在位于 `core/platform/pathutil`，更新原语现在位于 `core/platform/update`。其余领域与横切模块仍需继续按同样方式迁移。
 
 *最后更新：2026-03-21*

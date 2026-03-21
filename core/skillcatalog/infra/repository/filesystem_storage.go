@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shinerio/skillflow/core/pathutil"
+	"github.com/shinerio/skillflow/core/platform/pathutil"
 	"github.com/shinerio/skillflow/core/skillcatalog/domain"
 )
 

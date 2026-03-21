@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/shinerio/skillflow/core/platform/update"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
-	"github.com/shinerio/skillflow/core/update"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

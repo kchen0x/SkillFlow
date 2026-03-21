@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/shinerio/skillflow/core/applog"
 	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/platform/logging"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -14,7 +14,7 @@ func (a *App) logDir() string {
 }
 
 func (a *App) initLogger(logLevel string) {
-	lg, err := applog.New(a.logDir(), logLevel)
+	lg, err := logging.New(a.logDir(), logLevel)
 	if err != nil {
 		if a.ctx != nil {
 			runtime.LogErrorf(a.ctx, "logger init failed: %v", err)
@@ -34,18 +34,18 @@ func (a *App) setLoggerLevel(level string) string {
 }
 
 func (a *App) logDebugf(format string, args ...any) {
-	a.logf(applog.LevelDebug, format, args...)
+	a.logf(logging.LevelDebug, format, args...)
 }
 
 func (a *App) logInfof(format string, args ...any) {
-	a.logf(applog.LevelInfo, format, args...)
+	a.logf(logging.LevelInfo, format, args...)
 }
 
 func (a *App) logErrorf(format string, args ...any) {
-	a.logf(applog.LevelError, format, args...)
+	a.logf(logging.LevelError, format, args...)
 }
 
-func (a *App) logf(level applog.Level, format string, args ...any) {
+func (a *App) logf(level logging.Level, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if a.sysLog != nil {
 		a.sysLog.Logf(level, "%s", msg)
@@ -57,9 +57,9 @@ func (a *App) logf(level applog.Level, format string, args ...any) {
 		return
 	}
 	switch level {
-	case applog.LevelDebug:
+	case logging.LevelDebug:
 		runtime.LogDebug(a.ctx, msg)
-	case applog.LevelError:
+	case logging.LevelError:
 		runtime.LogError(a.ctx, msg)
 	default:
 		runtime.LogInfo(a.ctx, msg)

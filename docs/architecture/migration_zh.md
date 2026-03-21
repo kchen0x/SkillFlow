@@ -22,8 +22,11 @@
 - `cmd/skillflow` 和相关后端包已经不再 import `core/git`
 - `cmd/skillflow` 和相关后端包已经不再 import 平铺的 `core/backup`
 - `cmd/skillflow` 和相关后端包已经不再 import `core/notify`
+- `cmd/skillflow` 和相关后端包已经不再 import `core/applog`
+- `cmd/skillflow` 和相关后端包已经不再 import `core/pathutil`
+- `cmd/skillflow` 和相关后端包已经不再 import `core/update`
 - `cmd/skillflow` 已经不再 import `core/registry`
-- 旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify` 以及 `core/registry` 包已经移除
+- 旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify`、`core/applog`、`core/pathutil`、`core/update` 以及 `core/registry` 包已经移除
 
 这意味着第一批 bounded context 抽取已经就位，后续平台层与横切能力迁移可以把 `skillcatalog`、`promptcatalog`、`agentintegration`、`skillsource` 和 `backup` 作为参考模式。
 

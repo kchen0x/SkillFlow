@@ -62,6 +62,6 @@ As of 2026-03-21, five end-to-end bounded contexts have been extracted under `co
 - `core/backup/domain`
 - `core/backup/infra`
 
-The old `core/skill`, `core/prompt`, `core/sync`, `core/git`, flat `core/backup`, and `core/notify` packages have been removed. Pure Git helpers now live in `core/platform/git`, and the event hub now lives in `core/platform/eventbus`. Other domains and cross-cutting modules still need to migrate toward the same structure.
+The old `core/skill`, `core/prompt`, `core/sync`, `core/git`, flat `core/backup`, `core/notify`, `core/applog`, `core/pathutil`, and `core/update` packages have been removed. Pure Git helpers now live in `core/platform/git`, the event hub now lives in `core/platform/eventbus`, file logging now lives in `core/platform/logging`, path portability helpers now live in `core/platform/pathutil`, and update primitives now live in `core/platform/update`. Other domains and cross-cutting modules still need to migrate toward the same structure.
 
 *Last updated: 2026-03-21*

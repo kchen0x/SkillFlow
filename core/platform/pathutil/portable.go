@@ -7,8 +7,6 @@ import (
 	"unicode"
 )
 
-// NormalizeStoredRelativePath normalizes a serialized relative path to a
-// forward-slash form so it can round-trip across platforms.
 func NormalizeStoredRelativePath(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -18,7 +16,6 @@ func NormalizeStoredRelativePath(raw string) string {
 	return path.Clean(normalized)
 }
 
-// IsSafeStoredRelativePath reports whether rel stays within the storage root.
 func IsSafeStoredRelativePath(rel string) bool {
 	if rel == "" || rel == "." || rel == ".." || path.IsAbs(rel) {
 		return false
@@ -26,9 +23,6 @@ func IsSafeStoredRelativePath(rel string) bool {
 	return !strings.HasPrefix(rel, "../")
 }
 
-// IsPortableAbsolutePath detects both native absolute paths and serialized
-// absolute paths from other platforms (for example Windows drive-letter paths
-// read on macOS/Linux).
 func IsPortableAbsolutePath(raw string) bool {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -40,8 +34,6 @@ func IsPortableAbsolutePath(raw string) bool {
 	return len(trimmed) >= 3 && unicode.IsLetter(rune(trimmed[0])) && trimmed[1] == ':' && (trimmed[2] == '\\' || trimmed[2] == '/')
 }
 
-// RelativeToBase converts a native absolute path under base to a portable
-// forward-slash relative path.
 func RelativeToBase(base, target string) (string, bool) {
 	cleanTarget := strings.TrimSpace(target)
 	if !filepath.IsAbs(cleanTarget) {
@@ -58,9 +50,6 @@ func RelativeToBase(base, target string) (string, bool) {
 	return rel, true
 }
 
-// ResolveStoredPath converts a serialized path to an absolute runtime path. It
-// also reports whether the serialized form should be rewritten to the normalized
-// relative format.
 func ResolveStoredPath(base, storedPath, fallbackAbs string) (string, bool) {
 	storedPath = strings.TrimSpace(storedPath)
 	if storedPath == "" {
@@ -88,8 +77,6 @@ func ResolveStoredPath(base, storedPath, fallbackAbs string) (string, bool) {
 	return filepath.Clean(filepath.Join(base, filepath.FromSlash(rel))), rel != storedPath
 }
 
-// StorePath returns the portable relative path that should be persisted for a
-// runtime absolute path.
 func StorePath(base, currentAbs, fallbackAbs string) string {
 	if rel, ok := RelativeToBase(base, currentAbs); ok {
 		return rel

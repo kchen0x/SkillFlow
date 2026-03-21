@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shinerio/skillflow/core/pathutil"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	"github.com/shinerio/skillflow/core/platform/pathutil"
 	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 )
 

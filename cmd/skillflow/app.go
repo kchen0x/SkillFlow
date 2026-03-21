@@ -15,11 +15,11 @@ import (
 
 	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
-	"github.com/shinerio/skillflow/core/applog"
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
 	"github.com/shinerio/skillflow/core/platform/eventbus"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	"github.com/shinerio/skillflow/core/platform/logging"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
@@ -34,7 +34,7 @@ import (
 type App struct {
 	ctx                context.Context
 	hub                *eventbus.Hub
-	sysLog             *applog.Logger
+	sysLog             *logging.Logger
 	storage            *skillcatalogapp.Service
 	config             *config.Service
 	starStorage        *sourcerepo.StarRepoStorage

@@ -1,4 +1,4 @@
-package applog
+package logging
 
 import (
 	"os"
