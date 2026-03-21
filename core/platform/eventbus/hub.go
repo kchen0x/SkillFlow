@@ -1,4 +1,4 @@
-package notify
+package eventbus
 
 import "sync"
 
@@ -37,7 +37,7 @@ func (h *Hub) Publish(evt Event) {
 	for sub := range h.subscribers {
 		select {
 		case sub <- evt:
-		default: // drop if subscriber is slow
+		default:
 		}
 	}
 }

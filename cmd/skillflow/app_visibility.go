@@ -1,6 +1,6 @@
 package main
 
-import "github.com/shinerio/skillflow/core/notify"
+import "github.com/shinerio/skillflow/core/platform/eventbus"
 
 func (a *App) publishWindowVisibilityChanged(visible bool) {
 	if a == nil {
@@ -20,9 +20,9 @@ func (a *App) publishWindowVisibilityChanged(visible bool) {
 		return
 	}
 
-	a.hub.Publish(notify.Event{
-		Type: notify.EventAppWindowVisibilityChanged,
-		Payload: notify.AppWindowVisibilityPayload{
+	a.hub.Publish(eventbus.Event{
+		Type: eventbus.EventAppWindowVisibilityChanged,
+		Payload: eventbus.AppWindowVisibilityPayload{
 			Visible: visible,
 		},
 	})

@@ -18,9 +18,8 @@ import (
 	"github.com/shinerio/skillflow/core/applog"
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
-	"github.com/shinerio/skillflow/core/notify"
+	"github.com/shinerio/skillflow/core/platform/eventbus"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
-	"github.com/shinerio/skillflow/core/registry"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
@@ -34,7 +33,7 @@ import (
 
 type App struct {
 	ctx                context.Context
-	hub                *notify.Hub
+	hub                *eventbus.Hub
 	sysLog             *applog.Logger
 	storage            *skillcatalogapp.Service
 	config             *config.Service
@@ -92,7 +91,7 @@ func normalizeCategoryName(name string) string {
 
 func NewApp() *App {
 	return &App{
-		hub:           notify.NewHub(),
+		hub:           eventbus.NewHub(),
 		promptImports: newPromptImportSessionStore(),
 	}
 }
@@ -272,14 +271,14 @@ func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 	profile := a.backupProfile(cfg)
 	isGit := profile.Provider == backupdomain.GitProviderName
 	if isGit {
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncStarted})
 	}
-	a.hub.Publish(notify.Event{Type: notify.EventBackupStarted})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventBackupStarted})
 	result, err := a.newBackupService().RunBackup(a.ctx, profile,
 		func(file string) {
-			a.hub.Publish(notify.Event{
-				Type:    notify.EventBackupProgress,
-				Payload: notify.BackupProgressPayload{CurrentFile: file},
+			a.hub.Publish(eventbus.Event{
+				Type:    eventbus.EventBackupProgress,
+				Payload: eventbus.BackupProgressPayload{CurrentFile: file},
 			})
 		})
 	if err != nil {
@@ -289,19 +288,19 @@ func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 			a.publishGitConflict(conflictErr)
 		}
 		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
-		a.hub.Publish(notify.Event{Type: notify.EventBackupFailed, Payload: err.Error()})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventBackupFailed, Payload: err.Error()})
 		return err
 	} else {
 		a.recordBackupResult(result.Files, result.Snapshot)
-		payload := notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}
+		payload := eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}
 		a.logInfof("backup completed")
 		if isGit {
 			a.clearGitConflictPending()
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: payload})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: payload})
 		}
-		a.hub.Publish(notify.Event{Type: notify.EventBackupCompleted, Payload: payload})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventBackupCompleted, Payload: payload})
 		return nil
 	}
 }
@@ -310,9 +309,9 @@ func (a *App) publishGitConflict(conflictErr *backupdomain.GitConflictError) {
 	a.gitConflictMu.Lock()
 	a.gitConflictPending = true
 	a.gitConflictMu.Unlock()
-	a.hub.Publish(notify.Event{
-		Type: notify.EventGitConflict,
-		Payload: notify.GitConflictPayload{
+	a.hub.Publish(eventbus.Event{
+		Type: eventbus.EventGitConflict,
+		Payload: eventbus.GitConflictPayload{
 			Message: conflictErr.Output,
 			Files:   conflictErr.Files,
 		},
@@ -342,28 +341,28 @@ func (a *App) gitPullOnStartup() {
 	}
 	beforeRestore := a.captureCloudRestoreState()
 	a.logInfof("startup git pull started")
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncStarted})
 	result, err := a.newBackupService().RestoreBackup(a.ctx, a.backupProfile(cfg))
 	if err != nil {
 		a.logErrorf("startup git pull failed: %v", err)
 		var conflictErr *backupdomain.GitConflictError
 		if errors.As(err, &conflictErr) {
 			a.publishGitConflict(conflictErr)
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		} else {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
 		return
 	}
 	a.recordBackupResult(result.Files, result.Snapshot)
 	if err := a.handleRestoredCloudState(beforeRestore, "startup.git.pull"); err != nil {
 		a.logErrorf("startup git pull failed: restore compensation failed: %v", err)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		return
 	}
 	a.logInfof("startup git pull completed")
 	a.clearGitConflictPending()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 }
 
 // startAutoSyncTimer starts (or restarts) a periodic auto-backup ticker.
@@ -424,7 +423,7 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	a.gitConflictMu.Unlock()
 	a.recordBackupResult(result.Files, result.Snapshot)
 	a.reloadStateFromDisk()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 	a.logInfof("git conflict resolution completed: strategy=%s, backupDir=%s", action, backupDir)
 	return nil
 }
@@ -1099,7 +1098,7 @@ func (a *App) RestoreFromCloud() error {
 	profile := a.backupProfile(cfg)
 	isGit := profile.Provider == backupdomain.GitProviderName
 	if isGit {
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncStarted})
 	}
 	result, err := a.newBackupService().RestoreBackup(a.ctx, profile)
 	if err != nil {
@@ -1109,7 +1108,7 @@ func (a *App) RestoreFromCloud() error {
 			a.publishGitConflict(conflictErr)
 		}
 		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
 		return err
 	}
@@ -1118,13 +1117,13 @@ func (a *App) RestoreFromCloud() error {
 	if err := a.handleRestoredCloudState(beforeRestore, "cloud.restore"); err != nil {
 		a.logErrorf("restore from cloud failed: restore compensation failed: %v", err)
 		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
 		return err
 	}
 	if isGit {
 		a.clearGitConflictPending()
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 	}
 	return nil
 }
@@ -1132,7 +1131,7 @@ func (a *App) RestoreFromCloud() error {
 // ListCloudProviders returns all registered provider names and their required credential fields.
 func (a *App) ListCloudProviders() []map[string]any {
 	var result []map[string]any
-	for _, p := range registry.AllCloudProviders() {
+	for _, p := range allCloudProviders() {
 		result = append(result, map[string]any{
 			"name":   p.Name(),
 			"fields": p.RequiredCredentials(),
@@ -1199,9 +1198,9 @@ func (a *App) CheckUpdates() error {
 			}
 			_ = a.storage.SaveMeta(sk)
 			if sk.LatestSHA != "" {
-				a.hub.Publish(notify.Event{
-					Type: notify.EventUpdateAvailable,
-					Payload: notify.UpdateAvailablePayload{
+				a.hub.Publish(eventbus.Event{
+					Type: eventbus.EventUpdateAvailable,
+					Payload: eventbus.UpdateAvailablePayload{
 						SkillID:    sk.ID,
 						SkillName:  sk.Name,
 						CurrentSHA: sk.SourceSHA,
@@ -1244,7 +1243,7 @@ func (a *App) UpdateSkill(skillID string) error {
 	}
 	a.autoPushSkillsToConfiguredAgents("skill.update", []*skilldomain.InstalledSkill{sk}, true)
 	a.scheduleAutoBackup()
-	a.hub.Publish(notify.Event{Type: notify.EventSkillsUpdated})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventSkillsUpdated})
 	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
 	return nil
 }
@@ -1567,9 +1566,9 @@ func (a *App) UpdateStarredRepo(repoURL string) error {
 		a.logInfof("update starred repo completed: repo=%s", repo.URL)
 		a.autoUpdateInstalledSkillsForRepos("starred.refresh.one", []string{repo.URL})
 	}
-	a.hub.Publish(notify.Event{
-		Type: notify.EventStarSyncProgress,
-		Payload: notify.StarSyncProgressPayload{
+	a.hub.Publish(eventbus.Event{
+		Type: eventbus.EventStarSyncProgress,
+		Payload: eventbus.StarSyncProgressPayload{
 			RepoURL:   repo.URL,
 			RepoName:  repo.Name,
 			SyncError: repo.SyncError,
@@ -1601,9 +1600,9 @@ func (a *App) UpdateAllStarredRepos() error {
 			a.logInfof("update starred repo completed: repo=%s", repo.URL)
 			successfulRepoURLs = append(successfulRepoURLs, repo.URL)
 		}
-		a.hub.Publish(notify.Event{
-			Type: notify.EventStarSyncProgress,
-			Payload: notify.StarSyncProgressPayload{
+		a.hub.Publish(eventbus.Event{
+			Type: eventbus.EventStarSyncProgress,
+			Payload: eventbus.StarSyncProgressPayload{
 				RepoURL:   repo.URL,
 				RepoName:  repo.Name,
 				SyncError: repo.SyncError,
@@ -1611,7 +1610,7 @@ func (a *App) UpdateAllStarredRepos() error {
 		})
 	}
 	a.autoUpdateInstalledSkillsForRepos("starred.refresh.all", successfulRepoURLs)
-	a.hub.Publish(notify.Event{Type: notify.EventStarSyncDone})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventStarSyncDone})
 	a.logInfof("update all starred repos completed")
 	return nil
 }

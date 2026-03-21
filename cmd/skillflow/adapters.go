@@ -11,16 +11,27 @@ import (
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
-	"github.com/shinerio/skillflow/core/registry"
 	skillsourceapp "github.com/shinerio/skillflow/core/skillsource/app"
 	sourcediscovery "github.com/shinerio/skillflow/core/skillsource/infra/discovery"
 )
 
+var registeredAgentGateways = map[string]agentgateway.AgentGateway{}
+
 func registerAdapters() {
+	registeredAgentGateways = map[string]agentgateway.AgentGateway{}
 	agents := []string{"claude-code", "opencode", "codex", "gemini-cli", "openclaw"}
 	for _, name := range agents {
-		registry.RegisterAdapter(agentgatewayinfra.NewFilesystemAdapter(name, config.DefaultAgentPushDir(name)))
+		registerAgentGateway(agentgatewayinfra.NewFilesystemAdapter(name, config.DefaultAgentPushDir(name)))
 	}
+}
+
+func registerAgentGateway(gateway agentgateway.AgentGateway) {
+	registeredAgentGateways[gateway.Name()] = gateway
+}
+
+func agentGateway(name string) (agentgateway.AgentGateway, bool) {
+	gateway, ok := registeredAgentGateways[name]
+	return gateway, ok
 }
 
 func agentProfile(cfg config.AgentConfig) agentdomain.AgentProfile {
@@ -60,7 +71,7 @@ func agentConfigs(profiles []agentdomain.AgentProfile) []config.AgentConfig {
 }
 
 func resolveAgentGateway(profile agentdomain.AgentProfile) agentgateway.AgentGateway {
-	if adapter, ok := registry.GetAdapter(profile.Name); ok {
+	if adapter, ok := agentGateway(profile.Name); ok {
 		return adapter
 	}
 	return agentgatewayinfra.NewFilesystemAdapter(profile.Name, profile.PushDir)
@@ -113,7 +124,7 @@ func (a *App) newSkillsourceService() *skillsourceapp.Service {
 }
 
 func resolveCloudProvider(name string) (backupdomain.CloudProvider, bool) {
-	return registry.GetCloudProvider(name)
+	return cloudProvider(name)
 }
 
 func (a *App) newBackupService() *backupapp.Service {

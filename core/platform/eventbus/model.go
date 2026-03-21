@@ -1,4 +1,4 @@
-package notify
+package eventbus
 
 import backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 
@@ -13,13 +13,13 @@ const (
 	EventUpdateAvailable  EventType = "update.available"
 	EventSkillsUpdated    EventType = "skills.updated"
 	EventSkillConflict    EventType = "skill.conflict"
-	EventStarSyncProgress EventType = "star.sync.progress" // one repo finished syncing
-	EventStarSyncDone     EventType = "star.sync.done"     // all repos finished
+	EventStarSyncProgress EventType = "star.sync.progress"
+	EventStarSyncDone     EventType = "star.sync.done"
 
 	EventGitSyncStarted   EventType = "git.sync.started"
 	EventGitSyncCompleted EventType = "git.sync.completed"
 	EventGitSyncFailed    EventType = "git.sync.failed"
-	EventGitConflict      EventType = "git.conflict" // local ↔ remote conflict requires user decision
+	EventGitConflict      EventType = "git.conflict"
 
 	EventAppUpdateAvailable         EventType = "app.update.available"
 	EventAppUpdateDownloadDone      EventType = "app.update.download.done"

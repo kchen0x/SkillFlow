@@ -21,7 +21,9 @@ As of 2026-03-21:
 - `cmd/skillflow` and supporting backend packages no longer import `core/sync`
 - `cmd/skillflow` and supporting backend packages no longer import `core/git`
 - `cmd/skillflow` and supporting backend packages no longer import the flat `core/backup` package
-- the old `core/skill`, `core/prompt`, `core/sync`, `core/git`, and flat `core/backup` packages have been removed
+- `cmd/skillflow` and supporting backend packages no longer import `core/notify`
+- `cmd/skillflow` no longer imports `core/registry`
+- the old `core/skill`, `core/prompt`, `core/sync`, `core/git`, flat `core/backup`, `core/notify`, and `core/registry` packages have been removed
 
 This means the initial bounded-context extraction set is in place. `skillcatalog`, `promptcatalog`, `agentintegration`, `skillsource`, and `backup` are now the reference patterns for the remaining platform and cross-cutting migrations.
 
