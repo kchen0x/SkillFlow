@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	"github.com/shinerio/skillflow/core/config"
 	coregit "github.com/shinerio/skillflow/core/git"
 	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
@@ -154,23 +155,11 @@ func (a *App) buildAgentPresenceSnapshot(cfg config.AppConfig, idx *skillquery.I
 		if !ok {
 			return nil, nil
 		}
-		if _, err := os.Stat(agent.PushDir); err != nil {
-			if os.IsNotExist(err) {
-				return nil, nil
-			}
-			return nil, err
-		}
-
-		pushed, err := pullAgentSkills(a.ctx, getAdapter(agent), agent.PushDir, a.repoScanMaxDepth())
+		presence, err := newAgentIntegrationService().BuildPresenceIndex(a.ctx, []agentdomain.AgentProfile{agentProfile(agent)}, idx, a.repoScanMaxDepth())
 		if err != nil {
 			return nil, err
 		}
-
-		var keys []string
-		for _, candidate := range pushed {
-			keys = append(keys, agentPresenceKeys(candidate, idx)...)
-		}
-		return compactKeys(keys...), nil
+		return presence.KeysForAgent(agent.Name), nil
 	})
 	if err != nil {
 		return viewstate.AgentPresenceSnapshot{}, err

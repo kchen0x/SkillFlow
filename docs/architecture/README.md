@@ -44,7 +44,7 @@ These documents cover backend architecture only. User-facing behavior remains do
 
 The codebase is not yet fully aligned with this architecture. Unless otherwise noted, this document set describes the target structure that future backend refactoring should converge toward.
 
-As of 2026-03-21, two end-to-end bounded contexts have been extracted under `core/`:
+As of 2026-03-21, three end-to-end bounded contexts have been extracted under `core/`:
 
 - `core/skillcatalog/app`
 - `core/skillcatalog/domain`
@@ -52,7 +52,10 @@ As of 2026-03-21, two end-to-end bounded contexts have been extracted under `cor
 - `core/promptcatalog/app`
 - `core/promptcatalog/domain`
 - `core/promptcatalog/infra`
+- `core/agentintegration/app`
+- `core/agentintegration/domain`
+- `core/agentintegration/infra`
 
-The old `core/skill` and `core/prompt` packages have been removed. Other domains and cross-cutting modules still need to migrate toward the same structure.
+The old `core/skill`, `core/prompt`, and `core/sync` packages have been removed. Other domains and cross-cutting modules still need to migrate toward the same structure.
 
 *Last updated: 2026-03-21*

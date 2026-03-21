@@ -1,4 +1,4 @@
-package sync_test
+package gateway_test
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	agentgateway "github.com/shinerio/skillflow/core/agentintegration/infra/gateway"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
-	agentsync "github.com/shinerio/skillflow/core/sync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +25,7 @@ func TestFilesystemAdapterPushFlattens(t *testing.T) {
 	writeSkill(t, skillDir, "skill.md")
 	sk := &skilldomain.InstalledSkill{Name: "my-skill", Path: skillDir}
 
-	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
+	adapter := agentgateway.NewFilesystemAdapter("test-agent", "")
 	require.NoError(t, adapter.Push(context.Background(), []*skilldomain.InstalledSkill{sk}, dst))
 
 	_, err := os.Stat(filepath.Join(dst, "my-skill", "skill.md"))
@@ -36,9 +36,9 @@ func TestFilesystemAdapterPullFlat(t *testing.T) {
 	src := t.TempDir()
 	writeSkill(t, filepath.Join(src, "skill-x"), "skill.md")
 	writeSkill(t, filepath.Join(src, "skill-y"), "SKILL.MD")
-	require.NoError(t, os.MkdirAll(filepath.Join(src, "not-a-skill"), 0755)) // no skill.md
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "not-a-skill"), 0755))
 
-	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
+	adapter := agentgateway.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
 	assert.Len(t, skills, 2)
@@ -46,16 +46,13 @@ func TestFilesystemAdapterPullFlat(t *testing.T) {
 
 func TestFilesystemAdapterPullNested(t *testing.T) {
 	src := t.TempDir()
-	// skills nested under category dirs
 	writeSkill(t, filepath.Join(src, "coding", "skill-a"), "skill.md")
 	writeSkill(t, filepath.Join(src, "coding", "skill-b"), "skill.md")
 	writeSkill(t, filepath.Join(src, "writing", "skill-c"), "Skill.md")
-	// deeply nested
 	writeSkill(t, filepath.Join(src, "a", "b", "c", "skill-d"), "skill.md")
-	// category dir itself has no skill.md — should not be returned
 	require.NoError(t, os.MkdirAll(filepath.Join(src, "empty-category"), 0755))
 
-	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
+	adapter := agentgateway.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
 
@@ -71,7 +68,7 @@ func TestFilesystemAdapterPullWithMaxDepth(t *testing.T) {
 	writeSkill(t, filepath.Join(src, "skills", "skill-a"), "skill.md")
 	writeSkill(t, filepath.Join(src, "a", "b", "c", "skill-d"), "skill.md")
 
-	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
+	adapter := agentgateway.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.PullWithMaxDepth(context.Background(), src, 2)
 	require.NoError(t, err)
 
@@ -86,30 +83,27 @@ func TestFilesystemAdapterPullDefaultRespectsDepthLimit(t *testing.T) {
 	src := t.TempDir()
 	writeSkill(t, filepath.Join(src, "a", "b", "c", "d", "e", "f", "skill-g"), "skill.md")
 
-	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
+	adapter := agentgateway.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
 	assert.Empty(t, skills)
 }
 
 func TestFilesystemAdapterPullSkillNotRecursed(t *testing.T) {
-	// A skill dir that itself has subdirs should NOT have those subdirs pulled as skills.
 	src := t.TempDir()
 	skillDir := filepath.Join(src, "parent-skill")
 	writeSkill(t, skillDir, "skill.md")
-	// sub-dir inside the skill that also has a skill.md
 	writeSkill(t, filepath.Join(skillDir, "nested"), "skill.md")
 
-	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
+	adapter := agentgateway.NewFilesystemAdapter("test-agent", "")
 	skills, err := adapter.Pull(context.Background(), src)
 	require.NoError(t, err)
-	// only parent-skill, not nested
 	assert.Len(t, skills, 1)
 	assert.Equal(t, "parent-skill", skills[0].Name)
 }
 
 func TestFilesystemAdapterPullDirNotExist(t *testing.T) {
-	adapter := agentsync.NewFilesystemAdapter("test-agent", "")
+	adapter := agentgateway.NewFilesystemAdapter("test-agent", "")
 	_, err := adapter.Pull(context.Background(), "/nonexistent/path")
 	assert.Error(t, err)
 }

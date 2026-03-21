@@ -12,11 +12,13 @@ As of 2026-03-21:
 
 - `skillcatalog` is extracted under `core/skillcatalog/app`, `domain`, and `infra`
 - `promptcatalog` is extracted under `core/promptcatalog/app`, `domain`, and `infra`
+- `agentintegration` is extracted under `core/agentintegration/app`, `domain`, and `infra`
 - `cmd/skillflow` and supporting backend packages no longer import `core/skill`
 - `cmd/skillflow` no longer imports `core/prompt`
-- the old `core/skill` and `core/prompt` packages have been removed
+- `cmd/skillflow` and supporting backend packages no longer import `core/sync`
+- the old `core/skill`, `core/prompt`, and `core/sync` packages have been removed
 
-This means Phase 1 exit criteria are now met with two extracted core contexts. `skillcatalog` and `promptcatalog` are now the reference extraction patterns for the next migrations.
+This means the core-domain extraction phase now has three reference contexts. `skillcatalog`, `promptcatalog`, and `agentintegration` are the extraction patterns for the remaining migrations.
 
 ## Current-to-Target Mapping
 

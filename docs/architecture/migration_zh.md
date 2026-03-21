@@ -12,11 +12,13 @@
 
 - `skillcatalog` 已迁出到 `core/skillcatalog/app`、`domain`、`infra`
 - `promptcatalog` 已迁出到 `core/promptcatalog/app`、`domain`、`infra`
+- `agentintegration` 已迁出到 `core/agentintegration/app`、`domain`、`infra`
 - `cmd/skillflow` 和相关后端包已经不再 import `core/skill`
 - `cmd/skillflow` 已经不再 import `core/prompt`
-- 旧的 `core/skill` 和 `core/prompt` 包已经移除
+- `cmd/skillflow` 和相关后端包已经不再 import `core/sync`
+- 旧的 `core/skill`、`core/prompt` 和 `core/sync` 包已经移除
 
-这意味着阶段 1 现在已经有两个核心上下文完成抽取，后续迁移可以把 `skillcatalog` 和 `promptcatalog` 作为参考模式。
+这意味着核心域抽取现在已经有三个参考上下文，后续迁移可以把 `skillcatalog`、`promptcatalog` 和 `agentintegration` 作为参考模式。
 
 ## 当前到目标的映射
 

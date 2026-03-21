@@ -1,19 +1,19 @@
 package registry
 
 import (
+	agentgateway "github.com/shinerio/skillflow/core/agentintegration/app/port/gateway"
 	"github.com/shinerio/skillflow/core/backup"
-	skillsync "github.com/shinerio/skillflow/core/sync"
 )
 
 var (
-	adapters       = map[string]skillsync.AgentAdapter{}
+	adapters       = map[string]agentgateway.AgentGateway{}
 	cloudProviders = map[string]backup.CloudProvider{}
 )
 
-func RegisterAdapter(a skillsync.AgentAdapter)     { adapters[a.Name()] = a }
+func RegisterAdapter(a agentgateway.AgentGateway)  { adapters[a.Name()] = a }
 func RegisterCloudProvider(p backup.CloudProvider) { cloudProviders[p.Name()] = p }
 
-func GetAdapter(name string) (skillsync.AgentAdapter, bool) {
+func GetAdapter(name string) (agentgateway.AgentGateway, bool) {
 	a, ok := adapters[name]
 	return a, ok
 }
@@ -23,8 +23,8 @@ func GetCloudProvider(name string) (backup.CloudProvider, bool) {
 	return p, ok
 }
 
-func AllAdapters() []skillsync.AgentAdapter {
-	result := make([]skillsync.AgentAdapter, 0, len(adapters))
+func AllAdapters() []agentgateway.AgentGateway {
+	result := make([]agentgateway.AgentGateway, 0, len(adapters))
 	for _, a := range adapters {
 		result = append(result, a)
 	}

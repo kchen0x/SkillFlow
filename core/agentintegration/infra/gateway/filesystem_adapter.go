@@ -1,4 +1,4 @@
-package sync
+package gateway
 
 import (
 	"context"
@@ -9,10 +9,9 @@ import (
 	"strings"
 
 	"github.com/shinerio/skillflow/core/config"
-	"github.com/shinerio/skillflow/core/skillcatalog/domain"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 )
 
-// FilesystemAdapter works for all agents — they all share the same file-based skills directory model.
 type FilesystemAdapter struct {
 	name             string
 	defaultSkillsDir string
@@ -25,55 +24,53 @@ func NewFilesystemAdapter(name, defaultSkillsDir string) *FilesystemAdapter {
 func (f *FilesystemAdapter) Name() string             { return f.name }
 func (f *FilesystemAdapter) DefaultSkillsDir() string { return f.defaultSkillsDir }
 
-func (f *FilesystemAdapter) Push(_ context.Context, skills []*domain.InstalledSkill, targetDir string) error {
+func (f *FilesystemAdapter) Push(_ context.Context, skills []*skilldomain.InstalledSkill, targetDir string) error {
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return err
 	}
-	for _, sk := range skills {
-		dst := filepath.Join(targetDir, sk.Name)
-		if err := copyDir(sk.Path, dst); err != nil {
+	for _, skill := range skills {
+		dst := filepath.Join(targetDir, skill.Name)
+		if err := copyDir(skill.Path, dst); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (f *FilesystemAdapter) Pull(ctx context.Context, sourceDir string) ([]*domain.InstalledSkill, error) {
+func (f *FilesystemAdapter) Pull(ctx context.Context, sourceDir string) ([]*skilldomain.InstalledSkill, error) {
 	return f.PullWithMaxDepth(ctx, sourceDir, config.DefaultRepoScanMaxDepth)
 }
 
-func (f *FilesystemAdapter) PullWithMaxDepth(_ context.Context, sourceDir string, maxDepth int) ([]*domain.InstalledSkill, error) {
+func (f *FilesystemAdapter) PullWithMaxDepth(_ context.Context, sourceDir string, maxDepth int) ([]*skilldomain.InstalledSkill, error) {
 	if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("目录不存在: %s", sourceDir)
 	}
 	if maxDepth < 0 {
 		maxDepth = 0
 	}
-	var skills []*domain.InstalledSkill
+	var skills []*skilldomain.InstalledSkill
 	var walk func(dir string, depth int)
 	walk = func(dir string, depth int) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return
 		}
-		// Check if this directory itself contains a skill.md file.
-		for _, e := range entries {
-			if !e.IsDir() && isSkillMd(e.Name()) {
-				skills = append(skills, &domain.InstalledSkill{
+		for _, entry := range entries {
+			if !entry.IsDir() && isSkillMd(entry.Name()) {
+				skills = append(skills, &skilldomain.InstalledSkill{
 					Name:   filepath.Base(dir),
 					Path:   dir,
-					Source: domain.SourceManual,
+					Source: skilldomain.SourceManual,
 				})
-				return // found skill here — don't recurse deeper
+				return
 			}
 		}
 		if depth >= maxDepth {
 			return
 		}
-		// No skill.md found — recurse into subdirectories.
-		for _, e := range entries {
-			if e.IsDir() {
-				walk(filepath.Join(dir, e.Name()), depth+1)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				walk(filepath.Join(dir, entry.Name()), depth+1)
 			}
 		}
 	}
@@ -81,17 +78,16 @@ func (f *FilesystemAdapter) PullWithMaxDepth(_ context.Context, sourceDir string
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range entries {
-		if e.IsDir() {
-			walk(filepath.Join(sourceDir, e.Name()), 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			walk(filepath.Join(sourceDir, entry.Name()), 0)
 		}
 	}
 	return skills, nil
 }
 
 func isSkillMd(name string) bool {
-	lower := strings.ToLower(name)
-	return lower == "skill.md"
+	return strings.ToLower(name) == "skill.md"
 }
 
 func copyDir(src, dst string) error {
@@ -114,11 +110,13 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
+
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
+
 	_, err = io.Copy(out, in)
 	return err
 }

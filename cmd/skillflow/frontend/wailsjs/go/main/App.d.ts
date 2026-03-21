@@ -22,7 +22,7 @@ export function CheckAppUpdate():Promise<main.AppUpdateInfo>;
 
 export function CheckAppUpdateAndNotify():Promise<main.AppUpdateInfo>;
 
-export function CheckMissingAgentPushDirs(arg1:Array<string>):Promise<Array<Record<string, string>>>;
+export function CheckMissingAgentPushDirs(arg1:Array<string>):Promise<Array<domain.MissingPushDir>>;
 
 export function CheckUpdates():Promise<void>;
 
@@ -80,7 +80,7 @@ export function ImportPrompts():Promise<number>;
 
 export function ImportStarSkills(arg1:Array<string>,arg2:string,arg3:string):Promise<void>;
 
-export function ListAgentSkills(arg1:string):Promise<Array<main.AgentSkillEntry>>;
+export function ListAgentSkills(arg1:string):Promise<Array<domain.AgentSkillEntry>>;
 
 export function ListAllStarSkills():Promise<Array<git.StarSkill>>;
 
@@ -122,11 +122,11 @@ export function PullFromAgent(arg1:string,arg2:Array<string>,arg3:string):Promis
 
 export function PullFromAgentForce(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
 
-export function PushStarSkillsToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
+export function PushStarSkillsToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<domain.PushConflict>>;
 
 export function PushStarSkillsToAgentsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
-export function PushToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<main.PushConflict>>;
+export function PushToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<domain.PushConflict>>;
 
 export function PushToAgentsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;
 
@@ -146,7 +146,7 @@ export function RestoreFromCloud():Promise<void>;
 
 export function SaveConfig(arg1:config.AppConfig):Promise<void>;
 
-export function ScanAgentSkills(arg1:string):Promise<Array<main.AgentSkillCandidate>>;
+export function ScanAgentSkills(arg1:string):Promise<Array<domain.AgentSkillCandidate>>;
 
 export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 

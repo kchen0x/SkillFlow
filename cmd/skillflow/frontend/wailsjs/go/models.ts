@@ -222,6 +222,64 @@ export namespace config {
 
 export namespace domain {
 	
+	export class AgentSkillCandidate {
+	    name: string;
+	    path: string;
+	    source: string;
+	    logicalKey: string;
+	    installed: boolean;
+	    imported: boolean;
+	    updatable: boolean;
+	    pushed: boolean;
+	    pushedAgents: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentSkillCandidate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.source = source["source"];
+	        this.logicalKey = source["logicalKey"];
+	        this.installed = source["installed"];
+	        this.imported = source["imported"];
+	        this.updatable = source["updatable"];
+	        this.pushed = source["pushed"];
+	        this.pushedAgents = source["pushedAgents"];
+	    }
+	}
+	export class AgentSkillEntry {
+	    name: string;
+	    path: string;
+	    source: string;
+	    logicalKey: string;
+	    installed: boolean;
+	    imported: boolean;
+	    updatable: boolean;
+	    pushed: boolean;
+	    pushedAgents: string[];
+	    seenInAgentScan: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentSkillEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.source = source["source"];
+	        this.logicalKey = source["logicalKey"];
+	        this.installed = source["installed"];
+	        this.imported = source["imported"];
+	        this.updatable = source["updatable"];
+	        this.pushed = source["pushed"];
+	        this.pushedAgents = source["pushedAgents"];
+	        this.seenInAgentScan = source["seenInAgentScan"];
+	    }
+	}
 	export class InstalledSkill {
 	    ID: string;
 	    Name: string;
@@ -276,6 +334,20 @@ export namespace domain {
 		    }
 		    return a;
 		}
+	}
+	export class MissingPushDir {
+	    name: string;
+	    dir: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MissingPushDir(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.dir = source["dir"];
+	    }
 	}
 	export class PromptLink {
 	    label: string;
@@ -342,6 +414,26 @@ export namespace domain {
 		}
 	}
 	
+	export class PushConflict {
+	    skillId?: string;
+	    skillName: string;
+	    skillPath?: string;
+	    agentName: string;
+	    targetPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PushConflict(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.skillId = source["skillId"];
+	        this.skillName = source["skillName"];
+	        this.skillPath = source["skillPath"];
+	        this.agentName = source["agentName"];
+	        this.targetPath = source["targetPath"];
+	    }
+	}
 	export class SkillMeta {
 	    Name: string;
 	    Description: string;
@@ -449,64 +541,6 @@ export namespace git {
 
 export namespace main {
 	
-	export class AgentSkillCandidate {
-	    name: string;
-	    path: string;
-	    source: string;
-	    logicalKey: string;
-	    installed: boolean;
-	    imported: boolean;
-	    updatable: boolean;
-	    pushed: boolean;
-	    pushedAgents: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new AgentSkillCandidate(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.path = source["path"];
-	        this.source = source["source"];
-	        this.logicalKey = source["logicalKey"];
-	        this.installed = source["installed"];
-	        this.imported = source["imported"];
-	        this.updatable = source["updatable"];
-	        this.pushed = source["pushed"];
-	        this.pushedAgents = source["pushedAgents"];
-	    }
-	}
-	export class AgentSkillEntry {
-	    name: string;
-	    path: string;
-	    source: string;
-	    logicalKey: string;
-	    installed: boolean;
-	    imported: boolean;
-	    updatable: boolean;
-	    pushed: boolean;
-	    pushedAgents: string[];
-	    seenInAgentScan: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new AgentSkillEntry(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.path = source["path"];
-	        this.source = source["source"];
-	        this.logicalKey = source["logicalKey"];
-	        this.installed = source["installed"];
-	        this.imported = source["imported"];
-	        this.updatable = source["updatable"];
-	        this.pushed = source["pushed"];
-	        this.pushedAgents = source["pushedAgents"];
-	        this.seenInAgentScan = source["seenInAgentScan"];
-	    }
-	}
 	export class AppUpdateInfo {
 	    hasUpdate: boolean;
 	    currentVersion: string;
@@ -613,26 +647,6 @@ export namespace main {
 	        this.statusCode = source["statusCode"];
 	        this.elapsedMs = source["elapsedMs"];
 	        this.message = source["message"];
-	    }
-	}
-	export class PushConflict {
-	    skillId?: string;
-	    skillName: string;
-	    skillPath?: string;
-	    agentName: string;
-	    targetPath: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new PushConflict(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.skillId = source["skillId"];
-	        this.skillName = source["skillName"];
-	        this.skillPath = source["skillPath"];
-	        this.agentName = source["agentName"];
-	        this.targetPath = source["targetPath"];
 	    }
 	}
 
