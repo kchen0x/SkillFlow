@@ -123,6 +123,12 @@ Recommended logical ownership:
   - skipped update version
   - proxy and log-level preferences
 
+Current migration note:
+
+- window-state persistence now uses `core/platform/settingsstore`
+- log-level normalization now uses `core/platform/logging`
+- `core/config` still exposes compatibility wrappers while the broader settings namespace split is unfinished
+
 ## Repository vs Gateway Examples
 
 Repositories:

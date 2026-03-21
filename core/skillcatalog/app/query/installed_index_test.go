@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
 	"github.com/shinerio/skillflow/core/skillcatalog/app/query"
 	"github.com/shinerio/skillflow/core/skillcatalog/domain"
-	"github.com/shinerio/skillflow/core/skillkey"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +47,7 @@ func TestBuildInstalledIndexResolvesByLogicalKeyBeforeName(t *testing.T) {
 	status := idx.Resolve("same-name", "git:github.com/acme/repo-b#skills/same-name")
 
 	assert.True(t, status.Installed)
-	assert.Equal(t, skillkey.MatchStrengthLogical, status.MatchStrength)
+	assert.Equal(t, logicalkey.MatchStrengthLogical, status.MatchStrength)
 	assert.Equal(t, "git:github.com/acme/repo-b#skills/same-name", status.LogicalKey)
 }
 
@@ -68,7 +68,7 @@ func TestBuildInstalledIndexFallsBackToUniqueNameWhenLogicalKeyMissing(t *testin
 	status := idx.Resolve("alpha", "")
 	assert.True(t, status.Installed)
 	assert.True(t, status.Imported)
-	assert.Equal(t, skillkey.MatchStrengthFallback, status.MatchStrength)
+	assert.Equal(t, logicalkey.MatchStrengthFallback, status.MatchStrength)
 }
 
 func TestBuildInstalledIndexMarksGroupUpdatable(t *testing.T) {
@@ -101,7 +101,7 @@ func TestBuildInstalledIndexIncludesInstalledContentKeys(t *testing.T) {
 		SourceSubPath: "skills/alpha",
 	}})
 
-	contentKey, err := skillkey.ContentFromDir(dir)
+	contentKey, err := logicalkey.ContentFromDir(dir)
 	require.NoError(t, err)
 
 	status := idx.Resolve("alpha", "git:github.com/acme/repo#skills/alpha")
@@ -123,11 +123,11 @@ func TestBuildInstalledIndexResolvesGitSkillByContentKey(t *testing.T) {
 		SourceSubPath: "skills/alpha",
 	}})
 
-	contentKey, err := skillkey.ContentFromDir(dir)
+	contentKey, err := logicalkey.ContentFromDir(dir)
 	require.NoError(t, err)
 
 	status := idx.Resolve("alpha", contentKey)
 	assert.True(t, status.Installed)
-	assert.Equal(t, skillkey.MatchStrengthContent, status.MatchStrength)
+	assert.Equal(t, logicalkey.MatchStrengthContent, status.MatchStrength)
 	assert.Equal(t, "git:github.com/acme/repo#skills/alpha", status.LogicalKey)
 }

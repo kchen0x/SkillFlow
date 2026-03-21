@@ -21,7 +21,20 @@ const (
 	LevelDebug Level = iota
 	LevelInfo
 	LevelError
+
+	DefaultLevelString = "error"
 )
+
+func NormalizeLevelString(level string) string {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case LevelDebug.String():
+		return LevelDebug.String()
+	case LevelError.String():
+		return LevelError.String()
+	default:
+		return DefaultLevelString
+	}
+}
 
 func ParseLevel(level string) Level {
 	switch strings.ToLower(strings.TrimSpace(level)) {

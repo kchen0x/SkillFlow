@@ -40,3 +40,10 @@ func TestRotateWithTwoFilesOnly(t *testing.T) {
 	assert.FileExists(t, filepath.Join(dir, activeLogName))
 	assert.FileExists(t, filepath.Join(dir, backupLogName))
 }
+
+func TestNormalizeLevelStringUsesErrorAsDefault(t *testing.T) {
+	assert.Equal(t, DefaultLevelString, NormalizeLevelString(""))
+	assert.Equal(t, DefaultLevelString, NormalizeLevelString("bad"))
+	assert.Equal(t, LevelDebug.String(), NormalizeLevelString("DEBUG"))
+	assert.Equal(t, LevelError.String(), NormalizeLevelString(" error "))
+}

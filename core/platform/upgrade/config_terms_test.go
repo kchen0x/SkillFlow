@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/shinerio/skillflow/core/upgrade"
+	"github.com/shinerio/skillflow/core/platform/upgrade"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

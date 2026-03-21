@@ -25,8 +25,16 @@
 - `cmd/skillflow` 和相关后端包已经不再 import `core/applog`
 - `cmd/skillflow` 和相关后端包已经不再 import `core/pathutil`
 - `cmd/skillflow` 和相关后端包已经不再 import `core/update`
+- `cmd/skillflow` 和相关后端包已经不再 import `core/skillkey`
+- `cmd/skillflow` 和相关后端包已经不再 import `core/upgrade`
+- `cmd/skillflow` 和相关后端包已经不再 import `core/viewstate`
 - `cmd/skillflow` 已经不再 import `core/registry`
-- 旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify`、`core/applog`、`core/pathutil`、`core/update` 以及 `core/registry` 包已经移除
+- 旧的 `core/skill`、`core/prompt`、`core/sync`、`core/git`、平铺的 `core/backup`、`core/notify`、`core/applog`、`core/pathutil`、`core/update`、`core/skillkey`、`core/upgrade`、`core/viewstate` 以及 `core/registry` 包已经移除
+- `core/config` 已经把通用文件路径与 JSON 持久化能力下沉到 `core/platform/settingsstore`
+- 内建 agent 名单以及默认扫描/推送目录已经下沉到 `core/agentintegration/domain`
+- `config.AppConfig.Agents` 现在直接复用上下文拥有的 `agentintegration/domain.AgentProfile` 类型
+- window state 类型与持久化 helper 已下沉到 `core/platform/settingsstore`，`core/config` 保留兼容包装
+- log level 字符串常量与归一化规则已下沉到 `core/platform/logging`，`core/config` 保留兼容包装
 
 这意味着第一批 bounded context 抽取已经就位，后续平台层与横切能力迁移可以把 `skillcatalog`、`promptcatalog`、`agentintegration`、`skillsource` 和 `backup` 作为参考模式。
 
@@ -40,13 +48,13 @@
 | `core/git` 中与来源跟踪相关的部分 | `core/skillsource/domain` 中的 `StarRepo` 与 `SkillSource` 模型 + `core/skillsource/infra` |
 | `core/git` 中的 Git 基础能力 | `core/platform/git` |
 | `core/backup` 中的 provider 与 snapshot 逻辑 | `core/backup/domain` + `core/backup/infra` |
-| `core/config` | `core/platform/settingsstore` + 各上下文拥有的配置 namespace |
+| `core/config` | 过渡期兼容层，底层使用 `core/platform/settingsstore`，后续再拆到各上下文拥有的配置 namespace；内建 agent 默认值和 profile 类型已迁到 `core/agentintegration/domain`，window state 持久化已迁到 `core/platform/settingsstore`，log level 语义已迁到 `core/platform/logging` |
 | `core/applog` | `core/platform/logging` |
 | `core/notify` | `core/platform/eventbus` |
 | `core/pathutil` | `core/platform/pathutil` |
 | `core/skillkey` | `core/shared/logicalkey` |
 | `core/upgrade` | `core/platform/upgrade` |
-| `core/viewstate` | `core/readmodel` 或上下文本地 `infra/projection` |
+| `core/viewstate` | `core/readmodel/viewstate` |
 | `core/registry` | `cmd/skillflow` 中的壳层组合逻辑 |
 | `core/update` 中的应用更新部分 | `core/platform/update` + `cmd/skillflow` 中的壳层适配 |
 | `cmd/skillflow/app*.go` 中的业务方法 | `cmd/skillflow` 中的 Wails transport adapter，转调各上下文的 `app`、`orchestration` 与 `readmodel` |

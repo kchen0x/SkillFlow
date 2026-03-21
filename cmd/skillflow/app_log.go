@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/shinerio/skillflow/core/config"
 	"github.com/shinerio/skillflow/core/platform/logging"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -26,7 +25,7 @@ func (a *App) initLogger(logLevel string) {
 }
 
 func (a *App) setLoggerLevel(level string) string {
-	normalized := config.NormalizeLogLevel(level)
+	normalized := logging.NormalizeLevelString(level)
 	if a.sysLog != nil {
 		a.sysLog.SetLevelString(normalized)
 	}

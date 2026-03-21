@@ -1,4 +1,4 @@
-package skillkey
+package logicalkey
 
 import (
 	"crypto/sha256"
@@ -24,8 +24,6 @@ const (
 	MatchStrengthFallback MatchStrength = "fallback"
 )
 
-// Git returns the stable logical key for a git-backed skill using normalized
-// repo source plus normalized repository subpath.
 func Git(repoSource, subPath string) string {
 	repoSource = strings.TrimSpace(strings.ToLower(repoSource))
 	subPath = NormalizeRepoSubPath(subPath)
@@ -35,7 +33,6 @@ func Git(repoSource, subPath string) string {
 	return fmt.Sprintf("git:%s#%s", repoSource, subPath)
 }
 
-// GitFromRepoURL derives a git logical key from a remote URL and subpath.
 func GitFromRepoURL(repoURL, subPath string) (string, error) {
 	repoSource, err := platformgit.RepoSource(repoURL)
 	if err != nil {
@@ -64,8 +61,6 @@ func NormalizeRepoSubPath(subPath string) string {
 	return cleaned
 }
 
-// ContentFromDir derives a stable logical key from the directory content so the
-// same skill can still be correlated across local imports and tool scans.
 func ContentFromDir(dir string) (string, error) {
 	files, err := listFiles(dir)
 	if err != nil {
@@ -93,15 +88,15 @@ func ContentFromDir(dir string) (string, error) {
 				return "", err
 			}
 		case info.Mode().IsRegular():
-			f, err := os.Open(fullPath)
+			file, err := os.Open(fullPath)
 			if err != nil {
 				return "", err
 			}
-			if _, err := io.Copy(hasher, f); err != nil {
-				f.Close()
+			if _, err := io.Copy(hasher, file); err != nil {
+				file.Close()
 				return "", err
 			}
-			if err := f.Close(); err != nil {
+			if err := file.Close(); err != nil {
 				return "", err
 			}
 			if _, err := io.WriteString(hasher, "\n"); err != nil {

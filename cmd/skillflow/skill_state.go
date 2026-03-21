@@ -5,9 +5,9 @@ import (
 
 	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
 	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
-	"github.com/shinerio/skillflow/core/skillkey"
 	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 )
 
@@ -78,9 +78,9 @@ func resolveSourceCandidates(skills []sourcedomain.SourceSkillCandidate, idx *sk
 	resolved := make([]StarSkillEntry, 0, len(skills))
 	for _, candidate := range skills {
 		if strings.TrimSpace(candidate.LogicalKey) == "" {
-			candidate.LogicalKey = skillkey.Git(candidate.Source, candidate.SubPath)
+			candidate.LogicalKey = logicalkey.Git(candidate.Source, candidate.SubPath)
 		}
-		contentKey, err := skillkey.ContentFromDir(candidate.Path)
+		contentKey, err := logicalkey.ContentFromDir(candidate.Path)
 		if err != nil {
 			contentKey = ""
 		}
@@ -127,7 +127,7 @@ func (a *App) buildAgentPresenceIndex(idx *skillquery.InstalledIndex) *agentdoma
 		}
 
 		service := newAgentIntegrationService()
-		presence, err := service.BuildPresenceIndex(a.ctx, agentProfiles(cfg.Agents), idx, a.repoScanMaxDepth())
+		presence, err := service.BuildPresenceIndex(a.ctx, cfg.Agents, idx, a.repoScanMaxDepth())
 		if err != nil {
 			a.logErrorf("build agent presence index failed: build presence err=%v", err)
 			return agentdomain.NewAgentPresenceIndex(), nil

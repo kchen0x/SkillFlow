@@ -89,6 +89,7 @@ Shell concerns such as tray, window state, launch-at-login, single-instance beha
 ### Responsibilities
 
 - own agent profiles
+- own built-in agent profile defaults
 - own scan, push, and pull semantics
 - own push and pull conflict detection
 - own agent-side presence meaning

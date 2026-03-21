@@ -10,9 +10,9 @@ import (
 
 	gatewayport "github.com/shinerio/skillflow/core/agentintegration/app/port/gateway"
 	"github.com/shinerio/skillflow/core/agentintegration/domain"
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
 	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
-	"github.com/shinerio/skillflow/core/skillkey"
 )
 
 type SkillStatus struct {
@@ -323,7 +323,7 @@ func resolveAgentSkillCandidates(candidates []*skilldomain.InstalledSkill, idx *
 		if candidate == nil {
 			continue
 		}
-		logicalKey, err := skillkey.ContentFromDir(candidate.Path)
+		logicalKey, err := logicalkey.ContentFromDir(candidate.Path)
 		if err != nil {
 			logicalKey = ""
 		}
@@ -418,7 +418,7 @@ func agentPresenceKeys(candidate *skilldomain.InstalledSkill, idx *skillquery.In
 	if candidate == nil {
 		return nil
 	}
-	contentKey, err := skillkey.ContentFromDir(candidate.Path)
+	contentKey, err := logicalkey.ContentFromDir(candidate.Path)
 	if err != nil {
 		contentKey = ""
 	}

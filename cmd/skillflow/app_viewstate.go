@@ -10,9 +10,9 @@ import (
 
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/readmodel/viewstate"
 	skillquery "github.com/shinerio/skillflow/core/skillcatalog/app/query"
 	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
-	"github.com/shinerio/skillflow/core/viewstate"
 )
 
 const installedSkillsSnapshotName = "installed_skills"
@@ -87,8 +87,8 @@ func (a *App) installedSkillsFingerprint() (string, error) {
 
 func (a *App) agentPresenceConfigFingerprint(cfg config.AppConfig) (string, error) {
 	agentsConfig, err := json.Marshal(struct {
-		RepoScanMaxDepth int                  `json:"repoScanMaxDepth"`
-		Agents           []config.AgentConfig `json:"agents"`
+		RepoScanMaxDepth int                        `json:"repoScanMaxDepth"`
+		Agents           []agentdomain.AgentProfile `json:"agents"`
 	}{
 		RepoScanMaxDepth: cfg.RepoScanMaxDepth,
 		Agents:           cfg.Agents,
@@ -134,7 +134,7 @@ func (a *App) buildAgentPresenceSnapshot(cfg config.AppConfig, idx *skillquery.I
 	_, _ = a.ensureViewCache().Load(agentPresenceSnapshotName, configFingerprint, &previous)
 
 	inputs := make([]viewstate.AgentPresenceInput, 0, len(cfg.Agents))
-	agentsByName := make(map[string]config.AgentConfig, len(cfg.Agents))
+	agentsByName := make(map[string]agentdomain.AgentProfile, len(cfg.Agents))
 	for _, agent := range cfg.Agents {
 		if strings.TrimSpace(agent.PushDir) == "" {
 			continue
@@ -155,7 +155,7 @@ func (a *App) buildAgentPresenceSnapshot(cfg config.AppConfig, idx *skillquery.I
 		if !ok {
 			return nil, nil
 		}
-		presence, err := newAgentIntegrationService().BuildPresenceIndex(a.ctx, []agentdomain.AgentProfile{agentProfile(agent)}, idx, a.repoScanMaxDepth())
+		presence, err := newAgentIntegrationService().BuildPresenceIndex(a.ctx, []agentdomain.AgentProfile{agent}, idx, a.repoScanMaxDepth())
 		if err != nil {
 			return nil, err
 		}

@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
-	"github.com/shinerio/skillflow/core/skillkey"
 )
 
 type CheckResult struct {
@@ -43,7 +43,7 @@ func (c *Checker) Check(ctx context.Context, sk *skilldomain.InstalledSkill) (Ch
 	reqURL := fmt.Sprintf("%s/repos/%s/%s/commits", c.baseURL, owner, repo)
 	query := url.Values{}
 	query.Set("per_page", "1")
-	if normalized := skillkey.NormalizeRepoSubPath(subPath); normalized != "" && normalized != "." {
+	if normalized := logicalkey.NormalizeRepoSubPath(subPath); normalized != "" && normalized != "." {
 		query.Set("path", normalized)
 	}
 	req, _ := http.NewRequestWithContext(ctx, "GET", reqURL+"?"+query.Encode(), nil)

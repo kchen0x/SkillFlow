@@ -19,9 +19,8 @@ var registeredAgentGateways = map[string]agentgateway.AgentGateway{}
 
 func registerAdapters() {
 	registeredAgentGateways = map[string]agentgateway.AgentGateway{}
-	agents := []string{"claude-code", "opencode", "codex", "gemini-cli", "openclaw"}
-	for _, name := range agents {
-		registerAgentGateway(agentgatewayinfra.NewFilesystemAdapter(name, config.DefaultAgentPushDir(name)))
+	for _, name := range agentdomain.BuiltinAgentNames() {
+		registerAgentGateway(agentgatewayinfra.NewFilesystemAdapter(name, agentdomain.DefaultProfile(name).PushDir))
 	}
 }
 
@@ -32,42 +31,6 @@ func registerAgentGateway(gateway agentgateway.AgentGateway) {
 func agentGateway(name string) (agentgateway.AgentGateway, bool) {
 	gateway, ok := registeredAgentGateways[name]
 	return gateway, ok
-}
-
-func agentProfile(cfg config.AgentConfig) agentdomain.AgentProfile {
-	return agentdomain.AgentProfile{
-		Name:     cfg.Name,
-		ScanDirs: append([]string(nil), cfg.ScanDirs...),
-		PushDir:  cfg.PushDir,
-		Enabled:  cfg.Enabled,
-		Custom:   cfg.Custom,
-	}
-}
-
-func agentProfiles(cfgs []config.AgentConfig) []agentdomain.AgentProfile {
-	profiles := make([]agentdomain.AgentProfile, 0, len(cfgs))
-	for _, cfg := range cfgs {
-		profiles = append(profiles, agentProfile(cfg))
-	}
-	return profiles
-}
-
-func agentConfig(profile agentdomain.AgentProfile) config.AgentConfig {
-	return config.AgentConfig{
-		Name:     profile.Name,
-		ScanDirs: append([]string(nil), profile.ScanDirs...),
-		PushDir:  profile.PushDir,
-		Enabled:  profile.Enabled,
-		Custom:   profile.Custom,
-	}
-}
-
-func agentConfigs(profiles []agentdomain.AgentProfile) []config.AgentConfig {
-	cfgs := make([]config.AgentConfig, 0, len(profiles))
-	for _, profile := range profiles {
-		cfgs = append(cfgs, agentConfig(profile))
-	}
-	return cfgs
 }
 
 func resolveAgentGateway(profile agentdomain.AgentProfile) agentgateway.AgentGateway {

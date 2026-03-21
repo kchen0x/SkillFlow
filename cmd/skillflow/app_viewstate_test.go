@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/readmodel/viewstate"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
-	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

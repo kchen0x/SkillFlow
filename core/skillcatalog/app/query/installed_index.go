@@ -3,18 +3,18 @@ package query
 import (
 	"strings"
 
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
 	"github.com/shinerio/skillflow/core/skillcatalog/domain"
-	"github.com/shinerio/skillflow/core/skillkey"
 )
 
 type CorrelationStatus struct {
-	LogicalKey    string                 `json:"logicalKey,omitempty"`
-	MatchStrength skillkey.MatchStrength `json:"matchStrength,omitempty"`
-	Source        string                 `json:"source,omitempty"`
-	Installed     bool                   `json:"installed"`
-	Imported      bool                   `json:"imported"`
-	Updatable     bool                   `json:"updatable"`
-	ContentKeys   []string               `json:"-"`
+	LogicalKey    string                   `json:"logicalKey,omitempty"`
+	MatchStrength logicalkey.MatchStrength `json:"matchStrength,omitempty"`
+	Source        string                   `json:"source,omitempty"`
+	Installed     bool                     `json:"installed"`
+	Imported      bool                     `json:"imported"`
+	Updatable     bool                     `json:"updatable"`
+	ContentKeys   []string                 `json:"-"`
 }
 
 type InstalledIndex struct {
@@ -65,7 +65,7 @@ func BuildInstalledIndex(skills []*domain.InstalledSkill) *InstalledIndex {
 		}
 
 		if strings.TrimSpace(sk.Path) != "" {
-			if contentKey, err := skillkey.ContentFromDir(sk.Path); err == nil && strings.TrimSpace(contentKey) != "" {
+			if contentKey, err := logicalkey.ContentFromDir(sk.Path); err == nil && strings.TrimSpace(contentKey) != "" {
 				if contentGroups[contentKey] == nil {
 					contentGroups[contentKey] = map[string]*installedGroup{}
 				}
@@ -98,10 +98,10 @@ func (idx *InstalledIndex) Resolve(name, logicalKey string) CorrelationStatus {
 
 	if logicalKey != "" {
 		if group, ok := idx.byLogical[logicalKey]; ok {
-			return group.status(logicalKey, skillkey.MatchStrengthLogical)
+			return group.status(logicalKey, logicalkey.MatchStrengthLogical)
 		}
 		if groups := idx.byContent[logicalKey]; len(groups) == 1 {
-			return groups[0].status(coalesceLogicalKey(groups[0].LogicalKey, logicalKey), skillkey.MatchStrengthContent)
+			return groups[0].status(coalesceLogicalKey(groups[0].LogicalKey, logicalKey), logicalkey.MatchStrengthContent)
 		}
 	}
 
@@ -110,7 +110,7 @@ func (idx *InstalledIndex) Resolve(name, logicalKey string) CorrelationStatus {
 		return CorrelationStatus{LogicalKey: logicalKey}
 	}
 	if groups := idx.byName[nameKey]; len(groups) == 1 {
-		return groups[0].status(coalesceLogicalKey(logicalKey, groups[0].LogicalKey), skillkey.MatchStrengthFallback)
+		return groups[0].status(coalesceLogicalKey(logicalKey, groups[0].LogicalKey), logicalkey.MatchStrengthFallback)
 	}
 
 	return CorrelationStatus{LogicalKey: logicalKey}
@@ -120,7 +120,7 @@ func (idx *InstalledIndex) IsInstalled(name, logicalKey string) bool {
 	return idx.Resolve(name, logicalKey).Installed
 }
 
-func (g *installedGroup) status(logicalKey string, matchStrength skillkey.MatchStrength) CorrelationStatus {
+func (g *installedGroup) status(logicalKey string, matchStrength logicalkey.MatchStrength) CorrelationStatus {
 	status := CorrelationStatus{
 		LogicalKey:    logicalKey,
 		MatchStrength: matchStrength,
@@ -156,7 +156,7 @@ func (g *installedGroup) contentKeys() []string {
 		if sk == nil || strings.TrimSpace(sk.Path) == "" {
 			continue
 		}
-		contentKey, err := skillkey.ContentFromDir(sk.Path)
+		contentKey, err := logicalkey.ContentFromDir(sk.Path)
 		if err != nil || strings.TrimSpace(contentKey) == "" {
 			continue
 		}

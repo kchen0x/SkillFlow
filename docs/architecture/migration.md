@@ -25,8 +25,16 @@ As of 2026-03-21:
 - `cmd/skillflow` and supporting backend packages no longer import `core/applog`
 - `cmd/skillflow` and supporting backend packages no longer import `core/pathutil`
 - `cmd/skillflow` and supporting backend packages no longer import `core/update`
+- `cmd/skillflow` and supporting backend packages no longer import `core/skillkey`
+- `cmd/skillflow` and supporting backend packages no longer import `core/upgrade`
+- `cmd/skillflow` and supporting backend packages no longer import `core/viewstate`
 - `cmd/skillflow` no longer imports `core/registry`
-- the old `core/skill`, `core/prompt`, `core/sync`, `core/git`, flat `core/backup`, `core/notify`, `core/applog`, `core/pathutil`, `core/update`, and `core/registry` packages have been removed
+- the old `core/skill`, `core/prompt`, `core/sync`, `core/git`, flat `core/backup`, `core/notify`, `core/applog`, `core/pathutil`, `core/update`, `core/skillkey`, `core/upgrade`, `core/viewstate`, and `core/registry` packages have been removed
+- `core/config` now delegates generic file-path and JSON persistence mechanics to `core/platform/settingsstore`
+- built-in agent names and default scan/push directories now live in `core/agentintegration/domain`
+- `config.AppConfig.Agents` now reuses the context-owned `agentintegration/domain.AgentProfile` type
+- window-state type and persistence helpers now live in `core/platform/settingsstore` with `core/config` compatibility wrappers
+- log-level string constants and normalization now live in `core/platform/logging` with `core/config` compatibility wrappers
 
 This means the initial bounded-context extraction set is in place. `skillcatalog`, `promptcatalog`, `agentintegration`, `skillsource`, and `backup` are now the reference patterns for the remaining platform and cross-cutting migrations.
 
@@ -40,13 +48,13 @@ This means the initial bounded-context extraction set is in place. `skillcatalog
 | `core/git` starred-source parts | `core/skillsource/domain` with `StarRepo` and `SkillSource` models + `core/skillsource/infra` |
 | `core/git` Git primitives | `core/platform/git` |
 | `core/backup` provider and snapshot logic | `core/backup/domain` + `core/backup/infra` |
-| `core/config` | `core/platform/settingsstore` + context-owned config namespaces |
+| `core/config` | transitional compatibility layer over `core/platform/settingsstore` + future context-owned config namespaces; built-in agent defaults and profile type moved to `core/agentintegration/domain`, window-state persistence moved to `core/platform/settingsstore`, and log-level semantics moved to `core/platform/logging` |
 | `core/applog` | `core/platform/logging` |
 | `core/notify` | `core/platform/eventbus` |
 | `core/pathutil` | `core/platform/pathutil` |
 | `core/skillkey` | `core/shared/logicalkey` |
 | `core/upgrade` | `core/platform/upgrade` |
-| `core/viewstate` | `core/readmodel` or context-local `infra/projection` |
+| `core/viewstate` | `core/readmodel/viewstate` |
 | `core/registry` | shell composition concerns in `cmd/skillflow` |
 | `core/update` app-release pieces | `core/platform/update` plus shell-facing adapters in `cmd/skillflow` |
 | `cmd/skillflow/app*.go` business methods | Wails transport adapters in `cmd/skillflow` delegating to context `app`, `orchestration`, and `readmodel` |

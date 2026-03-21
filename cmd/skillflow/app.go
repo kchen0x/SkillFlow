@@ -20,14 +20,14 @@ import (
 	"github.com/shinerio/skillflow/core/platform/eventbus"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/platform/logging"
+	"github.com/shinerio/skillflow/core/platform/upgrade"
+	"github.com/shinerio/skillflow/core/readmodel/viewstate"
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
-	"github.com/shinerio/skillflow/core/skillkey"
 	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
-	"github.com/shinerio/skillflow/core/upgrade"
-	"github.com/shinerio/skillflow/core/viewstate"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -630,7 +630,7 @@ func (a *App) PushStarSkillsToAgents(skillPaths []string, agentNames []string) (
 			Path: skillPath,
 		})
 	}
-	conflicts, err := newAgentIntegrationService().PushSkills(a.ctx, agentProfiles(cfg.Agents), agentNames, tempSkills, false)
+	conflicts, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, tempSkills, false)
 	if err != nil {
 		a.logErrorf("push starred skills to agents failed: err=%v", err)
 		return nil, err
@@ -651,7 +651,7 @@ func (a *App) PushStarSkillsToAgentsForce(skillPaths []string, agentNames []stri
 			Path: skillPath,
 		})
 	}
-	if _, err := newAgentIntegrationService().PushSkills(a.ctx, agentProfiles(cfg.Agents), agentNames, tempSkills, true); err != nil {
+	if _, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, tempSkills, true); err != nil {
 		a.logErrorf("force push starred skills to agents failed: err=%v", err)
 		return err
 	}
@@ -684,7 +684,7 @@ func (a *App) autoPushAgentTargets(cfg config.AppConfig) []agentdomain.AgentProf
 			continue
 		}
 		if _, ok := selected[agent.Name]; ok {
-			targets = append(targets, agentProfile(agent))
+			targets = append(targets, agent)
 		}
 	}
 	return targets
@@ -729,13 +729,13 @@ func (a *App) GetEnabledAgents() ([]config.AgentConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	return agentConfigs(newAgentIntegrationService().EnabledProfiles(agentProfiles(cfg.Agents))), nil
+	return newAgentIntegrationService().EnabledProfiles(cfg.Agents), nil
 }
 
 // ScanAgentSkills lists all skills in an agent's configured scan directories for the pull page.
 func (a *App) ScanAgentSkills(agentName string) ([]agentdomain.AgentSkillCandidate, error) {
 	cfg, _ := a.config.Load()
-	profile, ok := agentapp.FindProfile(agentProfiles(cfg.Agents), agentName)
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
 	if !ok {
 		return nil, nil
 	}
@@ -753,7 +753,7 @@ func (a *App) ListAgentSkills(agentName string) ([]agentdomain.AgentSkillEntry, 
 	if err != nil {
 		return nil, err
 	}
-	profile, ok := agentapp.FindProfile(agentProfiles(cfg.Agents), agentName)
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
 	if !ok {
 		return nil, fmt.Errorf("agent %s not found", agentName)
 	}
@@ -771,7 +771,7 @@ func (a *App) DeleteAgentSkill(agentName string, skillPath string) error {
 	if err != nil {
 		return err
 	}
-	profile, ok := agentapp.FindProfile(agentProfiles(cfg.Agents), agentName)
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
 	if !ok {
 		return fmt.Errorf("agent %s not found", agentName)
 	}
@@ -788,7 +788,7 @@ func (a *App) DeleteAgentSkill(agentName string, skillPath string) error {
 // Each element is map{"name": agentName, "dir": pushDir}.
 func (a *App) CheckMissingAgentPushDirs(agentNames []string) ([]agentdomain.MissingPushDir, error) {
 	cfg, _ := a.config.Load()
-	return newAgentIntegrationService().CheckMissingPushDirs(agentProfiles(cfg.Agents), agentNames)
+	return newAgentIntegrationService().CheckMissingPushDirs(cfg.Agents, agentNames)
 }
 
 // PushToAgents pushes selected skills to target agents.
@@ -811,7 +811,7 @@ func (a *App) PushToAgents(skillIDs []string, agentNames []string) ([]agentdomai
 			selected = append(selected, sk)
 		}
 	}
-	conflicts, err := newAgentIntegrationService().PushSkills(a.ctx, agentProfiles(cfg.Agents), agentNames, selected, false)
+	conflicts, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, selected, false)
 	if err != nil {
 		a.logErrorf("push skills to agents failed: %v", err)
 		return nil, err
@@ -835,7 +835,7 @@ func (a *App) PushToAgentsForce(skillIDs []string, agentNames []string) error {
 			selected = append(selected, sk)
 		}
 	}
-	if _, err := newAgentIntegrationService().PushSkills(a.ctx, agentProfiles(cfg.Agents), agentNames, selected, true); err != nil {
+	if _, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, selected, true); err != nil {
 		a.logErrorf("force push skills to agents failed: %v", err)
 		return err
 	}
@@ -847,7 +847,7 @@ func (a *App) PushToAgentsForce(skillIDs []string, agentNames []string) error {
 func (a *App) PullFromAgent(agentName string, skillPaths []string, category string) ([]string, error) {
 	category = normalizeCategoryName(category)
 	cfg, _ := a.config.Load()
-	profile, ok := agentapp.FindProfile(agentProfiles(cfg.Agents), agentName)
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
 	if !ok {
 		return nil, nil
 	}
@@ -886,7 +886,7 @@ func (a *App) PullFromAgent(agentName string, skillPaths []string, category stri
 func (a *App) PullFromAgentForce(agentName string, skillPaths []string, category string) error {
 	category = normalizeCategoryName(category)
 	cfg, _ := a.config.Load()
-	profile, ok := agentapp.FindProfile(agentProfiles(cfg.Agents), agentName)
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
 	if !ok {
 		return nil
 	}
@@ -1160,7 +1160,7 @@ func (a *App) CheckUpdates() error {
 		if sk == nil || !sk.IsGitHub() {
 			continue
 		}
-		logicalKey, logicalErr := skillkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath)
+		logicalKey, logicalErr := logicalkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath)
 		if logicalErr != nil || strings.TrimSpace(logicalKey) == "" {
 			if logicalErr != nil {
 				a.logErrorf("check skill updates failed: skillID=%s name=%s err=%v", sk.ID, sk.Name, logicalErr)
@@ -1376,7 +1376,7 @@ func (a *App) refreshUpdatedPushedSkillCopies(sk *skilldomain.InstalledSkill) er
 	}
 
 	a.logInfof("refresh updated pushed skill copies started: skill=%s", sk.Name)
-	if err := newAgentIntegrationService().RefreshPushedCopies(a.ctx, agentProfiles(cfg.Agents), sk); err != nil {
+	if err := newAgentIntegrationService().RefreshPushedCopies(a.ctx, cfg.Agents, sk); err != nil {
 		a.logErrorf("refresh updated pushed skill copies failed: skill=%s err=%v", sk.Name, err)
 		return err
 	}
@@ -1643,7 +1643,7 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	for _, skillPath := range skillPaths {
 		subPath, _ := filepath.Rel(repoLocalDir, skillPath)
 		subPath = filepath.ToSlash(subPath)
-		logicalKey := skillkey.GitFromRepoURLOrEmpty(canonicalRepoURL, subPath)
+		logicalKey := logicalkey.GitFromRepoURLOrEmpty(canonicalRepoURL, subPath)
 		if installedIndex.IsInstalled(filepath.Base(skillPath), logicalKey) {
 			continue
 		}

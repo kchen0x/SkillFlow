@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shinerio/skillflow/core/skillkey"
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
 )
 
 type SourceType string
@@ -42,12 +42,12 @@ func LogicalKey(sk *InstalledSkill) (string, error) {
 		return "", nil
 	}
 	if sk.IsGitHub() {
-		if logicalKey, err := skillkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath); err == nil && strings.TrimSpace(logicalKey) != "" {
+		if logicalKey, err := logicalkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath); err == nil && strings.TrimSpace(logicalKey) != "" {
 			return logicalKey, nil
 		}
 	}
 	if strings.TrimSpace(sk.Path) == "" {
 		return "", nil
 	}
-	return skillkey.ContentFromDir(sk.Path)
+	return logicalkey.ContentFromDir(sk.Path)
 }

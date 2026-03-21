@@ -1,14 +1,14 @@
 package config
 
-import "strings"
+import (
+	"strings"
 
-type AgentConfig struct {
-	Name     string   `json:"name"`
-	ScanDirs []string `json:"scanDirs"`
-	PushDir  string   `json:"pushDir"`
-	Enabled  bool     `json:"enabled"`
-	Custom   bool     `json:"custom"`
-}
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	"github.com/shinerio/skillflow/core/platform/logging"
+	"github.com/shinerio/skillflow/core/platform/settingsstore"
+)
+
+type AgentConfig = agentdomain.AgentProfile
 
 type CloudConfig struct {
 	Provider            string            `json:"provider"`
@@ -42,10 +42,7 @@ type ProxyConfig struct {
 	URL  string    `json:"url"`  // used when Mode == "manual", e.g. "http://127.0.0.1:7890"
 }
 
-type WindowState struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-}
+type WindowState = settingsstore.WindowState
 
 type AppConfig struct {
 	SkillsStorageDir      string                         `json:"skillsStorageDir"`
@@ -67,23 +64,14 @@ const (
 	LogLevelDebug           = "debug"
 	LogLevelInfo            = "info"
 	LogLevelError           = "error"
-	DefaultLogLevel         = LogLevelError
+	DefaultLogLevel         = logging.DefaultLevelString
 	DefaultRepoScanMaxDepth = 5
 	MinRepoScanMaxDepth     = 1
 	MaxRepoScanMaxDepth     = 20
-	MinWindowWidth          = 640
-	MinWindowHeight         = 480
 )
 
 func NormalizeLogLevel(level string) string {
-	switch strings.ToLower(strings.TrimSpace(level)) {
-	case LogLevelDebug:
-		return LogLevelDebug
-	case LogLevelError:
-		return LogLevelError
-	default:
-		return DefaultLogLevel
-	}
+	return logging.NormalizeLevelString(level)
 }
 
 func NormalizeAgentNameList(names []string) []string {
@@ -156,14 +144,5 @@ func NormalizeProxyConfig(proxy ProxyConfig) ProxyConfig {
 }
 
 func NormalizeWindowState(state WindowState) WindowState {
-	if state.Width < MinWindowWidth {
-		state.Width = 0
-	}
-	if state.Height < MinWindowHeight {
-		state.Height = 0
-	}
-	if state.Width == 0 || state.Height == 0 {
-		return WindowState{}
-	}
-	return state
+	return settingsstore.NormalizeWindowState(state)
 }

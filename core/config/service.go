@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	"github.com/shinerio/skillflow/core/platform/settingsstore"
 )
 
 // sharedConfig is stored in config.json and safe to sync across platforms.
@@ -68,9 +71,7 @@ type legacyAppConfig struct {
 }
 
 type Service struct {
-	dataDir         string
-	configPath      string
-	localConfigPath string
+	store *settingsstore.Store
 }
 
 type LocalRuntimeConfig struct {
@@ -79,17 +80,15 @@ type LocalRuntimeConfig struct {
 
 func NewService(dataDir string) *Service {
 	return &Service{
-		dataDir:         dataDir,
-		configPath:      filepath.Join(dataDir, "config.json"),
-		localConfigPath: filepath.Join(dataDir, "config_local.json"),
+		store: settingsstore.New(dataDir),
 	}
 }
 
 // DataDir returns the app data root used by this config service.
-func (s *Service) DataDir() string { return s.dataDir }
+func (s *Service) DataDir() string { return s.store.DataDir() }
 
 // LocalConfigPath returns the path to the local (non-synced) config file.
-func (s *Service) LocalConfigPath() string { return s.localConfigPath }
+func (s *Service) LocalConfigPath() string { return s.store.LocalPath() }
 
 // LoadLocalRuntimeConfig returns the local-only settings that remain readable
 // even when synced files like config.json are temporarily conflicted.
@@ -109,17 +108,17 @@ func (s *Service) Load() (AppConfig, error) {
 	}
 	local := s.loadLocal()
 	if s.migrateCloudStorage(&shared, &local) {
-		_ = os.MkdirAll(s.dataDir, 0755)
+		_ = os.MkdirAll(s.DataDir(), 0755)
 		_ = s.saveShared(shared)
 		_ = s.saveLocal(local)
 	}
 	cfg := s.merge(shared, local)
 
-	_ = os.MkdirAll(s.dataDir, 0755)
-	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
+	_ = os.MkdirAll(s.DataDir(), 0755)
+	if _, err := os.Stat(s.store.SharedPath()); os.IsNotExist(err) {
 		_ = s.saveShared(s.splitShared(cfg))
 	}
-	if _, err := os.Stat(s.localConfigPath); os.IsNotExist(err) {
+	if _, err := os.Stat(s.store.LocalPath()); os.IsNotExist(err) {
 		_ = s.saveLocal(s.splitLocal(cfg))
 	}
 
@@ -127,7 +126,7 @@ func (s *Service) Load() (AppConfig, error) {
 }
 
 func (s *Service) Save(cfg AppConfig) error {
-	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+	if err := os.MkdirAll(s.DataDir(), 0755); err != nil {
 		return err
 	}
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
@@ -163,10 +162,10 @@ func (s *Service) Save(cfg AppConfig) error {
 // into the new split format. It is a no-op when config_local.json already exists
 // or when config.json does not exist yet.
 func (s *Service) maybeMigrate() {
-	if _, err := os.Stat(s.localConfigPath); err == nil {
+	if _, err := os.Stat(s.store.LocalPath()); err == nil {
 		return
 	}
-	data, err := os.ReadFile(s.configPath)
+	data, err := os.ReadFile(s.store.SharedPath())
 	if err != nil {
 		return
 	}
@@ -184,16 +183,13 @@ func (s *Service) maybeMigrate() {
 }
 
 func (s *Service) loadShared() (sharedConfig, error) {
-	data, err := os.ReadFile(s.configPath)
+	var sc sharedConfig
+	exists, err := s.store.ReadShared(&sc)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return s.defaultShared(), nil
-		}
 		return sharedConfig{}, err
 	}
-	var sc sharedConfig
-	if err := json.Unmarshal(data, &sc); err != nil {
-		return sharedConfig{}, err
+	if !exists {
+		return s.defaultShared(), nil
 	}
 	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
@@ -204,7 +200,8 @@ func (s *Service) loadShared() (sharedConfig, error) {
 		Cloud CloudConfig  `json:"cloud"`
 		Proxy *ProxyConfig `json:"proxy"`
 	}
-	if err := json.Unmarshal(data, &legacy); err == nil {
+	data, err := os.ReadFile(s.store.SharedPath())
+	if err == nil && json.Unmarshal(data, &legacy) == nil {
 		provider := strings.TrimSpace(legacy.Cloud.Provider)
 		if provider != "" {
 			if sc.Cloud.Provider == "" {
@@ -227,16 +224,13 @@ func (s *Service) loadShared() (sharedConfig, error) {
 }
 
 func (s *Service) loadLocal() localConfig {
-	data, err := os.ReadFile(s.localConfigPath)
-	if err != nil {
-		return s.defaultLocal()
-	}
 	var lc localConfig
-	if err := json.Unmarshal(data, &lc); err != nil {
+	exists, err := s.store.ReadLocal(&lc)
+	if err != nil || !exists {
 		return s.defaultLocal()
 	}
 	if lc.SkillsStorageDir == "" {
-		lc.SkillsStorageDir = filepath.Join(s.dataDir, "skills")
+		lc.SkillsStorageDir = filepath.Join(s.DataDir(), "skills")
 	}
 	lc.AutoPushAgents = NormalizeAgentNameList(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
@@ -257,11 +251,7 @@ func (s *Service) saveShared(sc sharedConfig) error {
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
 	sc.SkillStatusVisibility = NormalizeSkillStatusVisibility(sc.SkillStatusVisibility)
 	sc.CloudProfiles = splitSharedCloudProfiles(sc.CloudProfiles)
-	data, err := json.MarshalIndent(sc, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(s.configPath, data, 0644)
+	return s.store.WriteShared(sc)
 }
 
 func (s *Service) saveLocal(lc localConfig) error {
@@ -277,37 +267,25 @@ func (s *Service) saveLocal(lc localConfig) error {
 			lc.Window = &normalized
 		}
 	}
-	data, err := json.MarshalIndent(lc, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(s.localConfigPath, data, 0644)
+	return s.store.WriteLocal(lc)
 }
 
 func (s *Service) LoadWindowState() (WindowState, bool) {
-	local := s.loadLocal()
-	if local.Window == nil {
+	state, ok, err := s.store.LoadWindowState()
+	if err != nil {
 		return WindowState{}, false
 	}
-	return *local.Window, true
+	return state, ok
 }
 
 func (s *Service) SaveWindowState(state WindowState) error {
-	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
-		return err
-	}
-	normalized := NormalizeWindowState(state)
-	if normalized.Width == 0 || normalized.Height == 0 {
-		return nil
-	}
-	local := s.loadLocal()
-	local.Window = &normalized
-	return s.saveLocal(local)
+	return s.store.SaveWindowState(state)
 }
 
 func (s *Service) defaultShared() sharedConfig {
-	agents := make([]sharedAgentConfig, 0, len(builtinAgents))
-	for _, name := range builtinAgents {
+	names := agentdomain.BuiltinAgentNames()
+	agents := make([]sharedAgentConfig, 0, len(names))
+	for _, name := range names {
 		agents = append(agents, sharedAgentConfig{Name: name, Enabled: true})
 	}
 	return sharedConfig{
@@ -320,16 +298,18 @@ func (s *Service) defaultShared() sharedConfig {
 }
 
 func (s *Service) defaultLocal() localConfig {
-	agents := make([]localAgentConfig, 0, len(builtinAgents))
-	for _, name := range builtinAgents {
+	names := agentdomain.BuiltinAgentNames()
+	agents := make([]localAgentConfig, 0, len(names))
+	for _, name := range names {
+		profile := agentdomain.DefaultProfile(name)
 		agents = append(agents, localAgentConfig{
-			Name:     name,
-			ScanDirs: DefaultAgentScanDirs(name),
-			PushDir:  DefaultAgentPushDir(name),
+			Name:     profile.Name,
+			ScanDirs: profile.ScanDirs,
+			PushDir:  profile.PushDir,
 		})
 	}
 	return localConfig{
-		SkillsStorageDir: filepath.Join(s.dataDir, "skills"),
+		SkillsStorageDir: filepath.Join(s.DataDir(), "skills"),
 		Agents:           agents,
 		Proxy:            ProxyConfig{Mode: ProxyModeNone},
 	}
@@ -350,8 +330,9 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		sharedMap[sa.Name] = sa
 	}
 
-	agents := make([]AgentConfig, 0, len(builtinAgents)+len(local.Agents))
-	for _, name := range builtinAgents {
+	builtinNames := agentdomain.BuiltinAgentNames()
+	agents := make([]AgentConfig, 0, len(builtinNames)+len(local.Agents))
+	for _, name := range builtinNames {
 		sa, ok := sharedMap[name]
 		enabled := true
 		if ok {
@@ -360,11 +341,12 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		la := localMap[name]
 		scanDirs := la.ScanDirs
 		pushDir := la.PushDir
+		defaultProfile := agentdomain.DefaultProfile(name)
 		if len(scanDirs) == 0 {
-			scanDirs = DefaultAgentScanDirs(name)
+			scanDirs = defaultProfile.ScanDirs
 		}
 		if pushDir == "" {
-			pushDir = DefaultAgentPushDir(name)
+			pushDir = defaultProfile.PushDir
 		}
 		agents = append(agents, AgentConfig{
 			Name:     name,
