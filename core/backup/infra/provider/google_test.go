@@ -1,6 +1,6 @@
 //go:build !provider_select || backup_google
 
-package backup
+package provider
 
 import (
 	"os"
@@ -21,7 +21,7 @@ func TestGoogleCredentialOptionAcceptsInlineJSON(t *testing.T) {
 func TestGoogleCredentialOptionAcceptsFilePath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "service-account.json")
-	if err := os.WriteFile(path, []byte(`{"type":"service_account","project_id":"demo"}`), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"type":"service_account","project_id":"demo"}`), 0o644); err != nil {
 		t.Fatalf("write temp credentials failed: %v", err)
 	}
 

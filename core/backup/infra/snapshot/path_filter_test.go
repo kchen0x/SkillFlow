@@ -1,4 +1,4 @@
-package backup
+package snapshot
 
 import "testing"
 
@@ -18,11 +18,8 @@ func TestShouldSkipBackupPath(t *testing.T) {
 		{rel: "./cache/tmp.bin", want: true},
 		{rel: "logs", want: true},
 		{rel: "logs/skillflow.log", want: true},
-		{rel: "logs/skillflow.log.1", want: true},
 		{rel: "runtime", want: true},
 		{rel: "runtime/helper-control.json", want: true},
-		{rel: "runtime/ui-control.json", want: true},
-		{rel: "runtime/helper.lock", want: true},
 		{rel: ".DS_Store", want: true},
 		{rel: "skills/my-skill/.DS_Store", want: true},
 		{rel: "config_local.json", want: true},

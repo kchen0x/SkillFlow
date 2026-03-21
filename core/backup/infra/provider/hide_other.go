@@ -1,6 +1,6 @@
 //go:build !windows
 
-package backup
+package provider
 
 import "os/exec"
 

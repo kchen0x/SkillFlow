@@ -1,4 +1,4 @@
-package backup
+package snapshot
 
 import (
 	"os"
@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-// MigrateLegacyNestedGitDir moves an obsolete nested .git entry out of the
-// skills storage directory when the active backup root is a parent directory.
-// This prevents the outer backup repo from treating the skills directory as an
-// embedded repository and skipping its contents.
 func MigrateLegacyNestedGitDir(skillsDir, backupRoot string) (string, bool, error) {
 	cleanSkillsDir := filepath.Clean(skillsDir)
 	cleanBackupRoot := filepath.Clean(backupRoot)

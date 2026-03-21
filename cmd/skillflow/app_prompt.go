@@ -18,7 +18,7 @@ func (a *App) promptService() (*promptcatalogapp.Service, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	root := filepath.Join(a.backupRootDir(cfg), "prompts")
+	root := filepath.Join(a.newBackupService().BackupRootDir(a.backupProfile(cfg)), "prompts")
 	return promptcatalogapp.NewService(promptrepo.NewFilesystemStorage(root)), root, nil
 }
 

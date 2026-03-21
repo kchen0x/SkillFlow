@@ -1,17 +1,17 @@
 //go:build !provider_select || backup_aliyun
 
-package backup
+package provider
 
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
+	snapshotinfra "github.com/shinerio/skillflow/core/backup/infra/snapshot"
 )
 
 type AliyunProvider struct {
@@ -21,14 +21,14 @@ type AliyunProvider struct {
 func NewAliyunProvider() *AliyunProvider { return &AliyunProvider{} }
 
 func init() {
-	RegisterProviderFactory(func() CloudProvider { return NewAliyunProvider() })
+	RegisterProviderFactory(func() backupdomain.CloudProvider { return NewAliyunProvider() })
 }
 
 func (a *AliyunProvider) Name() string { return "aliyun" }
 
-func (a *AliyunProvider) RequiredCredentials() []CredentialField {
-	return []CredentialField{
-		{Key: "access_key_id", Label: "Access Key ID", Secret: false},
+func (a *AliyunProvider) RequiredCredentials() []backupdomain.CredentialField {
+	return []backupdomain.CredentialField{
+		{Key: "access_key_id", Label: "Access Key ID"},
 		{Key: "access_key_secret", Label: "Access Key Secret", Secret: true},
 		{Key: "endpoint", Label: "Endpoint", Placeholder: "oss-cn-hangzhou.aliyuncs.com"},
 	}
@@ -48,7 +48,7 @@ func (a *AliyunProvider) Init(creds map[string]string) error {
 }
 
 func (a *AliyunProvider) Sync(_ context.Context, localDir, bucket, remotePath string, onProgress func(string)) error {
-	b, err := a.bucketHandle(bucket)
+	bucketHandle, err := a.bucketHandle(bucket)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (a *AliyunProvider) Sync(_ context.Context, localDir, bucket, remotePath st
 			return err
 		}
 		rel, _ := filepath.Rel(localDir, path)
-		if ShouldSkipBackupPath(rel) {
+		if snapshotinfra.ShouldSkipBackupPath(rel) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -70,31 +70,31 @@ func (a *AliyunProvider) Sync(_ context.Context, localDir, bucket, remotePath st
 		if onProgress != nil {
 			onProgress(rel)
 		}
-		return b.PutObjectFromFile(key, path)
+		return bucketHandle.PutObjectFromFile(key, path)
 	})
 }
 
 func (a *AliyunProvider) Restore(_ context.Context, bucket, remotePath, localDir string) error {
-	b, err := a.bucketHandle(bucket)
+	bucketHandle, err := a.bucketHandle(bucket)
 	if err != nil {
 		return err
 	}
 	marker := ""
 	for {
-		result, err := b.ListObjects(oss.Prefix(remotePath), oss.Marker(marker))
+		result, err := bucketHandle.ListObjects(oss.Prefix(remotePath), oss.Marker(marker))
 		if err != nil {
 			return err
 		}
 		for _, obj := range result.Objects {
 			rel := strings.TrimPrefix(obj.Key, remotePath)
-			if ShouldSkipBackupPath(rel) {
+			if snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
 			local := filepath.Join(localDir, filepath.FromSlash(rel))
-			if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
 				return err
 			}
-			if err := b.GetObjectToFile(obj.Key, local); err != nil {
+			if err := bucketHandle.GetObjectToFile(obj.Key, local); err != nil {
 				return err
 			}
 		}
@@ -106,27 +106,24 @@ func (a *AliyunProvider) Restore(_ context.Context, bucket, remotePath, localDir
 	return nil
 }
 
-func (a *AliyunProvider) List(_ context.Context, bucket, remotePath string) ([]RemoteFile, error) {
-	b, err := a.bucketHandle(bucket)
+func (a *AliyunProvider) List(_ context.Context, bucket, remotePath string) ([]backupdomain.RemoteFile, error) {
+	bucketHandle, err := a.bucketHandle(bucket)
 	if err != nil {
 		return nil, err
 	}
-	var files []RemoteFile
+	var files []backupdomain.RemoteFile
 	marker := ""
 	for {
-		result, err := b.ListObjects(oss.Prefix(remotePath), oss.Marker(marker))
+		result, err := bucketHandle.ListObjects(oss.Prefix(remotePath), oss.Marker(marker))
 		if err != nil {
 			return nil, err
 		}
 		for _, obj := range result.Objects {
 			rel := strings.TrimPrefix(obj.Key, remotePath)
-			if ShouldSkipBackupPath(rel) {
+			if snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
-			files = append(files, RemoteFile{
-				Path: rel,
-				Size: obj.Size,
-			})
+			files = append(files, backupdomain.RemoteFile{Path: rel, Size: obj.Size})
 		}
 		if !result.IsTruncated {
 			break
@@ -144,11 +141,11 @@ func (a *AliyunProvider) bucketHandle(bucket string) (*oss.Bucket, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := a.client.Bucket(name)
+	handle, err := a.client.Bucket(name)
 	if err != nil {
 		return nil, fmt.Errorf("open aliyun bucket %q failed: %w", name, err)
 	}
-	return b, nil
+	return handle, nil
 }
 
 func normalizeAliyunEndpoint(raw string) (string, error) {
@@ -157,7 +154,7 @@ func normalizeAliyunEndpoint(raw string) (string, error) {
 		return "", fmt.Errorf("aliyun endpoint is required")
 	}
 	parts := strings.Split(endpoint, ".")
-	if len(parts) >= 4 && strings.HasPrefix(parts[1], "oss-") {
+	if len(parts) >= 4 && strings.HasPrefix(parts[1], "oss-") && isValidBucketName(parts[0]) {
 		endpoint = strings.Join(parts[1:], ".")
 	}
 	return endpoint, nil
@@ -168,53 +165,15 @@ func normalizeAliyunBucketName(raw string) (string, error) {
 	if bucket == "" {
 		return "", fmt.Errorf("aliyun bucket name is required")
 	}
-	if isValidAliyunBucketName(bucket) {
+	if isValidBucketName(bucket) {
 		return bucket, nil
 	}
 	host := normalizeHostLikeValue(bucket)
 	if host != "" {
 		parts := strings.Split(host, ".")
-		if len(parts) >= 4 && strings.HasPrefix(parts[1], "oss-") && isValidAliyunBucketName(parts[0]) {
+		if len(parts) >= 4 && strings.HasPrefix(parts[1], "oss-") && isValidBucketName(parts[0]) {
 			return parts[0], nil
 		}
 	}
-	return "", fmt.Errorf("invalid aliyun bucket name %q: enter bucket name only, not the full OSS URL or host", raw)
-}
-
-func normalizeHostLikeValue(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return ""
-	}
-	if strings.Contains(value, "://") {
-		if parsed, err := url.Parse(value); err == nil && parsed.Host != "" {
-			value = parsed.Host
-		}
-	}
-	value = strings.TrimPrefix(value, "//")
-	if slash := strings.Index(value, "/"); slash >= 0 {
-		value = value[:slash]
-	}
-	if host, _, err := net.SplitHostPort(value); err == nil {
-		value = host
-	}
-	return strings.TrimSuffix(strings.TrimSpace(value), ".")
-}
-
-func isValidAliyunBucketName(name string) bool {
-	if len(name) < 3 || len(name) > 63 {
-		return false
-	}
-	for i, r := range name {
-		isLower := r >= 'a' && r <= 'z'
-		isDigit := r >= '0' && r <= '9'
-		isHyphen := r == '-'
-		if !isLower && !isDigit && !isHyphen {
-			return false
-		}
-		if (i == 0 || i == len(name)-1) && !isLower && !isDigit {
-			return false
-		}
-	}
-	return true
+	return "", invalidBucketNameError("aliyun oss", raw)
 }

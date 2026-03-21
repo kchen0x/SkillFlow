@@ -7,6 +7,8 @@ import (
 	agentgateway "github.com/shinerio/skillflow/core/agentintegration/app/port/gateway"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	agentgatewayinfra "github.com/shinerio/skillflow/core/agentintegration/infra/gateway"
+	backupapp "github.com/shinerio/skillflow/core/backup/app"
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/registry"
@@ -108,4 +110,23 @@ func (appSkillsourceGitClient) IsSSHAuthError(err error) bool {
 
 func (a *App) newSkillsourceService() *skillsourceapp.Service {
 	return skillsourceapp.NewService(a.starStorage, sourcediscovery.NewRepoScanner(), appSkillsourceGitClient{})
+}
+
+func resolveCloudProvider(name string) (backupdomain.CloudProvider, bool) {
+	return registry.GetCloudProvider(name)
+}
+
+func (a *App) newBackupService() *backupapp.Service {
+	return backupapp.NewService(resolveCloudProvider)
+}
+
+func (a *App) backupProfile(cfg config.AppConfig) backupdomain.BackupProfile {
+	return backupdomain.BackupProfile{
+		Provider:         cfg.Cloud.Provider,
+		BucketName:       cfg.Cloud.BucketName,
+		RemotePath:       cfg.Cloud.RemotePath,
+		Credentials:      cfg.Cloud.Credentials,
+		SkillsStorageDir: cfg.SkillsStorageDir,
+		AppDataDir:       config.AppDataDir(),
+	}
 }

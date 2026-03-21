@@ -1,4 +1,4 @@
-package backup
+package snapshot
 
 import (
 	"crypto/sha256"
@@ -9,17 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 )
 
-type Snapshot map[string]SnapshotEntry
-
-type SnapshotEntry struct {
-	Size int64  `json:"size"`
-	Hash string `json:"hash"`
-}
-
-func BuildSnapshot(root string) (Snapshot, error) {
-	snapshot := make(Snapshot)
+func BuildSnapshot(root string) (backupdomain.Snapshot, error) {
+	snapshot := make(backupdomain.Snapshot)
 
 	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
 		return snapshot, nil
@@ -55,7 +50,7 @@ func BuildSnapshot(root string) (Snapshot, error) {
 		if err != nil {
 			return err
 		}
-		snapshot[rel] = SnapshotEntry{
+		snapshot[rel] = backupdomain.SnapshotEntry{
 			Size: info.Size(),
 			Hash: hash,
 		}
@@ -68,16 +63,16 @@ func BuildSnapshot(root string) (Snapshot, error) {
 	return snapshot, nil
 }
 
-func DiffSnapshots(previous, current Snapshot) []RemoteFile {
-	changes := make([]RemoteFile, 0)
+func DiffSnapshots(previous, current backupdomain.Snapshot) []backupdomain.RemoteFile {
+	changes := make([]backupdomain.RemoteFile, 0)
 
 	for path, entry := range current {
 		prev, ok := previous[path]
 		switch {
 		case !ok:
-			changes = append(changes, RemoteFile{Path: path, Size: entry.Size, Action: "added"})
+			changes = append(changes, backupdomain.RemoteFile{Path: path, Size: entry.Size, Action: "added"})
 		case prev.Hash != entry.Hash:
-			changes = append(changes, RemoteFile{Path: path, Size: entry.Size, Action: "modified"})
+			changes = append(changes, backupdomain.RemoteFile{Path: path, Size: entry.Size, Action: "modified"})
 		}
 	}
 
@@ -85,7 +80,7 @@ func DiffSnapshots(previous, current Snapshot) []RemoteFile {
 		if _, ok := current[path]; ok {
 			continue
 		}
-		changes = append(changes, RemoteFile{Path: path, Size: entry.Size, Action: "deleted"})
+		changes = append(changes, backupdomain.RemoteFile{Path: path, Size: entry.Size, Action: "deleted"})
 	}
 
 	sort.Slice(changes, func(i, j int) bool {
@@ -98,29 +93,29 @@ func DiffSnapshots(previous, current Snapshot) []RemoteFile {
 	return changes
 }
 
-func LoadSnapshot(path string) (Snapshot, error) {
+func LoadSnapshot(path string) (backupdomain.Snapshot, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return make(Snapshot), nil
+		return make(backupdomain.Snapshot), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	if len(data) == 0 {
-		return make(Snapshot), nil
+		return make(backupdomain.Snapshot), nil
 	}
 
-	var snapshot Snapshot
+	var snapshot backupdomain.Snapshot
 	if err := json.Unmarshal(data, &snapshot); err != nil {
 		return nil, err
 	}
 	if snapshot == nil {
-		snapshot = make(Snapshot)
+		snapshot = make(backupdomain.Snapshot)
 	}
 	return snapshot, nil
 }
 
-func SaveSnapshot(path string, snapshot Snapshot) error {
+func SaveSnapshot(path string, snapshot backupdomain.Snapshot) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}

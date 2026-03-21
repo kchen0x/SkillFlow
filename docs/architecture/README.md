@@ -44,7 +44,7 @@ These documents cover backend architecture only. User-facing behavior remains do
 
 The codebase is not yet fully aligned with this architecture. Unless otherwise noted, this document set describes the target structure that future backend refactoring should converge toward.
 
-As of 2026-03-21, four end-to-end bounded contexts have been extracted under `core/`:
+As of 2026-03-21, five end-to-end bounded contexts have been extracted under `core/`:
 
 - `core/skillcatalog/app`
 - `core/skillcatalog/domain`
@@ -58,7 +58,10 @@ As of 2026-03-21, four end-to-end bounded contexts have been extracted under `co
 - `core/skillsource/app`
 - `core/skillsource/domain`
 - `core/skillsource/infra`
+- `core/backup/app`
+- `core/backup/domain`
+- `core/backup/infra`
 
-The old `core/skill`, `core/prompt`, `core/sync`, and `core/git` packages have been removed. Pure Git helpers now live in `core/platform/git`. Other domains and cross-cutting modules still need to migrate toward the same structure.
+The old `core/skill`, `core/prompt`, `core/sync`, `core/git`, and flat `core/backup` packages have been removed. Pure Git helpers now live in `core/platform/git`. Other domains and cross-cutting modules still need to migrate toward the same structure.
 
 *Last updated: 2026-03-21*

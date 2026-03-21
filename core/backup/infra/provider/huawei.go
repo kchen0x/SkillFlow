@@ -1,6 +1,6 @@
 //go:build !provider_select || backup_huawei
 
-package backup
+package provider
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	obs "github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
+	snapshotinfra "github.com/shinerio/skillflow/core/backup/infra/snapshot"
 )
 
 type HuaweiProvider struct {
@@ -19,14 +21,14 @@ type HuaweiProvider struct {
 func NewHuaweiProvider() *HuaweiProvider { return &HuaweiProvider{} }
 
 func init() {
-	RegisterProviderFactory(func() CloudProvider { return NewHuaweiProvider() })
+	RegisterProviderFactory(func() backupdomain.CloudProvider { return NewHuaweiProvider() })
 }
 
 func (h *HuaweiProvider) Name() string { return "huawei" }
 
-func (h *HuaweiProvider) RequiredCredentials() []CredentialField {
-	return []CredentialField{
-		{Key: "access_key_id", Label: "Access Key ID", Secret: false},
+func (h *HuaweiProvider) RequiredCredentials() []backupdomain.CredentialField {
+	return []backupdomain.CredentialField{
+		{Key: "access_key_id", Label: "Access Key ID"},
 		{Key: "secret_access_key", Label: "Secret Access Key", Secret: true},
 		{Key: "endpoint", Label: "Endpoint", Placeholder: "obs.cn-north-4.myhuaweicloud.com"},
 	}
@@ -55,7 +57,7 @@ func (h *HuaweiProvider) Sync(_ context.Context, localDir, bucket, remotePath st
 			return err
 		}
 		rel, _ := filepath.Rel(localDir, path)
-		if ShouldSkipBackupPath(rel) {
+		if snapshotinfra.ShouldSkipBackupPath(rel) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -91,11 +93,11 @@ func (h *HuaweiProvider) Restore(_ context.Context, bucket, remotePath, localDir
 		}
 		for _, obj := range result.Contents {
 			rel := strings.TrimPrefix(obj.Key, remotePath)
-			if ShouldSkipBackupPath(rel) {
+			if snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
 			local := filepath.Join(localDir, filepath.FromSlash(rel))
-			if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
 				return err
 			}
 			getInput := &obs.GetObjectInput{}
@@ -105,14 +107,14 @@ func (h *HuaweiProvider) Restore(_ context.Context, bucket, remotePath, localDir
 			if err != nil {
 				return err
 			}
-			f, err := os.Create(local)
+			file, err := os.Create(local)
 			if err != nil {
 				resp.Body.Close()
 				return err
 			}
-			_, err = f.ReadFrom(resp.Body)
+			_, err = file.ReadFrom(resp.Body)
 			resp.Body.Close()
-			f.Close()
+			file.Close()
 			if err != nil {
 				return err
 			}
@@ -125,14 +127,14 @@ func (h *HuaweiProvider) Restore(_ context.Context, bucket, remotePath, localDir
 	return nil
 }
 
-func (h *HuaweiProvider) List(_ context.Context, bucket, remotePath string) ([]RemoteFile, error) {
+func (h *HuaweiProvider) List(_ context.Context, bucket, remotePath string) ([]backupdomain.RemoteFile, error) {
 	bucketName, err := h.bucketName(bucket)
 	if err != nil {
 		return nil, err
 	}
 	input := &obs.ListObjectsInput{Bucket: bucketName}
 	input.Prefix = remotePath
-	var files []RemoteFile
+	var files []backupdomain.RemoteFile
 	for {
 		result, err := h.client.ListObjects(input)
 		if err != nil {
@@ -140,13 +142,10 @@ func (h *HuaweiProvider) List(_ context.Context, bucket, remotePath string) ([]R
 		}
 		for _, obj := range result.Contents {
 			rel := strings.TrimPrefix(obj.Key, remotePath)
-			if ShouldSkipBackupPath(rel) {
+			if snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
-			files = append(files, RemoteFile{
-				Path: rel,
-				Size: obj.Size,
-			})
+			files = append(files, backupdomain.RemoteFile{Path: rel, Size: obj.Size})
 		}
 		if !result.IsTruncated {
 			break
@@ -160,11 +159,7 @@ func (h *HuaweiProvider) bucketName(raw string) (string, error) {
 	if h.client == nil {
 		return "", fmt.Errorf("huawei obs client is not initialized")
 	}
-	bucket, err := normalizeHuaweiBucketName(raw)
-	if err != nil {
-		return "", err
-	}
-	return bucket, nil
+	return normalizeHuaweiBucketName(raw)
 }
 
 func normalizeHuaweiEndpoint(raw string) (string, error) {
@@ -173,7 +168,7 @@ func normalizeHuaweiEndpoint(raw string) (string, error) {
 		return "", fmt.Errorf("huawei obs endpoint is required")
 	}
 	parts := strings.Split(endpoint, ".")
-	if len(parts) >= 5 && parts[1] == "obs" && isValidHuaweiBucketName(parts[0]) {
+	if len(parts) >= 5 && parts[1] == "obs" && isValidBucketName(parts[0]) {
 		endpoint = strings.Join(parts[1:], ".")
 	}
 	return endpoint, nil
@@ -184,33 +179,15 @@ func normalizeHuaweiBucketName(raw string) (string, error) {
 	if bucket == "" {
 		return "", fmt.Errorf("huawei obs bucket name is required")
 	}
-	if isValidHuaweiBucketName(bucket) {
+	if isValidBucketName(bucket) {
 		return bucket, nil
 	}
 	host := normalizeHostLikeValue(bucket)
 	if host != "" {
 		parts := strings.Split(host, ".")
-		if len(parts) >= 5 && parts[1] == "obs" && isValidHuaweiBucketName(parts[0]) {
+		if len(parts) >= 5 && parts[1] == "obs" && isValidBucketName(parts[0]) {
 			return parts[0], nil
 		}
 	}
-	return "", fmt.Errorf("invalid huawei obs bucket name %q: enter bucket name only, not the full OBS URL or host", raw)
-}
-
-func isValidHuaweiBucketName(name string) bool {
-	if len(name) < 3 || len(name) > 63 {
-		return false
-	}
-	for i, r := range name {
-		isLower := r >= 'a' && r <= 'z'
-		isDigit := r >= '0' && r <= '9'
-		isHyphen := r == '-'
-		if !isLower && !isDigit && !isHyphen {
-			return false
-		}
-		if (i == 0 || i == len(name)-1) && !isLower && !isDigit {
-			return false
-		}
-	}
-	return true
+	return "", invalidBucketNameError("huawei obs", raw)
 }

@@ -1,4 +1,4 @@
-package backup
+package provider
 
 import (
 	"context"
@@ -8,63 +8,29 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
+	snapshotinfra "github.com/shinerio/skillflow/core/backup/infra/snapshot"
 )
 
-const GitProviderName = "git"
-
-// GitConflictError is returned by Restore (git pull) when merge conflicts are detected,
-// and by Sync (git push) when the remote has diverged.
-type GitConflictError struct {
-	Output string
-	Files  []string
-}
-
-func (e *GitConflictError) Error() string {
-	return fmt.Sprintf("git conflict: %s", e.Output)
-}
-
-// GitProvider implements CloudProvider using a remote Git repository as the backup target.
-// The skills storage directory itself becomes the git working tree.
-// bucket and remotePath parameters are ignored; the repo URL comes from credentials.
 type GitProvider struct {
 	repoURL  string
 	branch   string
 	username string
 	token    string
-	localDir string // cached from the last Sync/Restore call, used by List
+	localDir string
 }
 
 func NewGitProvider() *GitProvider { return &GitProvider{} }
 
-func init() {
-	RegisterProviderFactory(func() CloudProvider { return NewGitProvider() })
-}
+func (p *GitProvider) Name() string { return backupdomain.GitProviderName }
 
-func (p *GitProvider) Name() string { return GitProviderName }
-
-func (p *GitProvider) RequiredCredentials() []CredentialField {
-	return []CredentialField{
-		{
-			Key:         "repo_url",
-			Label:       "Git 仓库地址",
-			Placeholder: "https://github.com/user/my-backup.git",
-		},
-		{
-			Key:         "branch",
-			Label:       "分支（留空默认 main）",
-			Placeholder: "main",
-		},
-		{
-			Key:         "username",
-			Label:       "用户名（HTTPS 认证，可选）",
-			Placeholder: "your-username",
-		},
-		{
-			Key:         "token",
-			Label:       "访问令牌（HTTPS 认证，可选）",
-			Placeholder: "ghp_xxxx",
-			Secret:      true,
-		},
+func (p *GitProvider) RequiredCredentials() []backupdomain.CredentialField {
+	return []backupdomain.CredentialField{
+		{Key: "repo_url", Label: "Git 仓库地址", Placeholder: "https://github.com/user/my-backup.git"},
+		{Key: "branch", Label: "分支（留空默认 main）", Placeholder: "main"},
+		{Key: "username", Label: "用户名（HTTPS 认证，可选）", Placeholder: "your-username"},
+		{Key: "token", Label: "访问令牌（HTTPS 认证，可选）", Placeholder: "ghp_xxxx", Secret: true},
 	}
 }
 
@@ -82,7 +48,6 @@ func (p *GitProvider) Init(credentials map[string]string) error {
 	return nil
 }
 
-// authenticatedURL injects credentials into an HTTPS URL when username+token are provided.
 func (p *GitProvider) authenticatedURL() string {
 	if p.username != "" && p.token != "" && strings.HasPrefix(p.repoURL, "https://") {
 		return "https://" + p.username + ":" + p.token + "@" + p.repoURL[8:]
@@ -236,14 +201,10 @@ func uniqueStrings(items []string) []string {
 
 func (p *GitProvider) collectConflictFiles(localDir, branch, output string) []string {
 	files := parseConflictFilesFromOutput(output)
-
 	if out, err := p.run(localDir, "diff", "--name-only", "--diff-filter=U"); err == nil {
 		files = append(files, parseNameOnlyOutput(out)...)
 	}
-
-	// Best-effort fetch for divergence cases like non-fast-forward push.
 	p.run(localDir, "fetch", "origin", branch) //nolint
-
 	if _, err := p.run(localDir, "rev-parse", "--verify", "HEAD"); err == nil {
 		if out, err := p.run(localDir, "diff", "--name-only", "HEAD..origin/"+branch); err == nil {
 			files = append(files, parseNameOnlyOutput(out)...)
@@ -252,43 +213,33 @@ func (p *GitProvider) collectConflictFiles(localDir, branch, output string) []st
 			files = append(files, parseNameOnlyOutput(out)...)
 		}
 	}
-
 	if out, err := p.run(localDir, "status", "--porcelain"); err == nil {
 		files = append(files, parsePorcelainConflictFiles(out)...)
 	}
-
 	return uniqueStrings(files)
 }
 
-// ensureRepo initializes a git repo in localDir (if needed) and ensures remote origin is configured.
 func (p *GitProvider) ensureRepo(localDir string) error {
 	if err := os.MkdirAll(localDir, 0755); err != nil {
 		return fmt.Errorf("创建本地目录失败: %w", err)
 	}
-
 	gitDir := filepath.Join(localDir, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) || !p.isGitRepo(localDir) {
 		if out, err := p.run(localDir, "init"); err != nil {
 			return fmt.Errorf("git init 失败: %s", out)
 		}
 	}
-
 	authURL := p.authenticatedURL()
 	remoteOut, remoteErr := p.run(localDir, "remote", "get-url", "origin")
 	if remoteErr != nil {
 		if out, err := p.run(localDir, "remote", "add", "origin", authURL); err != nil {
 			return fmt.Errorf("git remote add 失败: %s", out)
 		}
-	} else {
-		current := strings.TrimSpace(remoteOut)
-		if current != authURL {
-			if out, err := p.run(localDir, "remote", "set-url", "origin", authURL); err != nil {
-				return fmt.Errorf("git remote set-url 失败: %s", out)
-			}
+	} else if strings.TrimSpace(remoteOut) != authURL {
+		if out, err := p.run(localDir, "remote", "set-url", "origin", authURL); err != nil {
+			return fmt.Errorf("git remote set-url 失败: %s", out)
 		}
 	}
-
-	// Ensure user identity is set locally so commits don't fail
 	if out, err := p.run(localDir, "config", "user.email", "skillflow@local"); err != nil {
 		return fmt.Errorf("git config user.email 失败: %s", out)
 	}
@@ -298,12 +249,12 @@ func (p *GitProvider) ensureRepo(localDir string) error {
 	if out, err := p.run(localDir, "config", "commit.gpgsign", "false"); err != nil {
 		return fmt.Errorf("git config commit.gpgsign 失败: %s", out)
 	}
-	for _, dir := range excludedDirs {
+	for _, dir := range snapshotinfra.ExcludedDirectories() {
 		if err := ensureIgnoredPath(localDir, dir+"/"); err != nil {
 			return fmt.Errorf("写入 .gitignore 失败: %w", err)
 		}
 	}
-	for _, file := range excludedFiles {
+	for _, file := range snapshotinfra.ExcludedFiles() {
 		if err := ensureIgnoredPath(localDir, file); err != nil {
 			return fmt.Errorf("写入 .gitignore 失败: %w", err)
 		}
@@ -311,49 +262,38 @@ func (p *GitProvider) ensureRepo(localDir string) error {
 	return nil
 }
 
-// Sync commits all local changes and pushes to the remote repository.
 func (p *GitProvider) Sync(_ context.Context, localDir, _, _ string, onProgress func(file string)) error {
 	p.localDir = localDir
 	if err := p.ensureRepo(localDir); err != nil {
 		return err
 	}
-
 	onProgress("git add")
 	if out, err := p.run(localDir, "add", "-A"); err != nil {
 		return fmt.Errorf("git add 失败: %s", out)
 	}
-	// Ensure excluded paths are never tracked in git backup.
-	for _, dir := range excludedDirs {
+	for _, dir := range snapshotinfra.ExcludedDirectories() {
 		if out, err := p.run(localDir, "rm", "-r", "--cached", "--ignore-unmatch", dir); err != nil {
 			return fmt.Errorf("git rm --cached %s 失败: %s", dir, out)
 		}
 	}
-
-	// Nothing to commit?
 	statusOut, _ := p.run(localDir, "status", "--porcelain")
 	_, headErr := p.run(localDir, "rev-parse", "--verify", "HEAD")
-	// Fresh repo + no files: treat as no-op.
 	if strings.TrimSpace(statusOut) == "" && headErr != nil {
 		onProgress("up-to-date")
 		return nil
 	}
-	if strings.TrimSpace(statusOut) == "" {
-		onProgress("up-to-date")
-	} else {
+	if strings.TrimSpace(statusOut) != "" {
 		onProgress("git commit")
 		if out, err := p.run(localDir, "commit", "-m", "SkillFlow auto-backup"); err != nil {
 			return fmt.Errorf("git commit 失败: %s", out)
 		}
 	}
-
 	onProgress("git push")
 	out, err := p.run(localDir, "push", "origin", "HEAD:"+p.branch)
 	if err != nil {
-		// First push to a new remote: set upstream
 		if out2, err2 := p.run(localDir, "push", "--set-upstream", "origin", "HEAD:"+p.branch); err2 != nil {
-			// Remote has diverged → conflict
 			if isGitConflictOutput(out) || isGitConflictOutput(out2) {
-				return &GitConflictError{
+				return &backupdomain.GitConflictError{
 					Output: out + out2,
 					Files:  p.collectConflictFiles(localDir, p.branch, out+out2),
 				}
@@ -364,12 +304,9 @@ func (p *GitProvider) Sync(_ context.Context, localDir, _, _ string, onProgress 
 	return nil
 }
 
-// autoCommitLocal stages and commits any local changes before a pull so that
-// untracked or modified files do not block the merge.
 func (p *GitProvider) autoCommitLocal(localDir string) {
 	p.run(localDir, "add", "-A") //nolint
-	// Remove excluded paths from index if accidentally staged.
-	for _, dir := range excludedDirs {
+	for _, dir := range snapshotinfra.ExcludedDirectories() {
 		p.run(localDir, "rm", "-r", "--cached", "--ignore-unmatch", dir) //nolint
 	}
 	statusOut, _ := p.run(localDir, "status", "--porcelain")
@@ -378,24 +315,19 @@ func (p *GitProvider) autoCommitLocal(localDir string) {
 	}
 }
 
-// Restore runs git pull to bring the local directory up to date with the remote.
-// Returns *GitConflictError when merge conflicts are detected.
 func (p *GitProvider) Restore(_ context.Context, _, _, localDir string) error {
 	p.localDir = localDir
 	if err := p.ensureRepo(localDir); err != nil {
 		return err
 	}
-	// Commit any local changes before pulling to prevent
-	// "untracked working tree files would be overwritten by merge" errors.
 	p.autoCommitLocal(localDir)
 	out, err := p.run(localDir, "pull", "origin", p.branch, "--allow-unrelated-histories")
 	if err != nil {
 		if isMissingRemoteRef(out) {
-			// Remote branch does not exist yet; nothing to restore.
 			return nil
 		}
 		if isGitConflictOutput(out) || strings.Contains(out, "Automatic merge failed") {
-			return &GitConflictError{
+			return &backupdomain.GitConflictError{
 				Output: out,
 				Files:  p.collectConflictFiles(localDir, p.branch, out),
 			}
@@ -405,8 +337,7 @@ func (p *GitProvider) Restore(_ context.Context, _, _, localDir string) error {
 	return nil
 }
 
-// List returns the files tracked by git in the local working tree.
-func (p *GitProvider) PendingChanges(localDir string) ([]RemoteFile, error) {
+func (p *GitProvider) PendingChanges(localDir string) ([]backupdomain.RemoteFile, error) {
 	if err := p.ensureRepo(localDir); err != nil {
 		return nil, err
 	}
@@ -417,7 +348,7 @@ func (p *GitProvider) PendingChanges(localDir string) ([]RemoteFile, error) {
 	return parseGitStatusChanges(localDir, out), nil
 }
 
-func (p *GitProvider) List(_ context.Context, _, _ string) ([]RemoteFile, error) {
+func (p *GitProvider) List(_ context.Context, _, _ string) ([]backupdomain.RemoteFile, error) {
 	if p.localDir == "" {
 		return nil, nil
 	}
@@ -425,7 +356,7 @@ func (p *GitProvider) List(_ context.Context, _, _ string) ([]RemoteFile, error)
 	if err != nil {
 		return nil, nil
 	}
-	var files []RemoteFile
+	var files []backupdomain.RemoteFile
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -437,12 +368,11 @@ func (p *GitProvider) List(_ context.Context, _, _ string) ([]RemoteFile, error)
 		if statErr == nil {
 			size = info.Size()
 		}
-		files = append(files, RemoteFile{Path: line, Size: size})
+		files = append(files, backupdomain.RemoteFile{Path: line, Size: size})
 	}
 	return files, nil
 }
 
-// ResolveConflictUseLocal aborts the in-progress merge and force-pushes local state to remote.
 func (p *GitProvider) ResolveConflictUseLocal(localDir string) error {
 	if err := p.ensureExistingRepo(localDir); err != nil {
 		return err
@@ -451,13 +381,11 @@ func (p *GitProvider) ResolveConflictUseLocal(localDir string) error {
 	if err != nil {
 		return err
 	}
-	p.run(localDir, "merge", "--abort") //nolint – may not be in merge state
-	// Ensure all local changes are committed before force-push
+	p.run(localDir, "merge", "--abort")                                        //nolint
 	p.run(localDir, "add", "-A")                                               //nolint
-	p.run(localDir, "commit", "-m", "SkillFlow: resolve conflict (use local)") //nolint – may have nothing to commit
+	p.run(localDir, "commit", "-m", "SkillFlow: resolve conflict (use local)") //nolint
 	out, err := p.run(localDir, "push", "origin", "HEAD:"+branch, "--force-with-lease")
 	if err != nil {
-		// Fallback to force push when --force-with-lease fails
 		if out2, err2 := p.run(localDir, "push", "origin", "HEAD:"+branch, "--force"); err2 != nil {
 			return fmt.Errorf("git push --force 失败: %s %s", out, out2)
 		}
@@ -465,7 +393,6 @@ func (p *GitProvider) ResolveConflictUseLocal(localDir string) error {
 	return nil
 }
 
-// ResolveConflictUseRemote aborts the in-progress merge and resets local state to the remote branch.
 func (p *GitProvider) ResolveConflictUseRemote(localDir string) error {
 	if err := p.ensureExistingRepo(localDir); err != nil {
 		return err
@@ -484,25 +411,22 @@ func (p *GitProvider) ResolveConflictUseRemote(localDir string) error {
 	return nil
 }
 
-// GetBranch returns the configured branch.
-func parseGitStatusChanges(localDir, output string) []RemoteFile {
-	changes := make([]RemoteFile, 0)
+func parseGitStatusChanges(localDir, output string) []backupdomain.RemoteFile {
+	changes := make([]backupdomain.RemoteFile, 0)
 	normalized := strings.ReplaceAll(output, "\r\n", "\n")
 	for _, line := range strings.Split(normalized, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if len(line) < 3 {
 			continue
 		}
-
 		status := line[:2]
 		path := strings.TrimSpace(line[3:])
 		if idx := strings.LastIndex(path, " -> "); idx >= 0 {
 			path = strings.TrimSpace(path[idx+4:])
 		}
-		if path == "" || path == ".gitignore" || ShouldSkipBackupPath(path) {
+		if path == "" || path == ".gitignore" || snapshotinfra.ShouldSkipBackupPath(path) {
 			continue
 		}
-
 		action := "modified"
 		switch {
 		case status == "??":
@@ -512,15 +436,13 @@ func parseGitStatusChanges(localDir, output string) []RemoteFile {
 		case strings.Contains(status, "A"):
 			action = "added"
 		}
-
 		var size int64
 		if action != "deleted" {
 			if info, err := os.Stat(filepath.Join(localDir, filepath.FromSlash(path))); err == nil {
 				size = info.Size()
 			}
 		}
-
-		changes = append(changes, RemoteFile{Path: path, Size: size, Action: action})
+		changes = append(changes, backupdomain.RemoteFile{Path: path, Size: size, Action: action})
 	}
 	sort.Slice(changes, func(i, j int) bool {
 		if changes[i].Path == changes[j].Path {
@@ -530,5 +452,3 @@ func parseGitStatusChanges(localDir, output string) []RemoteFile {
 	})
 	return changes
 }
-
-func (p *GitProvider) GetBranch() string { return p.branch }

@@ -16,7 +16,7 @@ import (
 	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	"github.com/shinerio/skillflow/core/applog"
-	"github.com/shinerio/skillflow/core/backup"
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
 	"github.com/shinerio/skillflow/core/notify"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
@@ -52,7 +52,7 @@ type App struct {
 	stopAutoSync       chan struct{}
 
 	backupResultMu       sync.RWMutex
-	lastBackupResult     []backup.RemoteFile
+	lastBackupResult     []backupdomain.RemoteFile
 	lastBackupAt         time.Time
 	windowVisibilityMu   sync.Mutex
 	windowVisibilityInit bool
@@ -269,32 +269,13 @@ func (a *App) runBackup() error {
 
 func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 	a.logInfof("backup started (provider=%s)", cfg.Cloud.Provider)
-	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
-	if !ok {
-		return fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
-	}
-	if err := provider.Init(cfg.Cloud.Credentials); err != nil {
-		return err
-	}
-	isGit := cfg.Cloud.Provider == backup.GitProviderName
-	backupDir := a.backupRootDir(cfg)
-	var err error
-	if isGit {
-		backupDir, err = a.prepareGitBackupRoot(cfg)
-		if err != nil {
-			return err
-		}
-	}
-	changes, currentSnapshot, err := a.computeBackupChanges(provider, backupDir, isGit)
-	if err != nil {
-		a.logErrorf("backup failed: compute changes failed: %v", err)
-		return err
-	}
+	profile := a.backupProfile(cfg)
+	isGit := profile.Provider == backupdomain.GitProviderName
 	if isGit {
 		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
 	}
 	a.hub.Publish(notify.Event{Type: notify.EventBackupStarted})
-	err = provider.Sync(a.ctx, backupDir, cfg.Cloud.BucketName, cfg.Cloud.RemotePath,
+	result, err := a.newBackupService().RunBackup(a.ctx, profile,
 		func(file string) {
 			a.hub.Publish(notify.Event{
 				Type:    notify.EventBackupProgress,
@@ -303,7 +284,7 @@ func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 		})
 	if err != nil {
 		a.logErrorf("backup failed: %v", err)
-		var conflictErr *backup.GitConflictError
+		var conflictErr *backupdomain.GitConflictError
 		if isGit && errors.As(err, &conflictErr) {
 			a.publishGitConflict(conflictErr)
 		}
@@ -313,8 +294,8 @@ func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 		a.hub.Publish(notify.Event{Type: notify.EventBackupFailed, Payload: err.Error()})
 		return err
 	} else {
-		a.recordBackupResult(changes, currentSnapshot)
-		payload := notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}
+		a.recordBackupResult(result.Files, result.Snapshot)
+		payload := notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}
 		a.logInfof("backup completed")
 		if isGit {
 			a.clearGitConflictPending()
@@ -325,7 +306,7 @@ func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 	}
 }
 
-func (a *App) publishGitConflict(conflictErr *backup.GitConflictError) {
+func (a *App) publishGitConflict(conflictErr *backupdomain.GitConflictError) {
 	a.gitConflictMu.Lock()
 	a.gitConflictPending = true
 	a.gitConflictMu.Unlock()
@@ -356,35 +337,16 @@ func (a *App) reloadStateFromDisk() {
 // gitPullOnStartup pulls from the remote git repo at startup when the git provider is enabled.
 func (a *App) gitPullOnStartup() {
 	cfg, err := a.config.Load()
-	if err != nil || !cfg.Cloud.Enabled || cfg.Cloud.Provider != backup.GitProviderName {
+	if err != nil || !cfg.Cloud.Enabled || cfg.Cloud.Provider != backupdomain.GitProviderName {
 		return
 	}
 	beforeRestore := a.captureCloudRestoreState()
 	a.logInfof("startup git pull started")
-	p, ok := registry.GetCloudProvider(backup.GitProviderName)
-	if !ok {
-		return
-	}
-	if err := p.Init(cfg.Cloud.Credentials); err != nil {
-		return
-	}
-	gitP := p.(*backup.GitProvider)
-	backupDir, prepErr := a.prepareGitBackupRoot(cfg)
-	if prepErr != nil {
-		a.logErrorf("startup git pull failed: prepare git backup root failed: %v", prepErr)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: prepErr.Error()})
-		return
-	}
-	beforeSnapshot, snapErr := backup.BuildSnapshot(backupDir)
-	if snapErr != nil {
-		a.logErrorf("startup git pull failed: build pre-pull snapshot failed: %v", snapErr)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: snapErr.Error()})
-		return
-	}
 	a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
-	if err := gitP.Restore(a.ctx, "", "", backupDir); err != nil {
+	result, err := a.newBackupService().RestoreBackup(a.ctx, a.backupProfile(cfg))
+	if err != nil {
 		a.logErrorf("startup git pull failed: %v", err)
-		var conflictErr *backup.GitConflictError
+		var conflictErr *backupdomain.GitConflictError
 		if errors.As(err, &conflictErr) {
 			a.publishGitConflict(conflictErr)
 			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
@@ -393,13 +355,7 @@ func (a *App) gitPullOnStartup() {
 		}
 		return
 	}
-	changes, afterSnapshot, diffErr := a.computeSnapshotChanges(beforeSnapshot, backupDir)
-	if diffErr != nil {
-		a.logErrorf("startup git pull failed: compute post-pull changes failed: %v", diffErr)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: diffErr.Error()})
-		return
-	}
-	a.recordBackupResult(changes, afterSnapshot)
+	a.recordBackupResult(result.Files, result.Snapshot)
 	if err := a.handleRestoredCloudState(beforeRestore, "startup.git.pull"); err != nil {
 		a.logErrorf("startup git pull failed: restore compensation failed: %v", err)
 		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
@@ -407,7 +363,7 @@ func (a *App) gitPullOnStartup() {
 	}
 	a.logInfof("startup git pull completed")
 	a.clearGitConflictPending()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
+	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 }
 
 // startAutoSyncTimer starts (or restarts) a periodic auto-backup ticker.
@@ -451,25 +407,14 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	if useLocal {
 		action = "use_local"
 	}
-	p, ok := registry.GetCloudProvider(backup.GitProviderName)
-	if !ok {
-		return fmt.Errorf("git provider 未注册")
+	cfg, err := a.config.Load()
+	if err != nil {
+		a.logErrorf("git conflict resolution failed: strategy=%s load config failed: %v", action, err)
+		return err
 	}
-	gitP := p.(*backup.GitProvider)
-	localCfg := a.config.LoadLocalRuntimeConfig()
-	backupDir := a.backupRootDir(config.AppConfig{SkillsStorageDir: localCfg.SkillsStorageDir})
+	backupDir := a.newBackupService().BackupRootDir(a.backupProfile(cfg))
 	a.logInfof("git conflict resolution started: strategy=%s, backupDir=%s", action, backupDir)
-	beforeSnapshot, snapErr := backup.BuildSnapshot(backupDir)
-	if snapErr != nil {
-		a.logErrorf("git conflict resolution failed: build pre-resolution snapshot failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, snapErr)
-		return snapErr
-	}
-	var err error
-	if useLocal {
-		err = gitP.ResolveConflictUseLocal(backupDir)
-	} else {
-		err = gitP.ResolveConflictUseRemote(backupDir)
-	}
+	result, err := a.newBackupService().ResolveGitConflict(a.backupProfile(cfg), useLocal)
 	if err != nil {
 		a.logErrorf("git conflict resolution failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, err)
 		return err
@@ -477,86 +422,19 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	a.gitConflictMu.Lock()
 	a.gitConflictPending = false
 	a.gitConflictMu.Unlock()
-	changes, afterSnapshot, diffErr := a.computeSnapshotChanges(beforeSnapshot, backupDir)
-	if diffErr != nil {
-		a.logErrorf("git conflict resolution failed: compute post-resolution changes failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, diffErr)
-		return diffErr
-	}
-	a.recordBackupResult(changes, afterSnapshot)
+	a.recordBackupResult(result.Files, result.Snapshot)
 	a.reloadStateFromDisk()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
+	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 	a.logInfof("git conflict resolution completed: strategy=%s, backupDir=%s", action, backupDir)
 	return nil
 }
 
-func (a *App) backupRootDir(cfg config.AppConfig) string {
-	appDataDir := filepath.Clean(config.AppDataDir())
-	skillsDir := filepath.Clean(cfg.SkillsStorageDir)
-
-	// Prefer app data dir so cloud backup includes config/meta/skills.
-	if rel, err := filepath.Rel(appDataDir, skillsDir); err == nil &&
-		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return appDataDir
-	}
-	// If skills dir is outside app data dir, use its parent as the git root.
-	return filepath.Dir(skillsDir)
-}
-
-func (a *App) prepareGitBackupRoot(cfg config.AppConfig) (string, error) {
-	backupDir := a.backupRootDir(cfg)
-	migratedTo, migrated, err := backup.MigrateLegacyNestedGitDir(cfg.SkillsStorageDir, backupDir)
-	if err != nil {
-		a.logErrorf("git backup root preparation failed: skillsDir=%s, backupDir=%s, err=%v", cfg.SkillsStorageDir, backupDir, err)
-		return "", err
-	}
-	if migrated {
-		a.logInfof("git backup root preparation completed: moved legacy nested git dir from skills storage to %s", migratedTo)
-	}
-	return backupDir, nil
-}
-
-func (a *App) backupSnapshotPath() string {
-	return filepath.Join(config.AppDataDir(), "cache", "backup_snapshot.json")
-}
-
-func (a *App) computeBackupChanges(provider backup.CloudProvider, backupDir string, isGit bool) ([]backup.RemoteFile, backup.Snapshot, error) {
-	if isGit {
-		if gitProvider, ok := provider.(*backup.GitProvider); ok {
-			changes, err := gitProvider.PendingChanges(backupDir)
-			return changes, nil, err
-		}
-	}
-
-	previousSnapshot, err := backup.LoadSnapshot(a.backupSnapshotPath())
-	if err != nil {
-		return nil, nil, err
-	}
-	currentSnapshot, err := backup.BuildSnapshot(backupDir)
-	if err != nil {
-		return nil, nil, err
-	}
-	return backup.DiffSnapshots(previousSnapshot, currentSnapshot), currentSnapshot, nil
-}
-
-func (a *App) computeSnapshotChanges(beforeSnapshot backup.Snapshot, root string) ([]backup.RemoteFile, backup.Snapshot, error) {
-	afterSnapshot, err := backup.BuildSnapshot(root)
-	if err != nil {
-		return nil, nil, err
-	}
-	return backup.DiffSnapshots(beforeSnapshot, afterSnapshot), afterSnapshot, nil
-}
-
-func (a *App) recordBackupResult(files []backup.RemoteFile, snapshot backup.Snapshot) {
-	if snapshot != nil {
-		if err := backup.SaveSnapshot(a.backupSnapshotPath(), snapshot); err != nil {
-			a.logErrorf("backup snapshot save failed: %v", err)
-		}
-	}
+func (a *App) recordBackupResult(files []backupdomain.RemoteFile, _ backupdomain.Snapshot) {
 	a.setLastBackupResult(files)
 }
 
-func (a *App) setLastBackupResult(files []backup.RemoteFile) {
-	copied := make([]backup.RemoteFile, len(files))
+func (a *App) setLastBackupResult(files []backupdomain.RemoteFile) {
+	copied := make([]backupdomain.RemoteFile, len(files))
 	copy(copied, files)
 
 	a.backupResultMu.Lock()
@@ -565,11 +443,11 @@ func (a *App) setLastBackupResult(files []backup.RemoteFile) {
 	a.backupResultMu.Unlock()
 }
 
-func (a *App) GetLastBackupChanges() []backup.RemoteFile {
+func (a *App) GetLastBackupChanges() []backupdomain.RemoteFile {
 	a.backupResultMu.RLock()
 	defer a.backupResultMu.RUnlock()
 
-	copied := make([]backup.RemoteFile, len(a.lastBackupResult))
+	copied := make([]backupdomain.RemoteFile, len(a.lastBackupResult))
 	copy(copied, a.lastBackupResult)
 	return copied
 }
@@ -1194,24 +1072,14 @@ func (a *App) BackupNow() error {
 	return a.runBackup()
 }
 
-func (a *App) ListCloudFiles() ([]backup.RemoteFile, error) {
+func (a *App) ListCloudFiles() ([]backupdomain.RemoteFile, error) {
 	cfg, err := a.config.Load()
 	if err != nil {
 		a.logErrorf("list cloud files failed: load config failed: %v", err)
 		return nil, err
 	}
 	a.logInfof("list cloud files started (provider=%s, remotePath=%s)", cfg.Cloud.Provider, cfg.Cloud.RemotePath)
-	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
-	if !ok {
-		err := fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
-		a.logErrorf("list cloud files failed: %v", err)
-		return nil, err
-	}
-	if err := provider.Init(cfg.Cloud.Credentials); err != nil {
-		a.logErrorf("list cloud files failed: init provider %s failed: %v", cfg.Cloud.Provider, err)
-		return nil, err
-	}
-	files, err := provider.List(a.ctx, cfg.Cloud.BucketName, cfg.Cloud.RemotePath)
+	files, err := a.newBackupService().ListRemoteBackupFiles(a.ctx, a.backupProfile(cfg))
 	if err != nil {
 		a.logErrorf("list cloud files failed: provider=%s, remotePath=%s, err=%v", cfg.Cloud.Provider, cfg.Cloud.RemotePath, err)
 		return nil, err
@@ -1228,33 +1096,15 @@ func (a *App) RestoreFromCloud() error {
 		return err
 	}
 	beforeRestore := a.captureCloudRestoreState()
-	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
-	if !ok {
-		return fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
-	}
-	if err := provider.Init(cfg.Cloud.Credentials); err != nil {
-		return err
-	}
-	isGit := cfg.Cloud.Provider == backup.GitProviderName
-	restoreDir := a.backupRootDir(cfg)
-	if isGit {
-		restoreDir, err = a.prepareGitBackupRoot(cfg)
-		if err != nil {
-			a.logErrorf("restore from cloud failed: prepare git backup root failed: %v", err)
-			return err
-		}
-	}
-	beforeSnapshot, err := backup.BuildSnapshot(restoreDir)
-	if err != nil {
-		a.logErrorf("restore from cloud failed: build pre-restore snapshot failed: %v", err)
-		return err
-	}
+	profile := a.backupProfile(cfg)
+	isGit := profile.Provider == backupdomain.GitProviderName
 	if isGit {
 		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
 	}
-	if err := provider.Restore(a.ctx, cfg.Cloud.BucketName, cfg.Cloud.RemotePath, restoreDir); err != nil {
+	result, err := a.newBackupService().RestoreBackup(a.ctx, profile)
+	if err != nil {
 		a.logErrorf("restore from cloud failed: %v", err)
-		var conflictErr *backup.GitConflictError
+		var conflictErr *backupdomain.GitConflictError
 		if isGit && errors.As(err, &conflictErr) {
 			a.publishGitConflict(conflictErr)
 		}
@@ -1263,15 +1113,7 @@ func (a *App) RestoreFromCloud() error {
 		}
 		return err
 	}
-	changes, afterSnapshot, err := a.computeSnapshotChanges(beforeSnapshot, restoreDir)
-	if err != nil {
-		a.logErrorf("restore from cloud failed: compute post-restore changes failed: %v", err)
-		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
-		}
-		return err
-	}
-	a.recordBackupResult(changes, afterSnapshot)
+	a.recordBackupResult(result.Files, result.Snapshot)
 	a.logInfof("restore from cloud completed")
 	if err := a.handleRestoredCloudState(beforeRestore, "cloud.restore"); err != nil {
 		a.logErrorf("restore from cloud failed: restore compensation failed: %v", err)
@@ -1282,7 +1124,7 @@ func (a *App) RestoreFromCloud() error {
 	}
 	if isGit {
 		a.clearGitConflictPending()
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
+		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 	}
 	return nil
 }

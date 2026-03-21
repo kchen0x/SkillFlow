@@ -3,7 +3,6 @@
 import {domain} from '../models';
 import {main} from '../models';
 import {config} from '../models';
-import {backup} from '../models';
 
 export function AddCustomAgent(arg1:string,arg2:string):Promise<void>;
 
@@ -59,7 +58,7 @@ export function GetEnabledAgents():Promise<Array<config.AgentConfig>>;
 
 export function GetGitConflictPending():Promise<boolean>;
 
-export function GetLastBackupChanges():Promise<Array<backup.RemoteFile>>;
+export function GetLastBackupChanges():Promise<Array<domain.RemoteFile>>;
 
 export function GetLastBackupCompletedAt():Promise<string>;
 
@@ -85,7 +84,7 @@ export function ListAllStarSkills():Promise<Array<main.StarSkillEntry>>;
 
 export function ListCategories():Promise<Array<string>>;
 
-export function ListCloudFiles():Promise<Array<backup.RemoteFile>>;
+export function ListCloudFiles():Promise<Array<domain.RemoteFile>>;
 
 export function ListCloudProviders():Promise<Array<Record<string, any>>>;
 

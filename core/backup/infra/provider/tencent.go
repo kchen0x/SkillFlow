@@ -1,6 +1,6 @@
 //go:build !provider_select || backup_tencent
 
-package backup
+package provider
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
+	snapshotinfra "github.com/shinerio/skillflow/core/backup/infra/snapshot"
 	cos "github.com/tencentyun/cos-go-sdk-v5"
 )
 
@@ -23,14 +25,14 @@ type TencentProvider struct {
 func NewTencentProvider() *TencentProvider { return &TencentProvider{} }
 
 func init() {
-	RegisterProviderFactory(func() CloudProvider { return NewTencentProvider() })
+	RegisterProviderFactory(func() backupdomain.CloudProvider { return NewTencentProvider() })
 }
 
 func (t *TencentProvider) Name() string { return "tencent" }
 
-func (t *TencentProvider) RequiredCredentials() []CredentialField {
-	return []CredentialField{
-		{Key: "secret_id", Label: "Secret ID", Secret: false},
+func (t *TencentProvider) RequiredCredentials() []backupdomain.CredentialField {
+	return []backupdomain.CredentialField{
+		{Key: "secret_id", Label: "Secret ID"},
 		{Key: "secret_key", Label: "Secret Key", Secret: true},
 		{Key: "endpoint", Label: "Endpoint", Placeholder: "cos.ap-guangzhou.myqcloud.com"},
 	}
@@ -57,7 +59,7 @@ func (t *TencentProvider) Sync(ctx context.Context, localDir, bucket, remotePath
 			return err
 		}
 		rel, _ := filepath.Rel(localDir, path)
-		if ShouldSkipBackupPath(rel) {
+		if snapshotinfra.ShouldSkipBackupPath(rel) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -70,12 +72,12 @@ func (t *TencentProvider) Sync(ctx context.Context, localDir, bucket, remotePath
 		if onProgress != nil {
 			onProgress(rel)
 		}
-		f, err := os.Open(path)
+		file, err := os.Open(path)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		_, err = client.Object.Put(ctx, key, f, nil)
+		defer file.Close()
+		_, err = client.Object.Put(ctx, key, file, nil)
 		return err
 	})
 }
@@ -96,11 +98,11 @@ func (t *TencentProvider) Restore(ctx context.Context, bucket, remotePath, local
 		}
 		for _, obj := range result.Contents {
 			rel := strings.TrimPrefix(obj.Key, remotePath)
-			if ShouldSkipBackupPath(rel) {
+			if snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
 			local := filepath.Join(localDir, filepath.FromSlash(rel))
-			if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
 				return err
 			}
 			_, err := client.Object.GetToFile(ctx, obj.Key, local, nil)
@@ -116,12 +118,12 @@ func (t *TencentProvider) Restore(ctx context.Context, bucket, remotePath, local
 	return nil
 }
 
-func (t *TencentProvider) List(ctx context.Context, bucket, remotePath string) ([]RemoteFile, error) {
+func (t *TencentProvider) List(ctx context.Context, bucket, remotePath string) ([]backupdomain.RemoteFile, error) {
 	client, err := t.clientForBucket(bucket)
 	if err != nil {
 		return nil, err
 	}
-	var files []RemoteFile
+	var files []backupdomain.RemoteFile
 	var marker string
 	for {
 		result, _, err := client.Bucket.Get(ctx, &cos.BucketGetOptions{
@@ -133,13 +135,10 @@ func (t *TencentProvider) List(ctx context.Context, bucket, remotePath string) (
 		}
 		for _, obj := range result.Contents {
 			rel := strings.TrimPrefix(obj.Key, remotePath)
-			if ShouldSkipBackupPath(rel) {
+			if snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
-			files = append(files, RemoteFile{
-				Path: rel,
-				Size: obj.Size,
-			})
+			files = append(files, backupdomain.RemoteFile{Path: rel, Size: obj.Size})
 		}
 		if !result.IsTruncated {
 			break
@@ -171,7 +170,7 @@ func normalizeTencentEndpoint(raw string) (string, error) {
 		return "", fmt.Errorf("tencent cos endpoint is required")
 	}
 	parts := strings.Split(endpoint, ".")
-	if len(parts) >= 5 && parts[1] == "cos" && isValidTencentBucketName(parts[0]) {
+	if len(parts) >= 5 && parts[1] == "cos" && isValidBucketName(parts[0]) {
 		endpoint = strings.Join(parts[1:], ".")
 	}
 	return endpoint, nil
@@ -182,17 +181,17 @@ func normalizeTencentBucketName(raw string) (string, error) {
 	if bucket == "" {
 		return "", fmt.Errorf("tencent cos bucket name is required")
 	}
-	if isValidTencentBucketName(bucket) {
+	if isValidBucketName(bucket) {
 		return bucket, nil
 	}
 	host := normalizeHostLikeValue(bucket)
 	if host != "" {
 		parts := strings.Split(host, ".")
-		if len(parts) >= 5 && parts[1] == "cos" && isValidTencentBucketName(parts[0]) {
+		if len(parts) >= 5 && parts[1] == "cos" && isValidBucketName(parts[0]) {
 			return parts[0], nil
 		}
 	}
-	return "", fmt.Errorf("invalid tencent cos bucket name %q: enter bucket name only, not the full COS URL or host", raw)
+	return "", invalidBucketNameError("tencent cos", raw)
 }
 
 func buildTencentBucketURL(bucket, endpoint string) (*url.URL, error) {
@@ -209,22 +208,4 @@ func buildTencentBucketURL(bucket, endpoint string) (*url.URL, error) {
 		return nil, fmt.Errorf("invalid tencent cos bucket URL: %w", err)
 	}
 	return u, nil
-}
-
-func isValidTencentBucketName(name string) bool {
-	if len(name) < 3 || len(name) > 63 {
-		return false
-	}
-	for i, r := range name {
-		isLower := r >= 'a' && r <= 'z'
-		isDigit := r >= '0' && r <= '9'
-		isHyphen := r == '-'
-		if !isLower && !isDigit && !isHyphen {
-			return false
-		}
-		if (i == 0 || i == len(name)-1) && !isLower && !isDigit {
-			return false
-		}
-	}
-	return true
 }

@@ -2,25 +2,32 @@ package registry
 
 import (
 	agentgateway "github.com/shinerio/skillflow/core/agentintegration/app/port/gateway"
-	"github.com/shinerio/skillflow/core/backup"
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 )
 
 var (
-	adapters       = map[string]agentgateway.AgentGateway{}
-	cloudProviders = map[string]backup.CloudProvider{}
+	adapters               = map[string]agentgateway.AgentGateway{}
+	cloudProviderFactories = map[string]func() backupdomain.CloudProvider{}
 )
 
-func RegisterAdapter(a agentgateway.AgentGateway)  { adapters[a.Name()] = a }
-func RegisterCloudProvider(p backup.CloudProvider) { cloudProviders[p.Name()] = p }
+func RegisterAdapter(a agentgateway.AgentGateway) { adapters[a.Name()] = a }
+
+func RegisterCloudProviderFactory(factory func() backupdomain.CloudProvider) {
+	provider := factory()
+	cloudProviderFactories[provider.Name()] = factory
+}
 
 func GetAdapter(name string) (agentgateway.AgentGateway, bool) {
 	a, ok := adapters[name]
 	return a, ok
 }
 
-func GetCloudProvider(name string) (backup.CloudProvider, bool) {
-	p, ok := cloudProviders[name]
-	return p, ok
+func GetCloudProvider(name string) (backupdomain.CloudProvider, bool) {
+	factory, ok := cloudProviderFactories[name]
+	if !ok {
+		return nil, false
+	}
+	return factory(), true
 }
 
 func AllAdapters() []agentgateway.AgentGateway {
@@ -31,10 +38,10 @@ func AllAdapters() []agentgateway.AgentGateway {
 	return result
 }
 
-func AllCloudProviders() []backup.CloudProvider {
-	result := make([]backup.CloudProvider, 0, len(cloudProviders))
-	for _, p := range cloudProviders {
-		result = append(result, p)
+func AllCloudProviders() []backupdomain.CloudProvider {
+	result := make([]backupdomain.CloudProvider, 0, len(cloudProviderFactories))
+	for _, factory := range cloudProviderFactories {
+		result = append(result, factory())
 	}
 	return result
 }

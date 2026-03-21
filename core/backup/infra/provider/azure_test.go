@@ -1,6 +1,6 @@
 //go:build !provider_select || backup_azure
 
-package backup
+package provider
 
 import "testing"
 

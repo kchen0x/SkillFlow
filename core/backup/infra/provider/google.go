@@ -1,6 +1,6 @@
 //go:build !provider_select || backup_google
 
-package backup
+package provider
 
 import (
 	"context"
@@ -11,6 +11,9 @@ import (
 
 	"google.golang.org/api/option"
 	gcsapi "google.golang.org/api/storage/v1"
+
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
+	snapshotinfra "github.com/shinerio/skillflow/core/backup/infra/snapshot"
 )
 
 type GoogleProvider struct {
@@ -20,13 +23,13 @@ type GoogleProvider struct {
 func NewGoogleProvider() *GoogleProvider { return &GoogleProvider{} }
 
 func init() {
-	RegisterProviderFactory(func() CloudProvider { return NewGoogleProvider() })
+	RegisterProviderFactory(func() backupdomain.CloudProvider { return NewGoogleProvider() })
 }
 
 func (g *GoogleProvider) Name() string { return "google" }
 
-func (g *GoogleProvider) RequiredCredentials() []CredentialField {
-	return []CredentialField{
+func (g *GoogleProvider) RequiredCredentials() []backupdomain.CredentialField {
+	return []backupdomain.CredentialField{
 		{
 			Key:         "service_account_json",
 			Label:       "Service Account JSON",
@@ -41,7 +44,6 @@ func (g *GoogleProvider) Init(creds map[string]string) error {
 	if err != nil {
 		return err
 	}
-
 	service, err := gcsapi.NewService(
 		context.Background(),
 		opt,
@@ -50,7 +52,6 @@ func (g *GoogleProvider) Init(creds map[string]string) error {
 	if err != nil {
 		return fmt.Errorf("init google cloud storage service failed: %w", err)
 	}
-
 	g.service = service
 	return nil
 }
@@ -60,13 +61,12 @@ func (g *GoogleProvider) Sync(ctx context.Context, localDir, bucket, remotePath 
 	if err != nil {
 		return err
 	}
-
 	return filepath.Walk(localDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(localDir, path)
-		if ShouldSkipBackupPath(rel) {
+		if snapshotinfra.ShouldSkipBackupPath(rel) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -75,18 +75,15 @@ func (g *GoogleProvider) Sync(ctx context.Context, localDir, bucket, remotePath 
 		if info.IsDir() {
 			return nil
 		}
-
 		key := remotePath + strings.ReplaceAll(rel, string(filepath.Separator), "/")
 		if onProgress != nil {
 			onProgress(rel)
 		}
-
 		src, err := os.Open(path)
 		if err != nil {
 			return err
 		}
 		defer src.Close()
-
 		_, err = g.service.Objects.Insert(bucketName, &gcsapi.Object{Name: key}).Context(ctx).Media(src).Do()
 		return err
 	})
@@ -97,24 +94,20 @@ func (g *GoogleProvider) Restore(ctx context.Context, bucket, remotePath, localD
 	if err != nil {
 		return err
 	}
-
 	listCall := g.service.Objects.List(bucketName).Prefix(remotePath)
 	return listCall.Pages(ctx, func(objects *gcsapi.Objects) error {
 		for _, object := range objects.Items {
 			if object == nil {
 				continue
 			}
-
 			rel := strings.TrimPrefix(object.Name, remotePath)
-			if rel == "" || ShouldSkipBackupPath(rel) {
+			if rel == "" || snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
-
 			local := filepath.Join(localDir, filepath.FromSlash(rel))
-			if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
 				return err
 			}
-
 			resp, err := g.service.Objects.Get(bucketName, object.Name).Context(ctx).Download()
 			if err != nil {
 				return err
@@ -127,25 +120,23 @@ func (g *GoogleProvider) Restore(ctx context.Context, bucket, remotePath, localD
 	})
 }
 
-func (g *GoogleProvider) List(ctx context.Context, bucket, remotePath string) ([]RemoteFile, error) {
+func (g *GoogleProvider) List(ctx context.Context, bucket, remotePath string) ([]backupdomain.RemoteFile, error) {
 	bucketName, err := g.bucketName(bucket)
 	if err != nil {
 		return nil, err
 	}
-
-	var files []RemoteFile
+	var files []backupdomain.RemoteFile
 	listCall := g.service.Objects.List(bucketName).Prefix(remotePath)
 	if err := listCall.Pages(ctx, func(objects *gcsapi.Objects) error {
 		for _, object := range objects.Items {
 			if object == nil {
 				continue
 			}
-
 			rel := strings.TrimPrefix(object.Name, remotePath)
-			if rel == "" || ShouldSkipBackupPath(rel) {
+			if rel == "" || snapshotinfra.ShouldSkipBackupPath(rel) {
 				continue
 			}
-			files = append(files, RemoteFile{
+			files = append(files, backupdomain.RemoteFile{
 				Path: rel,
 				Size: int64(object.Size),
 			})
@@ -154,7 +145,6 @@ func (g *GoogleProvider) List(ctx context.Context, bucket, remotePath string) ([
 	}); err != nil {
 		return nil, err
 	}
-
 	return files, nil
 }
 
@@ -177,7 +167,6 @@ func googleCredentialOption(raw string) (option.ClientOption, error) {
 	if strings.HasPrefix(value, "{") {
 		return option.WithCredentialsJSON([]byte(value)), nil
 	}
-
 	data, err := os.ReadFile(value)
 	if err != nil {
 		return nil, fmt.Errorf("read google cloud service account file %q failed: %w", value, err)

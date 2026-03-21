@@ -43,29 +43,6 @@ export namespace app {
 
 }
 
-export namespace backup {
-	
-	export class RemoteFile {
-	    path: string;
-	    size: number;
-	    isDir: boolean;
-	    action?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new RemoteFile(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.size = source["size"];
-	        this.isDir = source["isDir"];
-	        this.action = source["action"];
-	    }
-	}
-
-}
-
 export namespace config {
 	
 	export class AgentConfig {
@@ -432,6 +409,24 @@ export namespace domain {
 	        this.skillPath = source["skillPath"];
 	        this.agentName = source["agentName"];
 	        this.targetPath = source["targetPath"];
+	    }
+	}
+	export class RemoteFile {
+	    path: string;
+	    size: number;
+	    isDir: boolean;
+	    action?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RemoteFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.isDir = source["isDir"];
+	        this.action = source["action"];
 	    }
 	}
 	export class SkillMeta {

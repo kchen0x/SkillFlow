@@ -1,18 +1,20 @@
-package backup
+package snapshot
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 )
 
 func TestDiffSnapshots(t *testing.T) {
-	previous := Snapshot{
+	previous := backupdomain.Snapshot{
 		"a.txt": {Size: 1, Hash: "old-a"},
 		"b.txt": {Size: 1, Hash: "same"},
 		"c.txt": {Size: 1, Hash: "gone"},
 	}
-	current := Snapshot{
+	current := backupdomain.Snapshot{
 		"a.txt": {Size: 2, Hash: "new-a"},
 		"b.txt": {Size: 1, Hash: "same"},
 		"d.txt": {Size: 3, Hash: "new-d"},
@@ -23,7 +25,7 @@ func TestDiffSnapshots(t *testing.T) {
 		t.Fatalf("expected 3 changes, got %d", len(changes))
 	}
 
-	expected := []RemoteFile{
+	expected := []backupdomain.RemoteFile{
 		{Path: "a.txt", Size: 2, Action: "modified"},
 		{Path: "c.txt", Size: 1, Action: "deleted"},
 		{Path: "d.txt", Size: 3, Action: "added"},
@@ -55,6 +57,23 @@ func TestBuildSnapshotSkipsExcludedPaths(t *testing.T) {
 	}
 	if _, ok := snapshot["config_local.json"]; ok {
 		t.Fatal("did not expect config_local.json in snapshot")
+	}
+}
+
+func TestLoadSaveSnapshotRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	want := backupdomain.Snapshot{
+		"a.txt": {Size: 10, Hash: "abc"},
+	}
+	if err := SaveSnapshot(path, want); err != nil {
+		t.Fatalf("SaveSnapshot failed: %v", err)
+	}
+	got, err := LoadSnapshot(path)
+	if err != nil {
+		t.Fatalf("LoadSnapshot failed: %v", err)
+	}
+	if len(got) != len(want) || got["a.txt"] != want["a.txt"] {
+		t.Fatalf("unexpected snapshot roundtrip: got=%+v want=%+v", got, want)
 	}
 }
 
