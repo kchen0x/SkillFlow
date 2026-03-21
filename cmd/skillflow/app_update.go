@@ -13,7 +13,7 @@ import (
 	goruntime "runtime"
 	"strings"
 
-	"github.com/shinerio/skillflow/core/notify"
+	"github.com/shinerio/skillflow/core/platform/eventbus"
 )
 
 const (
@@ -132,21 +132,21 @@ func (a *App) DownloadAppUpdate(downloadURL string) error {
 		resp, err := client.Get(downloadURL)
 		if err != nil {
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			err := fmt.Errorf("download status %d", resp.StatusCode)
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 
 		f, err := os.Create(partPath)
 		if err != nil {
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 
@@ -154,43 +154,43 @@ func (a *App) DownloadAppUpdate(downloadURL string) error {
 		if err != nil {
 			_ = f.Close()
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		if err := f.Close(); err != nil {
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		if resp.ContentLength > 0 && written != resp.ContentLength {
 			err := fmt.Errorf("download size mismatch: expected=%d actual=%d", resp.ContentLength, written)
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		checksum, err := fetchReleaseSHA256(client, releaseChecksumURL(downloadURL))
 		if err != nil {
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		if err := validateDownloadedWindowsUpdate(partPath, checksum); err != nil {
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		if err := os.Rename(partPath, tmpPath); err != nil {
 			a.logErrorf("download app update failed: %v", err)
-			a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadFail, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadFail, Payload: err.Error()})
 			return
 		}
 		a.logInfof("download app update completed: %s", tmpPath)
-		a.hub.Publish(notify.Event{Type: notify.EventAppUpdateDownloadDone, Payload: tmpPath})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventAppUpdateDownloadDone, Payload: tmpPath})
 	}()
 	return nil
 }
@@ -412,8 +412,8 @@ func (a *App) CheckAppUpdateAndNotify() (*AppUpdateInfo, error) {
 		return nil, err
 	}
 	if info.HasUpdate {
-		a.hub.Publish(notify.Event{
-			Type:    notify.EventAppUpdateAvailable,
+		a.hub.Publish(eventbus.Event{
+			Type:    eventbus.EventAppUpdateAvailable,
 			Payload: info,
 		})
 	}
@@ -437,8 +437,8 @@ func (a *App) checkAppUpdateOnStartup() {
 		a.logDebugf("check app update: version %s is skipped by user, suppressing startup prompt", info.LatestVersion)
 		return
 	}
-	a.hub.Publish(notify.Event{
-		Type:    notify.EventAppUpdateAvailable,
+	a.hub.Publish(eventbus.Event{
+		Type:    eventbus.EventAppUpdateAvailable,
 		Payload: info,
 	})
 }

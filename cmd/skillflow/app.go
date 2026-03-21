@@ -13,31 +13,34 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shinerio/skillflow/core/applog"
-	"github.com/shinerio/skillflow/core/backup"
+	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/notify"
-	"github.com/shinerio/skillflow/core/registry"
-	"github.com/shinerio/skillflow/core/skill"
-	"github.com/shinerio/skillflow/core/skillkey"
-	agentsync "github.com/shinerio/skillflow/core/sync"
-	"github.com/shinerio/skillflow/core/upgrade"
-	"github.com/shinerio/skillflow/core/viewstate"
+	"github.com/shinerio/skillflow/core/orchestration"
+	"github.com/shinerio/skillflow/core/platform/appdata"
+	"github.com/shinerio/skillflow/core/platform/eventbus"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	"github.com/shinerio/skillflow/core/platform/logging"
+	"github.com/shinerio/skillflow/core/platform/upgrade"
+	readmodelskills "github.com/shinerio/skillflow/core/readmodel/skills"
+	"github.com/shinerio/skillflow/core/readmodel/viewstate"
+	"github.com/shinerio/skillflow/core/shared/logicalkey"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
+	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type maxDepthPuller interface {
-	PullWithMaxDepth(ctx context.Context, sourceDir string, maxDepth int) ([]*skill.Skill, error)
-}
-
 type App struct {
 	ctx                context.Context
-	hub                *notify.Hub
-	sysLog             *applog.Logger
-	storage            *skill.Storage
+	hub                *eventbus.Hub
+	sysLog             *logging.Logger
+	storage            *skillcatalogapp.Service
 	config             *config.Service
-	starStorage        *coregit.StarStorage
+	starStorage        *sourcerepo.StarRepoStorage
 	cacheDir           string
 	viewCache          *viewstate.Manager
 	promptImports      *promptImportSessionStore
@@ -51,7 +54,7 @@ type App struct {
 	stopAutoSync       chan struct{}
 
 	backupResultMu       sync.RWMutex
-	lastBackupResult     []backup.RemoteFile
+	lastBackupResult     []backupdomain.RemoteFile
 	lastBackupAt         time.Time
 	windowVisibilityMu   sync.Mutex
 	windowVisibilityInit bool
@@ -73,7 +76,7 @@ var appDataDirFunc = config.AppDataDir
 
 var runStartupUpgrade = upgrade.Run
 
-var cloneOrUpdateRepo = coregit.CloneOrUpdate
+var cloneOrUpdateRepo = platformgit.CloneOrUpdate
 
 var loadStartupConfig = func(dataDir string) (*config.Service, config.AppConfig, error) {
 	svc := config.NewService(dataDir)
@@ -91,9 +94,38 @@ func normalizeCategoryName(name string) string {
 
 func NewApp() *App {
 	return &App{
-		hub:           notify.NewHub(),
+		hub:           eventbus.NewHub(),
 		promptImports: newPromptImportSessionStore(),
 	}
+}
+
+func (a *App) dataDir() string {
+	if a != nil && a.config != nil {
+		return a.config.DataDir()
+	}
+	return appDataDirFunc()
+}
+
+func (a *App) repoCacheDir() string {
+	dataDir := a.dataDir()
+	if a == nil || a.config == nil {
+		return appdata.RepoCacheDir(dataDir)
+	}
+	repoCacheDir := strings.TrimSpace(a.config.LoadLocalRuntimeConfig().RepoCacheDir)
+	if repoCacheDir == "" {
+		return appdata.RepoCacheDir(dataDir)
+	}
+	return repoCacheDir
+}
+
+func (a *App) rebuildPathBoundServices(repoCacheDir string) {
+	dataDir := a.dataDir()
+	a.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(appdata.SkillsDir(dataDir)))
+	a.starStorage = sourcerepo.NewStarRepoStorageWithBuiltinsAndCacheDir(
+		filepath.Join(dataDir, "star_repos.json"),
+		builtinStarredRepoURLs,
+		repoCacheDir,
+	)
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -124,10 +156,9 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
 		a.logErrorf("application startup launch-at-login reconcile failed: %v", err)
 	}
-	a.storage = skill.NewStorage(cfg.SkillsStorageDir)
+	a.rebuildPathBoundServices(cfg.RepoCacheDir)
 	a.cacheDir = filepath.Join(dataDir, "cache")
 	a.viewCache = viewstate.NewManager(filepath.Join(a.cacheDir, "viewstate"))
-	a.starStorage = coregit.NewStarStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
 	registerAdapters()
 	registerProviders()
 	if ctx != nil {
@@ -268,69 +299,50 @@ func (a *App) runBackup() error {
 
 func (a *App) runBackupWithConfig(cfg config.AppConfig) error {
 	a.logInfof("backup started (provider=%s)", cfg.Cloud.Provider)
-	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
-	if !ok {
-		return fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
-	}
-	if err := provider.Init(cfg.Cloud.Credentials); err != nil {
-		return err
-	}
-	isGit := cfg.Cloud.Provider == backup.GitProviderName
-	backupDir := a.backupRootDir(cfg)
-	var err error
+	profile := a.backupProfile(cfg)
+	isGit := profile.Provider == backupdomain.GitProviderName
 	if isGit {
-		backupDir, err = a.prepareGitBackupRoot(cfg)
-		if err != nil {
-			return err
-		}
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncStarted})
 	}
-	changes, currentSnapshot, err := a.computeBackupChanges(provider, backupDir, isGit)
-	if err != nil {
-		a.logErrorf("backup failed: compute changes failed: %v", err)
-		return err
-	}
-	if isGit {
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
-	}
-	a.hub.Publish(notify.Event{Type: notify.EventBackupStarted})
-	err = provider.Sync(a.ctx, backupDir, cfg.Cloud.BucketName, cfg.Cloud.RemotePath,
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventBackupStarted})
+	result, err := a.newBackupService().RunBackup(a.ctx, profile,
 		func(file string) {
-			a.hub.Publish(notify.Event{
-				Type:    notify.EventBackupProgress,
-				Payload: notify.BackupProgressPayload{CurrentFile: file},
+			a.hub.Publish(eventbus.Event{
+				Type:    eventbus.EventBackupProgress,
+				Payload: eventbus.BackupProgressPayload{CurrentFile: file},
 			})
 		})
 	if err != nil {
 		a.logErrorf("backup failed: %v", err)
-		var conflictErr *backup.GitConflictError
+		var conflictErr *backupdomain.GitConflictError
 		if isGit && errors.As(err, &conflictErr) {
 			a.publishGitConflict(conflictErr)
 		}
 		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
-		a.hub.Publish(notify.Event{Type: notify.EventBackupFailed, Payload: err.Error()})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventBackupFailed, Payload: err.Error()})
 		return err
 	} else {
-		a.recordBackupResult(changes, currentSnapshot)
-		payload := notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}
+		a.recordBackupResult(result.Files, result.Snapshot)
+		payload := eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}
 		a.logInfof("backup completed")
 		if isGit {
 			a.clearGitConflictPending()
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: payload})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: payload})
 		}
-		a.hub.Publish(notify.Event{Type: notify.EventBackupCompleted, Payload: payload})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventBackupCompleted, Payload: payload})
 		return nil
 	}
 }
 
-func (a *App) publishGitConflict(conflictErr *backup.GitConflictError) {
+func (a *App) publishGitConflict(conflictErr *backupdomain.GitConflictError) {
 	a.gitConflictMu.Lock()
 	a.gitConflictPending = true
 	a.gitConflictMu.Unlock()
-	a.hub.Publish(notify.Event{
-		Type: notify.EventGitConflict,
-		Payload: notify.GitConflictPayload{
+	a.hub.Publish(eventbus.Event{
+		Type: eventbus.EventGitConflict,
+		Payload: eventbus.GitConflictPayload{
 			Message: conflictErr.Output,
 			Files:   conflictErr.Files,
 		},
@@ -348,65 +360,40 @@ func (a *App) reloadStateFromDisk() {
 	if err != nil {
 		return
 	}
-	a.storage = skill.NewStorage(cfg.SkillsStorageDir)
+	a.rebuildPathBoundServices(cfg.RepoCacheDir)
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 }
 
 // gitPullOnStartup pulls from the remote git repo at startup when the git provider is enabled.
 func (a *App) gitPullOnStartup() {
 	cfg, err := a.config.Load()
-	if err != nil || !cfg.Cloud.Enabled || cfg.Cloud.Provider != backup.GitProviderName {
+	if err != nil || !cfg.Cloud.Enabled || cfg.Cloud.Provider != backupdomain.GitProviderName {
 		return
 	}
 	beforeRestore := a.captureCloudRestoreState()
 	a.logInfof("startup git pull started")
-	p, ok := registry.GetCloudProvider(backup.GitProviderName)
-	if !ok {
-		return
-	}
-	if err := p.Init(cfg.Cloud.Credentials); err != nil {
-		return
-	}
-	gitP := p.(*backup.GitProvider)
-	backupDir, prepErr := a.prepareGitBackupRoot(cfg)
-	if prepErr != nil {
-		a.logErrorf("startup git pull failed: prepare git backup root failed: %v", prepErr)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: prepErr.Error()})
-		return
-	}
-	beforeSnapshot, snapErr := backup.BuildSnapshot(backupDir)
-	if snapErr != nil {
-		a.logErrorf("startup git pull failed: build pre-pull snapshot failed: %v", snapErr)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: snapErr.Error()})
-		return
-	}
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
-	if err := gitP.Restore(a.ctx, "", "", backupDir); err != nil {
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncStarted})
+	result, err := a.newBackupService().RestoreBackup(a.ctx, a.backupProfile(cfg))
+	if err != nil {
 		a.logErrorf("startup git pull failed: %v", err)
-		var conflictErr *backup.GitConflictError
+		var conflictErr *backupdomain.GitConflictError
 		if errors.As(err, &conflictErr) {
 			a.publishGitConflict(conflictErr)
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		} else {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
 		return
 	}
-	changes, afterSnapshot, diffErr := a.computeSnapshotChanges(beforeSnapshot, backupDir)
-	if diffErr != nil {
-		a.logErrorf("startup git pull failed: compute post-pull changes failed: %v", diffErr)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: diffErr.Error()})
-		return
-	}
-	a.recordBackupResult(changes, afterSnapshot)
+	a.recordBackupResult(result.Files, result.Snapshot)
 	if err := a.handleRestoredCloudState(beforeRestore, "startup.git.pull"); err != nil {
 		a.logErrorf("startup git pull failed: restore compensation failed: %v", err)
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		return
 	}
 	a.logInfof("startup git pull completed")
 	a.clearGitConflictPending()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 }
 
 // startAutoSyncTimer starts (or restarts) a periodic auto-backup ticker.
@@ -450,25 +437,14 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	if useLocal {
 		action = "use_local"
 	}
-	p, ok := registry.GetCloudProvider(backup.GitProviderName)
-	if !ok {
-		return fmt.Errorf("git provider 未注册")
+	cfg, err := a.config.Load()
+	if err != nil {
+		a.logErrorf("git conflict resolution failed: strategy=%s load config failed: %v", action, err)
+		return err
 	}
-	gitP := p.(*backup.GitProvider)
-	localCfg := a.config.LoadLocalRuntimeConfig()
-	backupDir := a.backupRootDir(config.AppConfig{SkillsStorageDir: localCfg.SkillsStorageDir})
+	backupDir := a.newBackupService().BackupRootDir(a.backupProfile(cfg))
 	a.logInfof("git conflict resolution started: strategy=%s, backupDir=%s", action, backupDir)
-	beforeSnapshot, snapErr := backup.BuildSnapshot(backupDir)
-	if snapErr != nil {
-		a.logErrorf("git conflict resolution failed: build pre-resolution snapshot failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, snapErr)
-		return snapErr
-	}
-	var err error
-	if useLocal {
-		err = gitP.ResolveConflictUseLocal(backupDir)
-	} else {
-		err = gitP.ResolveConflictUseRemote(backupDir)
-	}
+	result, err := a.newBackupService().ResolveGitConflict(a.backupProfile(cfg), useLocal)
 	if err != nil {
 		a.logErrorf("git conflict resolution failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, err)
 		return err
@@ -476,86 +452,19 @@ func (a *App) ResolveGitConflict(useLocal bool) error {
 	a.gitConflictMu.Lock()
 	a.gitConflictPending = false
 	a.gitConflictMu.Unlock()
-	changes, afterSnapshot, diffErr := a.computeSnapshotChanges(beforeSnapshot, backupDir)
-	if diffErr != nil {
-		a.logErrorf("git conflict resolution failed: compute post-resolution changes failed: strategy=%s, backupDir=%s, err=%v", action, backupDir, diffErr)
-		return diffErr
-	}
-	a.recordBackupResult(changes, afterSnapshot)
+	a.recordBackupResult(result.Files, result.Snapshot)
 	a.reloadStateFromDisk()
-	a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 	a.logInfof("git conflict resolution completed: strategy=%s, backupDir=%s", action, backupDir)
 	return nil
 }
 
-func (a *App) backupRootDir(cfg config.AppConfig) string {
-	appDataDir := filepath.Clean(config.AppDataDir())
-	skillsDir := filepath.Clean(cfg.SkillsStorageDir)
-
-	// Prefer app data dir so cloud backup includes config/meta/skills.
-	if rel, err := filepath.Rel(appDataDir, skillsDir); err == nil &&
-		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return appDataDir
-	}
-	// If skills dir is outside app data dir, use its parent as the git root.
-	return filepath.Dir(skillsDir)
-}
-
-func (a *App) prepareGitBackupRoot(cfg config.AppConfig) (string, error) {
-	backupDir := a.backupRootDir(cfg)
-	migratedTo, migrated, err := backup.MigrateLegacyNestedGitDir(cfg.SkillsStorageDir, backupDir)
-	if err != nil {
-		a.logErrorf("git backup root preparation failed: skillsDir=%s, backupDir=%s, err=%v", cfg.SkillsStorageDir, backupDir, err)
-		return "", err
-	}
-	if migrated {
-		a.logInfof("git backup root preparation completed: moved legacy nested git dir from skills storage to %s", migratedTo)
-	}
-	return backupDir, nil
-}
-
-func (a *App) backupSnapshotPath() string {
-	return filepath.Join(config.AppDataDir(), "cache", "backup_snapshot.json")
-}
-
-func (a *App) computeBackupChanges(provider backup.CloudProvider, backupDir string, isGit bool) ([]backup.RemoteFile, backup.Snapshot, error) {
-	if isGit {
-		if gitProvider, ok := provider.(*backup.GitProvider); ok {
-			changes, err := gitProvider.PendingChanges(backupDir)
-			return changes, nil, err
-		}
-	}
-
-	previousSnapshot, err := backup.LoadSnapshot(a.backupSnapshotPath())
-	if err != nil {
-		return nil, nil, err
-	}
-	currentSnapshot, err := backup.BuildSnapshot(backupDir)
-	if err != nil {
-		return nil, nil, err
-	}
-	return backup.DiffSnapshots(previousSnapshot, currentSnapshot), currentSnapshot, nil
-}
-
-func (a *App) computeSnapshotChanges(beforeSnapshot backup.Snapshot, root string) ([]backup.RemoteFile, backup.Snapshot, error) {
-	afterSnapshot, err := backup.BuildSnapshot(root)
-	if err != nil {
-		return nil, nil, err
-	}
-	return backup.DiffSnapshots(beforeSnapshot, afterSnapshot), afterSnapshot, nil
-}
-
-func (a *App) recordBackupResult(files []backup.RemoteFile, snapshot backup.Snapshot) {
-	if snapshot != nil {
-		if err := backup.SaveSnapshot(a.backupSnapshotPath(), snapshot); err != nil {
-			a.logErrorf("backup snapshot save failed: %v", err)
-		}
-	}
+func (a *App) recordBackupResult(files []backupdomain.RemoteFile, _ backupdomain.Snapshot) {
 	a.setLastBackupResult(files)
 }
 
-func (a *App) setLastBackupResult(files []backup.RemoteFile) {
-	copied := make([]backup.RemoteFile, len(files))
+func (a *App) setLastBackupResult(files []backupdomain.RemoteFile) {
+	copied := make([]backupdomain.RemoteFile, len(files))
 	copy(copied, files)
 
 	a.backupResultMu.Lock()
@@ -564,11 +473,11 @@ func (a *App) setLastBackupResult(files []backup.RemoteFile) {
 	a.backupResultMu.Unlock()
 }
 
-func (a *App) GetLastBackupChanges() []backup.RemoteFile {
+func (a *App) GetLastBackupChanges() []backupdomain.RemoteFile {
 	a.backupResultMu.RLock()
 	defer a.backupResultMu.RUnlock()
 
-	copied := make([]backup.RemoteFile, len(a.lastBackupResult))
+	copied := make([]backupdomain.RemoteFile, len(a.lastBackupResult))
 	copy(copied, a.lastBackupResult)
 	return copied
 }
@@ -598,23 +507,20 @@ func (a *App) gitProxyURL() string {
 
 func (a *App) ListSkills() ([]InstalledSkillEntry, error) {
 	return measureOperation(a, "list_skills", func() ([]InstalledSkillEntry, error) {
-		fingerprint, fingerprintErr := a.installedSkillsFingerprint()
-		if fingerprintErr == nil {
-			var cached []InstalledSkillEntry
-			state, err := a.ensureViewCache().Load(installedSkillsSnapshotName, fingerprint, &cached)
-			if err == nil && state == viewstate.StateHit {
-				return cached, nil
-			}
-		}
-
-		entries, err := a.listSkillsUncached()
+		cfg, err := a.config.Load()
 		if err != nil {
 			return nil, err
 		}
-		if fingerprint, err := a.installedSkillsFingerprint(); err == nil {
-			_ = a.ensureViewCache().Save(installedSkillsSnapshotName, fingerprint, entries)
+		fingerprint, err := a.installedSkillsFingerprint()
+		if err != nil {
+			return nil, err
 		}
-		return entries, nil
+		return a.newSkillsReadmodelService().ListInstalledSkills(a.ctx, readmodelskills.InstalledSkillsInput{
+			DefaultCategory:     defaultCategoryName,
+			RepoScanMaxDepth:    config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+			AgentProfiles:       cfg.Agents,
+			SnapshotFingerprint: fingerprint,
+		})
 	})
 }
 
@@ -661,7 +567,7 @@ func (a *App) DeleteCategory(name string) error {
 		return err
 	}
 	if err := a.storage.DeleteCategory(name); err != nil {
-		if errors.Is(err, skill.ErrCategoryNotEmpty) {
+		if errors.Is(err, skillrepo.ErrCategoryNotEmpty) {
 			wrapped := fmt.Errorf("分类下仍有 Skill，请先清空后再删除")
 			a.logErrorf("delete category failed: category=%s, err=%v", name, wrapped)
 			return wrapped
@@ -696,17 +602,17 @@ func (a *App) DeleteSkills(skillIDs []string) error {
 	return nil
 }
 
-func (a *App) GetSkillMeta(skillID string) (*skill.SkillMeta, error) {
+func (a *App) GetSkillMeta(skillID string) (*skilldomain.SkillMeta, error) {
 	sk, err := a.storage.Get(skillID)
 	if err != nil {
 		return nil, err
 	}
-	return skill.ReadMeta(sk.Path)
+	return skilldomain.ReadMeta(sk.Path)
 }
 
 // GetSkillMetaByPath reads skill.md frontmatter from a skill directory path (no ID required).
-func (a *App) GetSkillMetaByPath(path string) (*skill.SkillMeta, error) {
-	return skill.ReadMeta(path)
+func (a *App) GetSkillMetaByPath(path string) (*skilldomain.SkillMeta, error) {
+	return skilldomain.ReadMeta(path)
 }
 
 // ReadSkillFileContent returns the full text content of skill.md inside the given skill directory.
@@ -732,7 +638,7 @@ func (a *App) ReadSkillFileContent(path string) (string, error) {
 func (a *App) OpenURL(rawURL string) error {
 	target := rawURL
 	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
-		if canonical, err := coregit.CanonicalRepoURL(rawURL); err == nil {
+		if canonical, err := platformgit.CanonicalRepoURL(rawURL); err == nil {
 			target = canonical
 		}
 	}
@@ -742,44 +648,20 @@ func (a *App) OpenURL(rawURL string) error {
 
 // PushStarSkillsToAgents copies starred skill directories directly to the push directory of each
 // specified agent, skipping skills that already exist. Returns structured conflicts.
-func (a *App) PushStarSkillsToAgents(skillPaths []string, agentNames []string) ([]PushConflict, error) {
+func (a *App) PushStarSkillsToAgents(skillPaths []string, agentNames []string) ([]agentdomain.PushConflict, error) {
 	a.logInfof("push starred skills to agents started: skillCount=%d agentCount=%d", len(skillPaths), len(agentNames))
 	cfg, _ := a.config.Load()
-	var conflicts []PushConflict
-	for _, agentName := range agentNames {
-		for _, agent := range cfg.Agents {
-			if agent.Name != agentName {
-				continue
-			}
-			if agent.PushDir == "" {
-				err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
-				a.logErrorf("push starred skills to agents failed: agent=%s err=%v", agentName, err)
-				return nil, err
-			}
-			if err := os.MkdirAll(agent.PushDir, 0755); err != nil {
-				a.logErrorf("push starred skills to agents failed: agent=%s pushDir=%s err=%v", agentName, agent.PushDir, err)
-				return nil, err
-			}
-			adapter := getAdapter(agent)
-			for _, skillPath := range skillPaths {
-				name := filepath.Base(skillPath)
-				dst := filepath.Join(agent.PushDir, name)
-				if _, err := os.Stat(dst); err == nil {
-					conflicts = append(conflicts, PushConflict{
-						SkillName:  name,
-						SkillPath:  skillPath,
-						AgentName:  agentName,
-						TargetPath: dst,
-					})
-					continue
-				}
-				sk := []*skill.Skill{{Name: name, Path: skillPath}}
-				if err := adapter.Push(a.ctx, sk, agent.PushDir); err != nil {
-					a.logErrorf("push starred skills to agents failed: agent=%s skill=%s err=%v", agentName, name, err)
-					return nil, err
-				}
-			}
-		}
+	tempSkills := make([]*skilldomain.InstalledSkill, 0, len(skillPaths))
+	for _, skillPath := range skillPaths {
+		tempSkills = append(tempSkills, &skilldomain.InstalledSkill{
+			Name: filepath.Base(skillPath),
+			Path: skillPath,
+		})
+	}
+	conflicts, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, tempSkills, false)
+	if err != nil {
+		a.logErrorf("push starred skills to agents failed: err=%v", err)
+		return nil, err
 	}
 	a.logInfof("push starred skills to agents completed: conflicts=%d", len(conflicts))
 	return conflicts, nil
@@ -790,48 +672,40 @@ func (a *App) PushStarSkillsToAgents(skillPaths []string, agentNames []string) (
 func (a *App) PushStarSkillsToAgentsForce(skillPaths []string, agentNames []string) error {
 	a.logInfof("force push starred skills to agents started: skillCount=%d agentCount=%d", len(skillPaths), len(agentNames))
 	cfg, _ := a.config.Load()
-	for _, agentName := range agentNames {
-		for _, agent := range cfg.Agents {
-			if agent.Name != agentName {
-				continue
-			}
-			if agent.PushDir == "" {
-				err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
-				a.logErrorf("force push starred skills to agents failed: agent=%s err=%v", agentName, err)
-				return err
-			}
-			var tempSkills []*skill.Skill
-			for _, skillPath := range skillPaths {
-				name := filepath.Base(skillPath)
-				targetPath := filepath.Join(agent.PushDir, name)
-				if err := os.RemoveAll(targetPath); err != nil {
-					a.logErrorf("force push starred skills to agents failed: agent=%s target=%s err=%v", agentName, targetPath, err)
-					return err
-				}
-				tempSkills = append(tempSkills, &skill.Skill{Name: name, Path: skillPath})
-			}
-			if err := getAdapter(agent).Push(a.ctx, tempSkills, agent.PushDir); err != nil {
-				a.logErrorf("force push starred skills to agents failed: agent=%s err=%v", agentName, err)
-				return err
-			}
-		}
+	tempSkills := make([]*skilldomain.InstalledSkill, 0, len(skillPaths))
+	for _, skillPath := range skillPaths {
+		tempSkills = append(tempSkills, &skilldomain.InstalledSkill{
+			Name: filepath.Base(skillPath),
+			Path: skillPath,
+		})
+	}
+	if _, err := newAgentIntegrationService().PushSkills(a.ctx, cfg.Agents, agentNames, tempSkills, true); err != nil {
+		a.logErrorf("force push starred skills to agents failed: err=%v", err)
+		return err
 	}
 	a.logInfof("force push starred skills to agents completed")
 	return nil
 }
 
-func (a *App) ImportLocal(dir, category string) (*skill.Skill, error) {
-	category = normalizeCategoryName(category)
-	sk, err := a.storage.Import(dir, category, skill.SourceManual, "", "")
+func (a *App) ImportLocal(dir, category string) (*skilldomain.InstalledSkill, error) {
+	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, err
 	}
-	a.autoPushImportedSkillsToAgents("local.import", []*skill.Skill{sk})
-	a.scheduleAutoBackup()
-	return sk, nil
+	result, err := a.newOrchestrationService().ImportLocalSkill(a.ctx, orchestration.ImportLocalCommand{
+		SourceDir:          dir,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Skill, nil
 }
 
-func (a *App) autoPushAgentTargets(cfg config.AppConfig) []config.AgentConfig {
+func (a *App) autoPushAgentTargets(cfg config.AppConfig) []agentdomain.AgentProfile {
 	if len(cfg.AutoPushAgents) == 0 {
 		return nil
 	}
@@ -839,7 +713,7 @@ func (a *App) autoPushAgentTargets(cfg config.AppConfig) []config.AgentConfig {
 	for _, name := range cfg.AutoPushAgents {
 		selected[name] = struct{}{}
 	}
-	targets := make([]config.AgentConfig, 0, len(selected))
+	targets := make([]agentdomain.AgentProfile, 0, len(selected))
 	for _, agent := range cfg.Agents {
 		if !agent.Enabled {
 			continue
@@ -851,11 +725,11 @@ func (a *App) autoPushAgentTargets(cfg config.AppConfig) []config.AgentConfig {
 	return targets
 }
 
-func (a *App) autoPushImportedSkillsToAgents(source string, imported []*skill.Skill) {
+func (a *App) autoPushImportedSkillsToAgents(source string, imported []*skilldomain.InstalledSkill) {
 	a.autoPushSkillsToConfiguredAgents(source, imported, false)
 }
 
-func (a *App) autoPushSkillsToConfiguredAgents(source string, skills []*skill.Skill, overwriteExisting bool) {
+func (a *App) autoPushSkillsToConfiguredAgents(source string, skills []*skilldomain.InstalledSkill, overwriteExisting bool) {
 	if len(skills) == 0 {
 		return
 	}
@@ -871,58 +745,16 @@ func (a *App) autoPushSkillsToConfiguredAgents(source string, skills []*skill.Sk
 	}
 
 	a.logInfof("auto push imported skills started: source=%s skillCount=%d agentCount=%d overwriteExisting=%t", source, len(skills), len(targets), overwriteExisting)
-	totalPushed := 0
-	failures := 0
-
-	for _, agent := range targets {
-		if strings.TrimSpace(agent.PushDir) == "" {
-			failures++
-			err := fmt.Errorf("push dir not configured")
-			a.logErrorf("auto push agent failed: source=%s agent=%s err=%v", source, agent.Name, err)
-			continue
-		}
-
-		toPush := make([]*skill.Skill, 0, len(skills))
-		skippedExisting := 0
-		for _, sk := range skills {
-			targetPath := filepath.Join(agent.PushDir, sk.Name)
-			if _, statErr := os.Stat(targetPath); statErr == nil {
-				if overwriteExisting {
-					if err := os.RemoveAll(targetPath); err != nil {
-						failures++
-						a.logErrorf("auto push agent failed: source=%s agent=%s skill=%s target=%s err=%v", source, agent.Name, sk.Name, targetPath, err)
-						continue
-					}
-					toPush = append(toPush, sk)
-					continue
-				}
-				skippedExisting++
-				a.logDebugf("auto push agent skipped existing target: source=%s agent=%s skill=%s target=%s", source, agent.Name, sk.Name, targetPath)
-				continue
-			} else if !os.IsNotExist(statErr) {
-				skippedExisting++
-				failures++
-				a.logErrorf("auto push agent failed: source=%s agent=%s skill=%s target=%s err=%v", source, agent.Name, sk.Name, targetPath, statErr)
-				continue
-			}
-			toPush = append(toPush, sk)
-		}
-
-		a.logInfof("auto push agent started: source=%s agent=%s skillCount=%d", source, agent.Name, len(toPush))
-		if len(toPush) == 0 {
-			a.logInfof("auto push agent completed: source=%s agent=%s pushed=%d skippedExisting=%d", source, agent.Name, 0, skippedExisting)
-			continue
-		}
-		if err := getAdapter(agent).Push(a.ctx, toPush, agent.PushDir); err != nil {
-			failures++
-			a.logErrorf("auto push agent failed: source=%s agent=%s pushDir=%s err=%v", source, agent.Name, agent.PushDir, err)
-			continue
-		}
-		totalPushed += len(toPush)
-		a.logInfof("auto push agent completed: source=%s agent=%s pushed=%d skippedExisting=%d", source, agent.Name, len(toPush), skippedExisting)
+	targetNames := make([]string, 0, len(targets))
+	for _, profile := range targets {
+		targetNames = append(targetNames, profile.Name)
 	}
-
-	a.logInfof("auto push imported skills completed: source=%s skillCount=%d agentCount=%d pushed=%d failures=%d overwriteExisting=%t", source, len(skills), len(targets), totalPushed, failures, overwriteExisting)
+	conflicts, err := newAgentIntegrationService().PushSkills(a.ctx, targets, targetNames, skills, overwriteExisting)
+	if err != nil {
+		a.logErrorf("auto push imported skills failed: source=%s err=%v", source, err)
+		return
+	}
+	a.logInfof("auto push imported skills completed: source=%s skillCount=%d agentCount=%d conflicts=%d overwriteExisting=%t", source, len(skills), len(targets), len(conflicts), overwriteExisting)
 }
 
 // --- Sync ---
@@ -932,72 +764,39 @@ func (a *App) GetEnabledAgents() ([]config.AgentConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	var enabled []config.AgentConfig
-	for _, t := range cfg.Agents {
-		if t.Enabled {
-			enabled = append(enabled, t)
-		}
-	}
-	return enabled, nil
+	return newAgentIntegrationService().EnabledProfiles(cfg.Agents), nil
 }
 
 // ScanAgentSkills lists all skills in an agent's configured scan directories for the pull page.
-func (a *App) ScanAgentSkills(agentName string) ([]AgentSkillCandidate, error) {
+func (a *App) ScanAgentSkills(agentName string) ([]agentdomain.AgentSkillCandidate, error) {
 	cfg, _ := a.config.Load()
-	for _, agent := range cfg.Agents {
-		if agent.Name == agentName {
-			scanned, err := scanAgentSkillsRaw(a.ctx, getAdapter(agent), agent.ScanDirs, a.repoScanMaxDepth())
-			if err != nil {
-				return nil, err
-			}
-			_, installedIndex, err := a.installedIndex()
-			if err != nil {
-				return nil, err
-			}
-			return resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), nil
-		}
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
+	if !ok {
+		return nil, nil
 	}
-	return nil, nil
-}
-
-// ListAgentSkills returns all skills for an agent, annotated with whether each
-// skill lives in the push directory and/or the scan directories.
-func (a *App) ListAgentSkills(agentName string) ([]AgentSkillEntry, error) {
-	cfg, err := a.config.Load()
-	if err != nil {
-		return nil, err
-	}
-	var agentCfg *config.AgentConfig
-	for i := range cfg.Agents {
-		if cfg.Agents[i].Name == agentName {
-			agentCfg = &cfg.Agents[i]
-			break
-		}
-	}
-	if agentCfg == nil {
-		return nil, fmt.Errorf("agent %s not found", agentName)
-	}
-	adapter := getAdapter(*agentCfg)
 	_, installedIndex, err := a.installedIndex()
 	if err != nil {
 		return nil, err
 	}
-	presence := a.buildAgentPresenceIndex(installedIndex)
-	var pushSkills []*skill.Skill
+	return newAgentIntegrationService().ScanAgentSkills(a.ctx, profile, installedIndex, a.buildAgentPresenceIndex(installedIndex), a.repoScanMaxDepth())
+}
 
-	if agentCfg.PushDir != "" {
-		if _, statErr := os.Stat(agentCfg.PushDir); statErr == nil {
-			if pulled, pullErr := pullAgentSkills(a.ctx, adapter, agentCfg.PushDir, a.repoScanMaxDepth()); pullErr == nil {
-				pushSkills = pulled
-			}
-		}
-	}
-
-	scanSkills, err := scanAgentSkillsRaw(a.ctx, adapter, agentCfg.ScanDirs, a.repoScanMaxDepth())
+// ListAgentSkills returns all skills for an agent, annotated with whether each
+// skill lives in the push directory and/or the scan directories.
+func (a *App) ListAgentSkills(agentName string) ([]agentdomain.AgentSkillEntry, error) {
+	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, err
 	}
-	return aggregateAgentSkillEntries(pushSkills, scanSkills, installedIndex, presence), nil
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
+	if !ok {
+		return nil, fmt.Errorf("agent %s not found", agentName)
+	}
+	_, installedIndex, err := a.installedIndex()
+	if err != nil {
+		return nil, err
+	}
+	return newAgentIntegrationService().ListAgentSkills(a.ctx, profile, installedIndex, a.buildAgentPresenceIndex(installedIndex), a.repoScanMaxDepth())
 }
 
 // DeleteAgentSkill removes a skill directory from an agent's push directory.
@@ -1007,27 +806,14 @@ func (a *App) DeleteAgentSkill(agentName string, skillPath string) error {
 	if err != nil {
 		return err
 	}
-	var agentCfg *config.AgentConfig
-	for i := range cfg.Agents {
-		if cfg.Agents[i].Name == agentName {
-			agentCfg = &cfg.Agents[i]
-			break
-		}
-	}
-	if agentCfg == nil {
+	profile, ok := agentapp.FindProfile(cfg.Agents, agentName)
+	if !ok {
 		return fmt.Errorf("agent %s not found", agentName)
 	}
-	if agentCfg.PushDir == "" {
-		return fmt.Errorf("智能体 %s 未配置推送路径", agentName)
-	}
-	rel, relErr := filepath.Rel(agentCfg.PushDir, skillPath)
-	if relErr != nil || strings.HasPrefix(rel, "..") {
-		return fmt.Errorf("无法删除不在推送路径下的 Skill")
-	}
 	a.logInfof("DeleteAgentSkill: deleting %s from agent %s push dir started", filepath.Base(skillPath), agentName)
-	if err := os.RemoveAll(skillPath); err != nil {
+	if err := newAgentIntegrationService().DeletePushedSkill(profile, skillPath); err != nil {
 		a.logErrorf("DeleteAgentSkill: delete %s failed: %v", skillPath, err)
-		return fmt.Errorf("删除失败: %w", err)
+		return err
 	}
 	a.logInfof("DeleteAgentSkill: deleted %s from agent %s push dir completed", filepath.Base(skillPath), agentName)
 	return nil
@@ -1035,214 +821,93 @@ func (a *App) DeleteAgentSkill(agentName string, skillPath string) error {
 
 // CheckMissingAgentPushDirs returns agent names and paths whose push directory does not yet exist.
 // Each element is map{"name": agentName, "dir": pushDir}.
-func (a *App) CheckMissingAgentPushDirs(agentNames []string) ([]map[string]string, error) {
+func (a *App) CheckMissingAgentPushDirs(agentNames []string) ([]agentdomain.MissingPushDir, error) {
 	cfg, _ := a.config.Load()
-	var missing []map[string]string
-	for _, agentName := range agentNames {
-		for _, agent := range cfg.Agents {
-			if agent.Name != agentName || agent.PushDir == "" {
-				continue
-			}
-			if _, err := os.Stat(agent.PushDir); os.IsNotExist(err) {
-				missing = append(missing, map[string]string{"name": agent.Name, "dir": agent.PushDir})
-			}
-		}
-	}
-	return missing, nil
+	return newAgentIntegrationService().CheckMissingPushDirs(cfg.Agents, agentNames)
 }
 
 // PushToAgents pushes selected skills to target agents.
 // Returns structured conflicts that were skipped.
-func (a *App) PushToAgents(skillIDs []string, agentNames []string) ([]PushConflict, error) {
-	a.logInfof("push skills to agents started: skillCount=%d agentCount=%d", len(skillIDs), len(agentNames))
-	cfg, _ := a.config.Load()
-	skills, err := a.storage.ListAll()
+func (a *App) PushToAgents(skillIDs []string, agentNames []string) ([]agentdomain.PushConflict, error) {
+	cfg, err := a.config.Load()
 	if err != nil {
-		a.logErrorf("push skills to agents failed: %v", err)
 		return nil, err
 	}
-	idSet := map[string]bool{}
-	for _, id := range skillIDs {
-		idSet[id] = true
+	result, err := a.newOrchestrationService().PushInstalledSkills(a.ctx, orchestration.PushInstalledSkillsCommand{
+		SkillIDs:      skillIDs,
+		AgentNames:    agentNames,
+		AgentProfiles: cfg.Agents,
+		Force:         false,
+	})
+	if err != nil {
+		return nil, err
 	}
-	var selected []*skill.Skill
-	for _, sk := range skills {
-		if idSet[sk.ID] {
-			selected = append(selected, sk)
-		}
-	}
-
-	var conflicts []PushConflict
-	for _, agentName := range agentNames {
-		for _, agent := range cfg.Agents {
-			if agent.Name != agentName {
-				continue
-			}
-			if agent.PushDir == "" {
-				err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
-				a.logErrorf("push skills to agents failed: agent=%s err=%v", agentName, err)
-				return nil, err
-			}
-			adapter := getAdapter(agent)
-			var toPush []*skill.Skill
-			for _, sk := range selected {
-				dst := filepath.Join(agent.PushDir, sk.Name)
-				if _, err := os.Stat(dst); err == nil {
-					conflicts = append(conflicts, PushConflict{
-						SkillID:    sk.ID,
-						SkillName:  sk.Name,
-						SkillPath:  sk.Path,
-						AgentName:  agentName,
-						TargetPath: dst,
-					})
-					continue
-				}
-				toPush = append(toPush, sk)
-			}
-			if len(toPush) == 0 {
-				continue
-			}
-			if err := adapter.Push(a.ctx, toPush, agent.PushDir); err != nil {
-				a.logErrorf("push skills to agents failed: agent=%s err=%v", agentName, err)
-				return nil, err
-			}
-		}
-	}
-	a.logInfof("push skills to agents completed: conflicts=%d", len(conflicts))
-	return conflicts, nil
+	return result.Conflicts, nil
 }
 
 // PushToAgentsForce pushes and overwrites conflicts.
 func (a *App) PushToAgentsForce(skillIDs []string, agentNames []string) error {
-	a.logInfof("force push skills to agents started: skillCount=%d agentCount=%d", len(skillIDs), len(agentNames))
-	cfg, _ := a.config.Load()
-	skills, _ := a.storage.ListAll()
-	idSet := map[string]bool{}
-	for _, id := range skillIDs {
-		idSet[id] = true
+	cfg, err := a.config.Load()
+	if err != nil {
+		return err
 	}
-	var selected []*skill.Skill
-	for _, sk := range skills {
-		if idSet[sk.ID] {
-			selected = append(selected, sk)
-		}
-	}
-	for _, agentName := range agentNames {
-		for _, agent := range cfg.Agents {
-			if agent.Name == agentName {
-				if agent.PushDir == "" {
-					err := fmt.Errorf("智能体 %s 未配置推送路径", agentName)
-					a.logErrorf("force push skills to agents failed: agent=%s err=%v", agentName, err)
-					return err
-				}
-				for _, sk := range selected {
-					targetPath := filepath.Join(agent.PushDir, sk.Name)
-					if err := os.RemoveAll(targetPath); err != nil {
-						a.logErrorf("force push skills to agents failed: agent=%s target=%s err=%v", agentName, targetPath, err)
-						return err
-					}
-				}
-				if err := getAdapter(agent).Push(a.ctx, selected, agent.PushDir); err != nil {
-					a.logErrorf("force push skills to agents failed: agent=%s err=%v", agentName, err)
-					return err
-				}
-			}
-		}
-	}
-	a.logInfof("force push skills to agents completed")
-	return nil
+	_, err = a.newOrchestrationService().PushInstalledSkills(a.ctx, orchestration.PushInstalledSkillsCommand{
+		SkillIDs:      skillIDs,
+		AgentNames:    agentNames,
+		AgentProfiles: cfg.Agents,
+		Force:         true,
+	})
+	return err
 }
 
 // PullFromAgent imports selected skills from an agent into SkillFlow storage.
 func (a *App) PullFromAgent(agentName string, skillPaths []string, category string) ([]string, error) {
-	category = normalizeCategoryName(category)
-	cfg, _ := a.config.Load()
-	for _, agent := range cfg.Agents {
-		if agent.Name != agentName {
-			continue
-		}
-		scanned, err := scanAgentSkillsRaw(a.ctx, getAdapter(agent), agent.ScanDirs, a.repoScanMaxDepth())
-		if err != nil {
-			return nil, err
-		}
-		_, installedIndex, err := a.installedIndex()
-		if err != nil {
-			return nil, err
-		}
-		candidates := resolveAgentSkillSelection(resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), skillPaths)
-		var conflicts []string
-		imported := make([]*skill.Skill, 0, len(candidates))
-		for _, candidate := range candidates {
-			if candidate.Imported {
-				conflicts = append(conflicts, candidate.Path)
-				continue
-			}
-			sk, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
-			if err == skill.ErrSkillExists {
-				conflicts = append(conflicts, candidate.Path)
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			imported = append(imported, sk)
-		}
-		a.autoPushImportedSkillsToAgents("agent.pull", imported)
-		a.scheduleAutoBackup()
-		return conflicts, nil
+	cfg, err := a.config.Load()
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	result, err := a.newOrchestrationService().PullFromAgent(a.ctx, orchestration.PullFromAgentCommand{
+		AgentName:          agentName,
+		SkillPaths:         skillPaths,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		RepoScanMaxDepth:   cfg.RepoScanMaxDepth,
+		Force:              false,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !result.AgentFound {
+		return nil, nil
+	}
+	return result.Conflicts, nil
 }
 
 // PullFromAgentForce imports selected skills, overwriting existing ones.
 func (a *App) PullFromAgentForce(agentName string, skillPaths []string, category string) error {
-	category = normalizeCategoryName(category)
-	cfg, _ := a.config.Load()
-	for _, agent := range cfg.Agents {
-		if agent.Name != agentName {
-			continue
-		}
-		scanned, err := scanAgentSkillsRaw(a.ctx, getAdapter(agent), agent.ScanDirs, a.repoScanMaxDepth())
-		if err != nil {
-			return err
-		}
-		_, installedIndex, err := a.installedIndex()
-		if err != nil {
-			return err
-		}
-		imported := make([]*skill.Skill, 0, len(skillPaths))
-		for _, candidate := range resolveAgentSkillSelection(resolveAgentSkillCandidates(scanned, installedIndex, a.buildAgentPresenceIndex(installedIndex)), skillPaths) {
-			existing, _ := a.storage.ListAll()
-			for _, e := range existing {
-				logicalKey, logicalErr := skill.LogicalKey(e)
-				if (candidate.LogicalKey != "" && logicalErr == nil && logicalKey == candidate.LogicalKey) || (candidate.LogicalKey == "" && e.Name == candidate.Name) {
-					_ = a.storage.Delete(e.ID)
-				}
-			}
-			sk, err := a.storage.Import(candidate.Path, category, skill.SourceManual, "", "")
-			if err != nil {
-				return err
-			}
-			imported = append(imported, sk)
-		}
-		a.autoPushImportedSkillsToAgents("agent.pull.force", imported)
-		a.scheduleAutoBackup()
+	cfg, err := a.config.Load()
+	if err != nil {
+		return err
+	}
+	result, err := a.newOrchestrationService().PullFromAgent(a.ctx, orchestration.PullFromAgentCommand{
+		AgentName:          agentName,
+		SkillPaths:         skillPaths,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		RepoScanMaxDepth:   cfg.RepoScanMaxDepth,
+		Force:              true,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.AgentFound {
+		return nil
 	}
 	return nil
-}
-
-func pullAgentSkills(ctx context.Context, adapter agentsync.AgentAdapter, dir string, maxDepth int) ([]*skill.Skill, error) {
-	if depthAware, ok := adapter.(maxDepthPuller); ok {
-		return depthAware.PullWithMaxDepth(ctx, dir, maxDepth)
-	}
-	return adapter.Pull(ctx, dir)
-}
-
-func getAdapter(t config.AgentConfig) agentsync.AgentAdapter {
-	if a, ok := registry.GetAdapter(t.Name); ok {
-		return a
-	}
-	return agentsync.NewFilesystemAdapter(t.Name, t.PushDir)
 }
 
 func (a *App) repoScanMaxDepth() int {
@@ -1251,100 +916,6 @@ func (a *App) repoScanMaxDepth() int {
 		return config.DefaultRepoScanMaxDepth
 	}
 	return config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
-}
-
-// --- Config ---
-
-func (a *App) GetConfig() (config.AppConfig, error) {
-	cfg, err := a.config.Load()
-	if err != nil {
-		return cfg, err
-	}
-	cfg.DefaultCategory = defaultCategoryName
-	cfg.LogLevel = config.NormalizeLogLevel(cfg.LogLevel)
-	cfg.RepoScanMaxDepth = config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
-	return cfg, nil
-}
-
-func (a *App) SaveConfig(cfg config.AppConfig) error {
-	a.logInfof("save config requested")
-	prevCfg, err := a.config.Load()
-	if err != nil {
-		a.logErrorf("save config failed: load current config failed: %v", err)
-		return err
-	}
-	cfg.DefaultCategory = defaultCategoryName
-	cfg.LogLevel = config.NormalizeLogLevel(cfg.LogLevel)
-	cfg.RepoScanMaxDepth = config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
-	if err := a.config.Save(cfg); err != nil {
-		a.logErrorf("save config failed: %v", err)
-		return err
-	}
-	a.syncExistingSkillsForNewAutoPushAgents(prevCfg, cfg)
-	if prevCfg.LaunchAtLogin != cfg.LaunchAtLogin {
-		if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
-			persistedCfg := cfg
-			rollbackCfg := cfg
-			rollbackCfg.LaunchAtLogin = prevCfg.LaunchAtLogin
-			if rollbackErr := a.config.Save(rollbackCfg); rollbackErr != nil {
-				a.logErrorf("save config rollback failed: restore launch-at-login setting=%t err=%v", prevCfg.LaunchAtLogin, rollbackErr)
-			} else if rollbackErr := a.syncLaunchAtLogin(prevCfg.LaunchAtLogin); rollbackErr != nil {
-				a.logErrorf("save config rollback failed: restore launch-at-login state=%t err=%v", prevCfg.LaunchAtLogin, rollbackErr)
-				persistedCfg = rollbackCfg
-			} else {
-				persistedCfg = rollbackCfg
-			}
-			a.setLoggerLevel(persistedCfg.LogLevel)
-			a.startAutoSyncTimer(persistedCfg.Cloud.SyncIntervalMinutes)
-			a.logErrorf("save config failed: apply launch-at-login failed: %v", err)
-			return err
-		}
-	}
-	a.setLoggerLevel(cfg.LogLevel)
-	a.logInfof("save config completed: logLevel=%s repoScanMaxDepth=%d launchAtLogin=%t", cfg.LogLevel, cfg.RepoScanMaxDepth, cfg.LaunchAtLogin)
-	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
-	return nil
-}
-
-func (a *App) syncExistingSkillsForNewAutoPushAgents(prevCfg, nextCfg config.AppConfig) {
-	prevTargets := make(map[string]struct{}, len(prevCfg.AutoPushAgents))
-	for _, name := range prevCfg.AutoPushAgents {
-		prevTargets[name] = struct{}{}
-	}
-
-	newTargets := make([]string, 0, len(nextCfg.AutoPushAgents))
-	for _, name := range nextCfg.AutoPushAgents {
-		if _, existed := prevTargets[name]; existed {
-			continue
-		}
-		newTargets = append(newTargets, name)
-	}
-	if len(newTargets) == 0 {
-		return
-	}
-
-	skills, err := a.storage.ListAll()
-	if err != nil {
-		a.logErrorf("sync existing skills to new auto push agents failed: load skills failed: %v", err)
-		return
-	}
-	if len(skills) == 0 {
-		a.logInfof("sync existing skills to new auto push agents skipped: reason=no-skills agentCount=%d", len(newTargets))
-		return
-	}
-
-	skillIDs := make([]string, 0, len(skills))
-	for _, sk := range skills {
-		skillIDs = append(skillIDs, sk.ID)
-	}
-
-	a.logInfof("sync existing skills to new auto push agents started: skillCount=%d agentCount=%d", len(skillIDs), len(newTargets))
-	conflicts, err := a.PushToAgents(skillIDs, newTargets)
-	if err != nil {
-		a.logErrorf("sync existing skills to new auto push agents failed: %v", err)
-		return
-	}
-	a.logInfof("sync existing skills to new auto push agents completed: skillCount=%d agentCount=%d conflicts=%d", len(skillIDs), len(newTargets), len(conflicts))
 }
 
 func (a *App) AddCustomAgent(name, pushDir string) error {
@@ -1398,24 +969,14 @@ func (a *App) BackupNow() error {
 	return a.runBackup()
 }
 
-func (a *App) ListCloudFiles() ([]backup.RemoteFile, error) {
+func (a *App) ListCloudFiles() ([]backupdomain.RemoteFile, error) {
 	cfg, err := a.config.Load()
 	if err != nil {
 		a.logErrorf("list cloud files failed: load config failed: %v", err)
 		return nil, err
 	}
 	a.logInfof("list cloud files started (provider=%s, remotePath=%s)", cfg.Cloud.Provider, cfg.Cloud.RemotePath)
-	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
-	if !ok {
-		err := fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
-		a.logErrorf("list cloud files failed: %v", err)
-		return nil, err
-	}
-	if err := provider.Init(cfg.Cloud.Credentials); err != nil {
-		a.logErrorf("list cloud files failed: init provider %s failed: %v", cfg.Cloud.Provider, err)
-		return nil, err
-	}
-	files, err := provider.List(a.ctx, cfg.Cloud.BucketName, cfg.Cloud.RemotePath)
+	files, err := a.newBackupService().ListRemoteBackupFiles(a.ctx, a.backupProfile(cfg))
 	if err != nil {
 		a.logErrorf("list cloud files failed: provider=%s, remotePath=%s, err=%v", cfg.Cloud.Provider, cfg.Cloud.RemotePath, err)
 		return nil, err
@@ -1432,61 +993,35 @@ func (a *App) RestoreFromCloud() error {
 		return err
 	}
 	beforeRestore := a.captureCloudRestoreState()
-	provider, ok := registry.GetCloudProvider(cfg.Cloud.Provider)
-	if !ok {
-		return fmt.Errorf("provider not found: %s", cfg.Cloud.Provider)
-	}
-	if err := provider.Init(cfg.Cloud.Credentials); err != nil {
-		return err
-	}
-	isGit := cfg.Cloud.Provider == backup.GitProviderName
-	restoreDir := a.backupRootDir(cfg)
+	profile := a.backupProfile(cfg)
+	isGit := profile.Provider == backupdomain.GitProviderName
 	if isGit {
-		restoreDir, err = a.prepareGitBackupRoot(cfg)
-		if err != nil {
-			a.logErrorf("restore from cloud failed: prepare git backup root failed: %v", err)
-			return err
-		}
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncStarted})
 	}
-	beforeSnapshot, err := backup.BuildSnapshot(restoreDir)
+	result, err := a.newBackupService().RestoreBackup(a.ctx, profile)
 	if err != nil {
-		a.logErrorf("restore from cloud failed: build pre-restore snapshot failed: %v", err)
-		return err
-	}
-	if isGit {
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncStarted})
-	}
-	if err := provider.Restore(a.ctx, cfg.Cloud.BucketName, cfg.Cloud.RemotePath, restoreDir); err != nil {
 		a.logErrorf("restore from cloud failed: %v", err)
-		var conflictErr *backup.GitConflictError
+		var conflictErr *backupdomain.GitConflictError
 		if isGit && errors.As(err, &conflictErr) {
 			a.publishGitConflict(conflictErr)
 		}
 		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
 		return err
 	}
-	changes, afterSnapshot, err := a.computeSnapshotChanges(beforeSnapshot, restoreDir)
-	if err != nil {
-		a.logErrorf("restore from cloud failed: compute post-restore changes failed: %v", err)
-		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
-		}
-		return err
-	}
-	a.recordBackupResult(changes, afterSnapshot)
+	a.recordBackupResult(result.Files, result.Snapshot)
 	a.logInfof("restore from cloud completed")
 	if err := a.handleRestoredCloudState(beforeRestore, "cloud.restore"); err != nil {
 		a.logErrorf("restore from cloud failed: restore compensation failed: %v", err)
 		if isGit {
-			a.hub.Publish(notify.Event{Type: notify.EventGitSyncFailed, Payload: err.Error()})
+			a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncFailed, Payload: err.Error()})
 		}
 		return err
 	}
 	if isGit {
 		a.clearGitConflictPending()
-		a.hub.Publish(notify.Event{Type: notify.EventGitSyncCompleted, Payload: notify.BackupCompletedPayload{Files: changes, CompletedAt: a.GetLastBackupCompletedAt()}})
+		a.hub.Publish(eventbus.Event{Type: eventbus.EventGitSyncCompleted, Payload: eventbus.BackupCompletedPayload{Files: result.Files, CompletedAt: a.GetLastBackupCompletedAt()}})
 	}
 	return nil
 }
@@ -1494,7 +1029,7 @@ func (a *App) RestoreFromCloud() error {
 // ListCloudProviders returns all registered provider names and their required credential fields.
 func (a *App) ListCloudProviders() []map[string]any {
 	var result []map[string]any
-	for _, p := range registry.AllCloudProviders() {
+	for _, p := range allCloudProviders() {
 		result = append(result, map[string]any{
 			"name":   p.Name(),
 			"fields": p.RequiredCredentials(),
@@ -1515,7 +1050,7 @@ func (a *App) CheckUpdates() error {
 
 	type updateGroup struct {
 		LogicalKey string
-		Skills     []*skill.Skill
+		Skills     []*skilldomain.InstalledSkill
 	}
 
 	groups := map[string]*updateGroup{}
@@ -1523,7 +1058,7 @@ func (a *App) CheckUpdates() error {
 		if sk == nil || !sk.IsGitHub() {
 			continue
 		}
-		logicalKey, logicalErr := skillkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath)
+		logicalKey, logicalErr := logicalkey.GitFromRepoURL(sk.SourceURL, sk.SourceSubPath)
 		if logicalErr != nil || strings.TrimSpace(logicalKey) == "" {
 			if logicalErr != nil {
 				a.logErrorf("check skill updates failed: skillID=%s name=%s err=%v", sk.ID, sk.Name, logicalErr)
@@ -1561,9 +1096,9 @@ func (a *App) CheckUpdates() error {
 			}
 			_ = a.storage.SaveMeta(sk)
 			if sk.LatestSHA != "" {
-				a.hub.Publish(notify.Event{
-					Type: notify.EventUpdateAvailable,
-					Payload: notify.UpdateAvailablePayload{
+				a.hub.Publish(eventbus.Event{
+					Type: eventbus.EventUpdateAvailable,
+					Payload: eventbus.UpdateAvailablePayload{
 						SkillID:    sk.ID,
 						SkillName:  sk.Name,
 						CurrentSHA: sk.SourceSHA,
@@ -1580,34 +1115,19 @@ func (a *App) CheckUpdates() error {
 
 // UpdateSkill refreshes an installed GitHub skill from the local cached repo copy.
 func (a *App) UpdateSkill(skillID string) error {
-	a.logInfof("update skill requested: id=%s", skillID)
-	sk, err := a.storage.Get(skillID)
+	cfg, err := a.config.Load()
 	if err != nil {
-		a.logErrorf("update skill failed: %v", err)
 		return err
 	}
-	cacheSourceDir, latestSHA, err := a.cachedSkillSourceDir(sk)
-	if err != nil {
-		a.logErrorf("update skill cache prepare failed: id=%s name=%s repo=%s subPath=%s err=%v", skillID, sk.Name, sk.SourceURL, sk.SourceSubPath, err)
+	if _, err := a.newOrchestrationService().UpdateInstalledSkill(a.ctx, orchestration.UpdateInstalledSkillCommand{
+		SkillID:            skillID,
+		AgentProfiles:      cfg.Agents,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	}); err != nil {
 		return err
 	}
-	a.logInfof("update skill cache copy started: id=%s name=%s source=%s", skillID, sk.Name, cacheSourceDir)
-	if err := a.storage.OverwriteFromDir(skillID, cacheSourceDir); err != nil {
-		a.logErrorf("update skill overwrite failed: %v", err)
-		return err
-	}
-	sk.SourceSHA = latestSHA
-	sk.LatestSHA = ""
-	_ = a.storage.UpdateMeta(sk)
-	if err := a.refreshUpdatedPushedSkillCopies(sk); err != nil {
-		a.logErrorf("update skill refresh pushed copies failed: id=%s name=%s err=%v", skillID, sk.Name, err)
-		a.scheduleAutoBackup()
-		return err
-	}
-	a.autoPushSkillsToConfiguredAgents("skill.update", []*skill.Skill{sk}, true)
-	a.scheduleAutoBackup()
-	a.hub.Publish(notify.Event{Type: notify.EventSkillsUpdated})
-	a.logInfof("update skill completed: id=%s name=%s", skillID, sk.Name)
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventSkillsUpdated})
 	return nil
 }
 
@@ -1624,7 +1144,7 @@ func (a *App) autoUpdateInstalledSkillsForRepos(source string, repoURLs []string
 
 	repoSources := make(map[string]struct{}, len(repoURLs))
 	for _, repoURL := range repoURLs {
-		repoSource, err := coregit.RepoSource(repoURL)
+		repoSource, err := platformgit.RepoSource(repoURL)
 		if err != nil || strings.TrimSpace(repoSource) == "" {
 			if err != nil {
 				a.logErrorf("auto update installed skills failed: source=%s repo=%s err=%v", source, repoURL, err)
@@ -1649,7 +1169,7 @@ func (a *App) autoUpdateInstalledSkillsForRepos(source string, repoURLs []string
 		if sk == nil || !sk.IsGitHub() {
 			continue
 		}
-		repoSource, err := coregit.RepoSource(sk.SourceURL)
+		repoSource, err := platformgit.RepoSource(sk.SourceURL)
 		if err != nil {
 			a.logErrorf("auto update installed skills failed: source=%s skillID=%s name=%s err=%v", source, sk.ID, sk.Name, err)
 			continue
@@ -1679,7 +1199,7 @@ func (a *App) autoUpdateInstalledSkillsForRepos(source string, repoURLs []string
 	a.logInfof("auto update installed skills completed: source=%s updated=%d", source, updatedCount)
 }
 
-func (a *App) cachedSkillSourceDir(sk *skill.Skill) (string, string, error) {
+func (a *App) cachedSkillSourceDir(sk *skilldomain.InstalledSkill) (string, string, error) {
 	if sk == nil {
 		return "", "", fmt.Errorf("skill is required")
 	}
@@ -1687,7 +1207,7 @@ func (a *App) cachedSkillSourceDir(sk *skill.Skill) (string, string, error) {
 		return "", "", fmt.Errorf("config service is not initialized")
 	}
 
-	cacheDir, err := coregit.CacheDir(a.config.DataDir(), sk.SourceURL)
+	cacheDir, err := platformgit.CacheDir(a.repoCacheDir(), sk.SourceURL)
 	if err != nil {
 		return "", "", err
 	}
@@ -1720,56 +1240,11 @@ func (a *App) cachedSkillSourceDir(sk *skill.Skill) (string, string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	latestSHA, err := coregit.GetSubPathSHA(ctx, cacheDir, shaPath)
+	latestSHA, err := platformgit.GetSubPathSHA(ctx, cacheDir, shaPath)
 	if err != nil {
 		return "", "", err
 	}
 	return sourceDir, latestSHA, nil
-}
-
-func (a *App) refreshUpdatedPushedSkillCopies(sk *skill.Skill) error {
-	if sk == nil {
-		return nil
-	}
-
-	cfg, err := a.config.Load()
-	if err != nil {
-		a.logErrorf("refresh updated pushed skill copies failed: skill=%s load config failed: %v", sk.Name, err)
-		return err
-	}
-
-	a.logInfof("refresh updated pushed skill copies started: skill=%s", sk.Name)
-	updatedAgents := 0
-
-	for _, agent := range cfg.Agents {
-		if strings.TrimSpace(agent.PushDir) == "" {
-			continue
-		}
-
-		targetPath := filepath.Join(agent.PushDir, sk.Name)
-		if _, err := os.Stat(targetPath); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
-			return err
-		}
-
-		a.logInfof("refresh updated pushed skill copy started: skill=%s agent=%s target=%s", sk.Name, agent.Name, targetPath)
-		if err := os.RemoveAll(targetPath); err != nil {
-			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
-			return err
-		}
-		if err := getAdapter(agent).Push(a.ctx, []*skill.Skill{sk}, agent.PushDir); err != nil {
-			a.logErrorf("refresh updated pushed skill copy failed: skill=%s agent=%s target=%s err=%v", sk.Name, agent.Name, targetPath, err)
-			return err
-		}
-		updatedAgents++
-		a.logInfof("refresh updated pushed skill copy completed: skill=%s agent=%s target=%s", sk.Name, agent.Name, targetPath)
-	}
-
-	a.logInfof("refresh updated pushed skill copies completed: skill=%s updatedAgents=%d", sk.Name, updatedAgents)
-	return nil
 }
 
 func (a *App) checkUpdatesOnStartup() {
@@ -1831,131 +1306,41 @@ func (a *App) Greet(name string) string {
 
 // --- Starred Repos ---
 
-func (a *App) AddStarredRepo(repoURL string) (*coregit.StarredRepo, error) {
+func (a *App) AddStarredRepo(repoURL string) (*sourcedomain.StarRepo, error) {
 	a.logInfof("add starred repo requested: %s", repoURL)
-	if err := coregit.CheckGitInstalled(); err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	repos, err := a.starStorage.Load()
+	repo, err := a.newSkillsourceService().TrackStarRepo(a.cloneContext(), a.repoCacheDir(), repoURL, a.gitProxyURL())
 	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	for i, r := range repos {
-		if coregit.SameRepo(r.URL, repoURL) {
-			if repos[i].Source == "" {
-				if source, err := coregit.RepoSource(repos[i].URL); err == nil {
-					repos[i].Source = source
-					_ = a.starStorage.Save(repos)
-				}
-			}
-			return &repos[i], nil // already starred
+		if platformgit.IsSSHAuthError(err) {
+			a.logErrorf("add starred repo failed: %v", err)
+			return nil, fmt.Errorf("AUTH_SSH:%s", err.Error())
 		}
-	}
-	name, err := coregit.ParseRepoName(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	dataDir := filepath.Dir(a.cacheDir)
-	localDir, err := coregit.CacheDir(dataDir, repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	source, err := coregit.RepoSource(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo failed: %v", err)
-		return nil, err
-	}
-	repo := coregit.StarredRepo{URL: repoURL, Name: name, Source: source, LocalDir: localDir}
-	if cloneErr := coregit.CloneOrUpdate(a.ctx, repoURL, localDir, a.gitProxyURL()); cloneErr != nil {
-		// Return typed errors for auth failures so the frontend can show the right dialog.
-		if coregit.IsSSHAuthError(cloneErr) {
-			return nil, fmt.Errorf("AUTH_SSH:%s", cloneErr.Error())
+		if platformgit.IsAuthError(err) {
+			a.logErrorf("add starred repo failed: %v", err)
+			return nil, fmt.Errorf("AUTH_HTTP:%s", err.Error())
 		}
-		if coregit.IsAuthError(cloneErr) {
-			return nil, fmt.Errorf("AUTH_HTTP:%s", cloneErr.Error())
-		}
-		repo.SyncError = cloneErr.Error()
-	} else {
-		repo.LastSync = time.Now()
-	}
-	repos = append(repos, repo)
-	if err := a.starStorage.Save(repos); err != nil {
 		a.logErrorf("add starred repo failed: %v", err)
 		return nil, err
 	}
 	a.logInfof("add starred repo completed: %s", repoURL)
-	return &repos[len(repos)-1], nil
+	return repo, nil
 }
 
 // AddStarredRepoWithCredentials clones a repo using the provided HTTP username/password,
 // removing any previously failed entry for the same URL first.
-func (a *App) AddStarredRepoWithCredentials(repoURL, username, password string) (*coregit.StarredRepo, error) {
+func (a *App) AddStarredRepoWithCredentials(repoURL, username, password string) (*sourcedomain.StarRepo, error) {
 	a.logInfof("add starred repo with credentials requested: %s", repoURL)
-	if err := coregit.CheckGitInstalled(); err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	repos, err := a.starStorage.Load()
+	repo, err := a.newSkillsourceService().TrackStarRepoWithCredentials(a.cloneContext(), a.repoCacheDir(), repoURL, a.gitProxyURL(), username, password)
 	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	// Remove any existing (possibly failed) entry for this URL.
-	filtered := repos[:0]
-	for _, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			filtered = append(filtered, r)
-		}
-	}
-	name, err := coregit.ParseRepoName(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	dataDir := filepath.Dir(a.cacheDir)
-	localDir, err := coregit.CacheDir(dataDir, repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	source, err := coregit.RepoSource(repoURL)
-	if err != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", err)
-		return nil, err
-	}
-	repo := coregit.StarredRepo{URL: repoURL, Name: name, Source: source, LocalDir: localDir}
-	if cloneErr := coregit.CloneOrUpdateWithCreds(a.ctx, repoURL, localDir, a.gitProxyURL(), username, password); cloneErr != nil {
-		a.logErrorf("add starred repo with credentials failed: %v", cloneErr)
-		return nil, cloneErr
-	}
-	repo.LastSync = time.Now()
-	filtered = append(filtered, repo)
-	if err := a.starStorage.Save(filtered); err != nil {
 		a.logErrorf("add starred repo with credentials failed: %v", err)
 		return nil, err
 	}
 	a.logInfof("add starred repo with credentials completed: %s", repoURL)
-	return &filtered[len(filtered)-1], nil
+	return repo, nil
 }
 
 func (a *App) RemoveStarredRepo(repoURL string) error {
 	a.logInfof("remove starred repo requested: %s", repoURL)
-	repos, err := a.starStorage.Load()
-	if err != nil {
-		a.logErrorf("remove starred repo failed: %v", err)
-		return err
-	}
-	filtered := make([]coregit.StarredRepo, 0, len(repos))
-	for _, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			filtered = append(filtered, r)
-		}
-	}
-	if err := a.starStorage.Save(filtered); err != nil {
+	if err := a.newSkillsourceService().UntrackStarRepo(repoURL); err != nil {
 		a.logErrorf("remove starred repo failed: %v", err)
 		return err
 	}
@@ -1963,105 +1348,44 @@ func (a *App) RemoveStarredRepo(repoURL string) error {
 	return nil
 }
 
-func (a *App) ListStarredRepos() ([]coregit.StarredRepo, error) {
-	repos, err := a.starStorage.Load()
-	if repos == nil {
-		return []coregit.StarredRepo{}, err
-	}
-	changed := false
-	for i := range repos {
-		if repos[i].Source != "" {
-			continue
-		}
-		if source, parseErr := coregit.RepoSource(repos[i].URL); parseErr == nil {
-			repos[i].Source = source
-			changed = true
-		}
-	}
-	if changed {
-		_ = a.starStorage.Save(repos)
-	}
-	return repos, err
+func (a *App) ListStarredRepos() ([]sourcedomain.StarRepo, error) {
+	return a.newSkillsourceService().ListStarRepos()
 }
 
-func (a *App) ListAllStarSkills() ([]coregit.StarSkill, error) {
-	return measureOperation(a, "list_all_star_skills", func() ([]coregit.StarSkill, error) {
-		fingerprint, fingerprintErr := a.allStarSkillsFingerprint()
-		if fingerprintErr == nil {
-			var cached []coregit.StarSkill
-			state, err := a.ensureViewCache().Load(allStarSkillsSnapshotName, fingerprint, &cached)
-			if err == nil && state == viewstate.StateHit {
-				return cached, nil
-			}
-		}
-
-		skills, err := a.listAllStarSkillsUncached()
+func (a *App) ListAllStarSkills() ([]StarSkillEntry, error) {
+	return measureOperation(a, "list_all_star_skills", func() ([]StarSkillEntry, error) {
+		cfg, err := a.config.Load()
 		if err != nil {
 			return nil, err
 		}
-		if fingerprint, err := a.allStarSkillsFingerprint(); err == nil {
-			_ = a.ensureViewCache().Save(allStarSkillsSnapshotName, fingerprint, skills)
+		fingerprint, err := a.allStarSkillsFingerprint()
+		if err != nil {
+			return nil, err
 		}
-		return skills, nil
+		return a.newSkillsReadmodelService().ListAllStarSkills(a.ctx, readmodelskills.StarSkillsInput{
+			RepoScanMaxDepth:    config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+			AgentProfiles:       cfg.Agents,
+			SnapshotFingerprint: fingerprint,
+		})
 	})
 }
 
-func (a *App) listAllStarSkillsUncached() ([]coregit.StarSkill, error) {
-	repos, err := a.starStorage.Load()
+func (a *App) ListRepoStarSkills(repoURL string) ([]StarSkillEntry, error) {
+	cfg, err := a.config.Load()
 	if err != nil {
 		return nil, err
 	}
-	maxDepth := a.repoScanMaxDepth()
-	_, installedIndex, err := a.installedIndex()
+	skills, err := a.newSkillsReadmodelService().ListRepoStarSkills(a.ctx, repoURL, readmodelskills.StarSkillsInput{
+		RepoScanMaxDepth: config.NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+		AgentProfiles:    cfg.Agents,
+	})
 	if err != nil {
 		return nil, err
 	}
-	presence := a.buildAgentPresenceIndex(installedIndex)
-	var all []coregit.StarSkill
-	for _, r := range repos {
-		source := r.Source
-		if source == "" {
-			source, _ = coregit.RepoSource(r.URL)
-		}
-		skills, _ := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
-		all = append(all, resolveStarSkills(skills, installedIndex, presence)...)
+	if skills == nil {
+		return []StarSkillEntry{}, nil
 	}
-	if all == nil {
-		return []coregit.StarSkill{}, nil
-	}
-	return all, nil
-}
-
-func (a *App) ListRepoStarSkills(repoURL string) ([]coregit.StarSkill, error) {
-	repos, err := a.starStorage.Load()
-	if err != nil {
-		return nil, err
-	}
-	maxDepth := a.repoScanMaxDepth()
-	_, installedIndex, err := a.installedIndex()
-	if err != nil {
-		return nil, err
-	}
-	presence := a.buildAgentPresenceIndex(installedIndex)
-	for _, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			continue
-		}
-		source := r.Source
-		if source == "" {
-			source, _ = coregit.RepoSource(r.URL)
-		}
-		skills, err := coregit.ScanSkillsWithMaxDepth(r.LocalDir, r.URL, r.Name, source, maxDepth)
-		if err != nil {
-			return nil, err
-		}
-		skills = resolveStarSkills(skills, installedIndex, presence)
-		if skills == nil {
-			return []coregit.StarSkill{}, nil
-		}
-		return skills, nil
-	}
-	return []coregit.StarSkill{}, nil
+	return skills, nil
 }
 
 func (a *App) UpdateStarredRepo(repoURL string) error {
@@ -2070,43 +1394,29 @@ func (a *App) UpdateStarredRepo(repoURL string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	repos, err := a.starStorage.Load()
+	repo, err := a.newSkillsourceService().RefreshStarRepo(ctx, repoURL, a.gitProxyURL())
 	if err != nil {
 		a.logErrorf("update starred repo failed: repo=%s err=%v", repoURL, err)
 		return err
 	}
-	for i, r := range repos {
-		if !coregit.SameRepo(r.URL, repoURL) {
-			continue
-		}
-		syncErr := cloneOrUpdateRepo(ctx, r.URL, r.LocalDir, a.gitProxyURL())
-		if syncErr != nil {
-			a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, syncErr)
-			repos[i].SyncError = syncErr.Error()
-		} else {
-			a.logInfof("update starred repo completed: repo=%s", r.URL)
-			repos[i].SyncError = ""
-			repos[i].LastSync = time.Now()
-		}
-		err = a.starStorage.Save(repos)
-		if err != nil {
-			a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, err)
-			return err
-		}
-		if syncErr == nil {
-			a.autoUpdateInstalledSkillsForRepos("starred.refresh.one", []string{r.URL})
-		}
-		a.hub.Publish(notify.Event{
-			Type: notify.EventStarSyncProgress,
-			Payload: notify.StarSyncProgressPayload{
-				RepoURL:   repos[i].URL,
-				RepoName:  repos[i].Name,
-				SyncError: repos[i].SyncError,
-			},
-		})
+	if repo == nil {
+		a.logErrorf("update starred repo failed: repo=%s err=starred repo not found", repoURL)
 		return nil
 	}
-	a.logErrorf("update starred repo failed: repo=%s err=starred repo not found", repoURL)
+	if strings.TrimSpace(repo.SyncError) != "" {
+		a.logErrorf("update starred repo failed: repo=%s err=%s", repo.URL, repo.SyncError)
+	} else {
+		a.logInfof("update starred repo completed: repo=%s", repo.URL)
+		a.autoUpdateInstalledSkillsForRepos("starred.refresh.one", []string{repo.URL})
+	}
+	a.hub.Publish(eventbus.Event{
+		Type: eventbus.EventStarSyncProgress,
+		Payload: eventbus.StarSyncProgressPayload{
+			RepoURL:   repo.URL,
+			RepoName:  repo.Name,
+			SyncError: repo.SyncError,
+		},
+	})
 	return nil
 }
 
@@ -2116,68 +1426,53 @@ func (a *App) UpdateAllStarredRepos() error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	repos, err := a.starStorage.Load()
+	results, err := a.newSkillsourceService().RefreshAllStarRepos(ctx, a.gitProxyURL())
 	if err != nil {
 		a.logErrorf("update all starred repos failed: %v", err)
 		return err
 	}
-	if len(repos) == 0 {
+	if len(results) == 0 {
 		return nil
 	}
-	var wg sync.WaitGroup
-	mu := &sync.Mutex{}
-	successfulRepoURLs := make([]string, 0, len(repos))
-	for i := range repos {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			r := repos[idx]
-			a.logInfof("update starred repo started: repo=%s", r.URL)
-			syncErr := cloneOrUpdateRepo(ctx, r.URL, r.LocalDir, a.gitProxyURL())
-			mu.Lock()
-			if syncErr != nil {
-				a.logErrorf("update starred repo failed: repo=%s err=%v", r.URL, syncErr)
-				repos[idx].SyncError = syncErr.Error()
-			} else {
-				a.logInfof("update starred repo completed: repo=%s", r.URL)
-				repos[idx].SyncError = ""
-				repos[idx].LastSync = time.Now()
-				successfulRepoURLs = append(successfulRepoURLs, r.URL)
-			}
-			mu.Unlock()
-			a.hub.Publish(notify.Event{
-				Type: notify.EventStarSyncProgress,
-				Payload: notify.StarSyncProgressPayload{
-					RepoURL:   repos[idx].URL,
-					RepoName:  repos[idx].Name,
-					SyncError: repos[idx].SyncError,
-				},
-			})
-		}(i)
-	}
-	wg.Wait()
-	if err := a.starStorage.Save(repos); err != nil {
-		a.logErrorf("update all starred repos failed: %v", err)
-		return err
+	successfulRepoURLs := make([]string, 0, len(results))
+	for _, result := range results {
+		repo := result.Repo
+		if strings.TrimSpace(repo.SyncError) != "" {
+			a.logErrorf("update starred repo failed: repo=%s err=%s", repo.URL, repo.SyncError)
+		} else {
+			a.logInfof("update starred repo completed: repo=%s", repo.URL)
+			successfulRepoURLs = append(successfulRepoURLs, repo.URL)
+		}
+		a.hub.Publish(eventbus.Event{
+			Type: eventbus.EventStarSyncProgress,
+			Payload: eventbus.StarSyncProgressPayload{
+				RepoURL:   repo.URL,
+				RepoName:  repo.Name,
+				SyncError: repo.SyncError,
+			},
+		})
 	}
 	a.autoUpdateInstalledSkillsForRepos("starred.refresh.all", successfulRepoURLs)
-	a.hub.Publish(notify.Event{Type: notify.EventStarSyncDone})
+	a.hub.Publish(eventbus.Event{Type: eventbus.EventStarSyncDone})
 	a.logInfof("update all starred repos completed")
 	return nil
 }
 
 func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) error {
-	category = normalizeCategoryName(category)
-	repos, _ := a.starStorage.Load()
+	cfg, err := a.config.Load()
+	if err != nil {
+		return err
+	}
+	repos, _ := a.newSkillsourceService().ListStarRepos()
 	var repoLocalDir string
 	canonicalRepoURL := repoURL
-	if normalized, err := coregit.CanonicalRepoURL(repoURL); err == nil {
+	if normalized, err := platformgit.CanonicalRepoURL(repoURL); err == nil {
 		canonicalRepoURL = normalized
 	}
 	for _, r := range repos {
-		if coregit.SameRepo(r.URL, repoURL) {
+		if platformgit.SameRepo(r.URL, repoURL) {
 			repoLocalDir = r.LocalDir
-			if normalized, err := coregit.CanonicalRepoURL(r.URL); err == nil {
+			if normalized, err := platformgit.CanonicalRepoURL(r.URL); err == nil {
 				canonicalRepoURL = normalized
 			}
 			break
@@ -2186,31 +1481,14 @@ func (a *App) ImportStarSkills(skillPaths []string, repoURL, category string) er
 	if repoLocalDir == "" {
 		return fmt.Errorf("starred repo not found: %s", repoURL)
 	}
-	_, installedIndex, err := a.installedIndex()
-	if err != nil {
-		return err
-	}
-	imported := make([]*skill.Skill, 0, len(skillPaths))
-	for _, skillPath := range skillPaths {
-		subPath, _ := filepath.Rel(repoLocalDir, skillPath)
-		subPath = filepath.ToSlash(subPath)
-		logicalKey := skillkey.GitFromRepoURLOrEmpty(canonicalRepoURL, subPath)
-		if installedIndex.IsInstalled(filepath.Base(skillPath), logicalKey) {
-			continue
-		}
-		sk, err := a.storage.Import(skillPath, category, skill.SourceGitHub, canonicalRepoURL, subPath)
-		if err == skill.ErrSkillExists {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		sha, _ := coregit.GetSubPathSHA(a.ctx, repoLocalDir, subPath)
-		sk.SourceSHA = sha
-		_ = a.storage.UpdateMeta(sk)
-		imported = append(imported, sk)
-	}
-	a.autoPushImportedSkillsToAgents("starred.import", imported)
-	a.scheduleAutoBackup()
-	return nil
+	_, err = a.newOrchestrationService().ImportRepoSourceSkills(a.ctx, orchestration.ImportRepoSourceSkillsCommand{
+		SkillPaths:         skillPaths,
+		RepoRootDir:        repoLocalDir,
+		CanonicalRepoURL:   canonicalRepoURL,
+		Category:           category,
+		AgentProfiles:      cfg.Agents,
+		AutoPushAgentNames: cfg.AutoPushAgents,
+		TriggerAutoBackup:  true,
+	})
+	return err
 }

@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	"github.com/shinerio/skillflow/core/platform/appdata"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
+	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +24,7 @@ func TestHandleRestoredCloudStateAutoPushesNewlyRestoredSkills(t *testing.T) {
 	before := app.captureCloudRestoreState()
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nRestored\n")
 
-	_, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceManual, "", "")
+	_, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceManual, "", "")
 	require.NoError(t, err)
 
 	require.NoError(t, app.handleRestoredCloudState(before, "test.restore"))
@@ -35,10 +41,10 @@ func TestHandleRestoredCloudStateAutoPushesUpdatedExistingSkills(t *testing.T) {
 	app, pushDir, _, _ := newRestoreTestApp(t, []string{"codex"})
 	sourceDir := writeTestSkillDir(t, t.TempDir(), "demo-skill", "# Demo\nVersion 1\n")
 
-	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skill.SourceManual, "", "")
+	sk, err := app.storage.Import(sourceDir, defaultCategoryName, skilldomain.SourceManual, "", "")
 	require.NoError(t, err)
 
-	app.autoPushImportedSkillsToAgents("test.setup", []*skill.Skill{sk})
+	app.autoPushImportedSkillsToAgents("test.setup", []*skilldomain.InstalledSkill{sk})
 	pushPath := filepath.Join(pushDir, "demo-skill", "skill.md")
 	assertFileContentEquals(t, pushPath, "# Demo\nVersion 1\n")
 
@@ -51,19 +57,32 @@ func TestHandleRestoredCloudStateAutoPushesUpdatedExistingSkills(t *testing.T) {
 }
 
 func TestHandleRestoredCloudStateClonesNewlyRestoredStarredRepos(t *testing.T) {
-	if err := coregit.CheckGitInstalled(); err != nil {
+	if err := platformgit.CheckGitInstalled(); err != nil {
 		t.Skip("git not installed")
 	}
 
-	app, _, _, starsPath := newRestoreTestApp(t, nil)
+	app, _, _, _ := newRestoreTestApp(t, nil)
 	before := app.captureCloudRestoreState()
 	sourceRepo := newLocalGitRepo(t)
-	cloneDir := filepath.Join(filepath.Dir(starsPath), "cache", "restored-repo")
+	repoURL := "https://example.com/restored/test.git"
+	cloneDir, err := platformgit.CacheDir(app.repoCacheDir(), repoURL)
+	require.NoError(t, err)
 
-	require.NoError(t, app.starStorage.Save([]coregit.StarredRepo{{
-		URL:      sourceRepo,
+	prevCloneOrUpdateRepo := cloneOrUpdateRepo
+	cloneOrUpdateRepo = func(ctx context.Context, gotRepoURL, dir, proxyURL string) error {
+		if gotRepoURL != repoURL {
+			return exec.ErrNotFound
+		}
+		return platformgit.CloneOrUpdate(ctx, sourceRepo, dir, proxyURL)
+	}
+	t.Cleanup(func() {
+		cloneOrUpdateRepo = prevCloneOrUpdateRepo
+	})
+
+	require.NoError(t, app.starStorage.Save([]sourcedomain.StarRepo{{
+		URL:      repoURL,
 		Name:     "local/test-repo",
-		Source:   "local/test-repo",
+		Source:   "example.com/restored/test",
 		LocalDir: cloneDir,
 	}}))
 
@@ -84,12 +103,11 @@ func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, str
 
 	dataDir := t.TempDir()
 	pushDir := filepath.Join(dataDir, "agent-skills")
-	skillsDir := filepath.Join(dataDir, "library", "skills")
+	skillsDir := appdata.SkillsDir(dataDir)
 	starsPath := filepath.Join(dataDir, "star_repos.json")
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
-	cfg.SkillsStorageDir = skillsDir
 	cfg.AutoPushAgents = autoPushAgents
 	cfg.Agents = []config.AgentConfig{{
 		Name:     "codex",
@@ -101,9 +119,9 @@ func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, str
 
 	app := NewApp()
 	app.config = svc
-	app.storage = skill.NewStorage(skillsDir)
+	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = filepath.Join(dataDir, "cache")
-	app.starStorage = coregit.NewStarStorage(starsPath)
+	app.starStorage = sourcerepo.NewStarRepoStorageWithCacheDir(starsPath, cfg.RepoCacheDir)
 	return app, pushDir, skillsDir, starsPath
 }
 

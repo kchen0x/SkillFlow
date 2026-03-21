@@ -9,7 +9,7 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 import CategoryPanel from '../components/CategoryPanel'
 import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
-import { FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine, AlertCircle, CheckCircle2, X } from 'lucide-react'
+import { FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, X } from 'lucide-react'
 import {
   gridContainerVariants,
   cardVariants,
@@ -21,6 +21,7 @@ import { getListLoadState } from '../lib/listLoadState'
 import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import {
   createDashboardSkillEventSubscriptions,
+  getDashboardAutoUpdateActionState,
   listDashboardToolbarActionKeys,
   readDashboardSkillSettings,
   toggleDashboardAutoPushAgent,
@@ -54,6 +55,7 @@ export default function Dashboard() {
   const [dashboardCfg, setDashboardCfg] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingAutoPush, setSavingAutoPush] = useState(false)
+  const [savingAutoUpdate, setSavingAutoUpdate] = useState(false)
   const [updatingSkillIDs, setUpdatingSkillIDs] = useState<Set<string>>(new Set())
   const [updateNotice, setUpdateNotice] = useState<SkillUpdateNotice | null>(null)
 
@@ -120,6 +122,8 @@ export default function Dashboard() {
   const listState = getListLoadState({ isLoading: loading, itemCount: filtered.length })
   const animateCards = shouldAnimateSkillCards(filtered.length)
   const animateGridIntro = shouldAnimateSkillGridIntro(filtered.length, hasRenderedSkillGrid.current)
+  const autoUpdateAction = getDashboardAutoUpdateActionState(autoUpdateSkills)
+  const savingDashboardSettings = savingAutoPush || savingAutoUpdate
 
   useEffect(() => {
     if (listState !== 'loading') {
@@ -260,19 +264,23 @@ export default function Dashboard() {
       case 'autoUpdate':
         return {
           key,
-          icon: <RefreshCw size={14} className={autoUpdateSkills ? '' : 'opacity-80'} />,
+          icon: savingAutoUpdate
+            ? <RefreshCw size={14} className="animate-spin" />
+            : autoUpdateAction.visualState === 'enabled'
+              ? <ToggleRight size={16} style={{ color: 'var(--color-success)' }} />
+              : <ToggleLeft size={16} style={{ color: 'var(--text-disabled)' }} />,
           label: t('dashboard.autoUpdateTitle'),
           onClick: (): void => { void toggleAutoUpdateSetting() },
-          disabled: savingAutoPush,
-          className: `btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-all disabled:cursor-not-allowed disabled:opacity-60 ${autoUpdateSkills ? '' : 'opacity-70'}`,
+          disabled: savingDashboardSettings,
+          className: `${autoUpdateAction.buttonTone === 'primary' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-all disabled:cursor-not-allowed disabled:opacity-60`,
           style: undefined as CSSProperties | undefined,
           title: t('dashboard.autoUpdateDesc'),
         }
     }
-  }), [autoUpdateSkills, load, savingAutoPush, t])
+  }), [autoUpdateAction, load, savingAutoUpdate, savingDashboardSettings, t])
 
   const toggleAutoPushAgent = async (name: string) => {
-    if (!dashboardCfg || savingAutoPush) return
+    if (!dashboardCfg || savingDashboardSettings) return
 
     const nextAgents = toggleDashboardAutoPushAgent(Array.from(autoPushAgents), name)
 
@@ -298,26 +306,38 @@ export default function Dashboard() {
   }
 
   const toggleAutoUpdateSetting = async () => {
-    if (!dashboardCfg || savingAutoPush) return
+    if (!dashboardCfg || savingDashboardSettings) return
+
+    const nextAutoUpdateSkills = !autoUpdateSkills
 
     const nextCfg = {
       ...dashboardCfg,
-      autoUpdateSkills: !autoUpdateSkills,
+      autoUpdateSkills: nextAutoUpdateSkills,
     }
 
-    setAutoUpdateSkills(!autoUpdateSkills)
+    setAutoUpdateSkills(nextAutoUpdateSkills)
     setDashboardCfg(nextCfg)
-    setSavingAutoPush(true)
+    setSavingAutoUpdate(true)
 
     try {
       await SaveConfig(nextCfg)
       await load()
+      setUpdateNotice({
+        tone: 'success',
+        message: t(nextAutoUpdateSkills ? 'dashboard.autoUpdateEnabledNotice' : 'dashboard.autoUpdateDisabledNotice'),
+      })
     } catch (error) {
       console.error('Save auto update skills failed:', error)
       const latestCfg = await GetConfig()
       syncDashboardConfigState(latestCfg)
+      setUpdateNotice({
+        tone: 'error',
+        message: t('dashboard.autoUpdateToggleFailed', {
+          msg: String(error instanceof Error ? error.message : error),
+        }),
+      })
     } finally {
-      setSavingAutoPush(false)
+      setSavingAutoUpdate(false)
     }
   }
 
@@ -559,7 +579,7 @@ export default function Dashboard() {
                     <button
                       key={agent.name}
                       onClick={() => void toggleAutoPushAgent(agent.name)}
-                      disabled={savingAutoPush}
+                      disabled={savingDashboardSettings}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${active ? 'font-semibold -translate-y-px' : ''}`}
                       style={active ? {
                         background: 'var(--active-surface)',

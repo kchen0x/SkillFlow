@@ -94,6 +94,10 @@ export function ExportPromptsByNames(arg1) {
   return window['go']['main']['App']['ExportPromptsByNames'](arg1);
 }
 
+export function GetAppDataDir() {
+  return window['go']['main']['App']['GetAppDataDir']();
+}
+
 export function GetAppVersion() {
   return window['go']['main']['App']['GetAppVersion']();
 }
@@ -196,6 +200,10 @@ export function MovePromptCategory(arg1, arg2) {
 
 export function MoveSkillCategory(arg1, arg2) {
   return window['go']['main']['App']['MoveSkillCategory'](arg1, arg2);
+}
+
+export function OpenAppDataDir() {
+  return window['go']['main']['App']['OpenAppDataDir']();
 }
 
 export function OpenFolderDialog(arg1) {

@@ -11,15 +11,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shinerio/skillflow/core/applog"
 	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/platform/logging"
 )
 
 const helperNotifyTimeout = 3 * time.Second
 
 type helperController struct {
 	loggerMu     sync.Mutex
-	logger       *applog.Logger
+	logger       *logging.Logger
 	helperServer *loopbackControlServer
 	quitCh       chan struct{}
 	quitOnce     sync.Once
@@ -209,18 +209,18 @@ func (h *helperController) closeHelperServer() {
 }
 
 func (h *helperController) logDebugf(format string, args ...any) {
-	h.logf(applog.LevelDebug, format, args...)
+	h.logf(logging.LevelDebug, format, args...)
 }
 
 func (h *helperController) logInfof(format string, args ...any) {
-	h.logf(applog.LevelInfo, format, args...)
+	h.logf(logging.LevelInfo, format, args...)
 }
 
 func (h *helperController) logErrorf(format string, args ...any) {
-	h.logf(applog.LevelError, format, args...)
+	h.logf(logging.LevelError, format, args...)
 }
 
-func (h *helperController) logf(level applog.Level, format string, args ...any) {
+func (h *helperController) logf(level logging.Level, format string, args ...any) {
 	h.loggerMu.Lock()
 	logger := h.logger
 	h.loggerMu.Unlock()
@@ -246,14 +246,14 @@ func waitForHelperShowUI(timeout time.Duration) error {
 	return lastErr
 }
 
-func loadHelperLogger() *applog.Logger {
+func loadHelperLogger() *logging.Logger {
 	dataDir := config.AppDataDir()
 	cfgService := config.NewService(dataDir)
 	cfg, err := cfgService.Load()
 	if err != nil {
 		cfg = config.DefaultConfig(dataDir)
 	}
-	logger, err := applog.New(filepath.Join(dataDir, "logs"), cfg.LogLevel)
+	logger, err := logging.New(filepath.Join(dataDir, "logs"), cfg.LogLevel)
 	if err != nil {
 		return nil
 	}

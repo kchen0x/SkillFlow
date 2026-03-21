@@ -5,8 +5,14 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
+
+	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	"github.com/shinerio/skillflow/core/platform/appdata"
+	"github.com/shinerio/skillflow/core/platform/settingsstore"
+	"github.com/shinerio/skillflow/core/platform/shellsettings"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 )
 
 // sharedConfig is stored in config.json and safe to sync across platforms.
@@ -40,7 +46,7 @@ type sharedAgentConfig struct {
 // localConfig is stored in config_local.json and never synced to cloud/git.
 // It holds all file system paths and sensitive cloud credentials.
 type localConfig struct {
-	SkillsStorageDir           string                       `json:"skillsStorageDir"`
+	RepoCacheDir               string                       `json:"repoCacheDir"`
 	AutoUpdateSkills           bool                         `json:"autoUpdateSkills"`
 	AutoPushAgents             []string                     `json:"autoPushAgents"`
 	LaunchAtLogin              bool                         `json:"launchAtLogin"`
@@ -68,35 +74,31 @@ type legacyAppConfig struct {
 }
 
 type Service struct {
-	dataDir         string
-	configPath      string
-	localConfigPath string
+	store *settingsstore.Store
 }
 
 type LocalRuntimeConfig struct {
-	SkillsStorageDir string
+	RepoCacheDir string
 }
 
 func NewService(dataDir string) *Service {
 	return &Service{
-		dataDir:         dataDir,
-		configPath:      filepath.Join(dataDir, "config.json"),
-		localConfigPath: filepath.Join(dataDir, "config_local.json"),
+		store: settingsstore.New(dataDir),
 	}
 }
 
 // DataDir returns the app data root used by this config service.
-func (s *Service) DataDir() string { return s.dataDir }
+func (s *Service) DataDir() string { return s.store.DataDir() }
 
 // LocalConfigPath returns the path to the local (non-synced) config file.
-func (s *Service) LocalConfigPath() string { return s.localConfigPath }
+func (s *Service) LocalConfigPath() string { return s.store.LocalPath() }
 
 // LoadLocalRuntimeConfig returns the local-only settings that remain readable
 // even when synced files like config.json are temporarily conflicted.
 func (s *Service) LoadLocalRuntimeConfig() LocalRuntimeConfig {
 	local := s.loadLocal()
 	return LocalRuntimeConfig{
-		SkillsStorageDir: local.SkillsStorageDir,
+		RepoCacheDir: local.RepoCacheDir,
 	}
 }
 
@@ -109,17 +111,17 @@ func (s *Service) Load() (AppConfig, error) {
 	}
 	local := s.loadLocal()
 	if s.migrateCloudStorage(&shared, &local) {
-		_ = os.MkdirAll(s.dataDir, 0755)
+		_ = os.MkdirAll(s.DataDir(), 0755)
 		_ = s.saveShared(shared)
 		_ = s.saveLocal(local)
 	}
 	cfg := s.merge(shared, local)
 
-	_ = os.MkdirAll(s.dataDir, 0755)
-	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
+	_ = os.MkdirAll(s.DataDir(), 0755)
+	if _, err := os.Stat(s.store.SharedPath()); os.IsNotExist(err) {
 		_ = s.saveShared(s.splitShared(cfg))
 	}
-	if _, err := os.Stat(s.localConfigPath); os.IsNotExist(err) {
+	if _, err := os.Stat(s.store.LocalPath()); os.IsNotExist(err) {
 		_ = s.saveLocal(s.splitLocal(cfg))
 	}
 
@@ -127,7 +129,7 @@ func (s *Service) Load() (AppConfig, error) {
 }
 
 func (s *Service) Save(cfg AppConfig) error {
-	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+	if err := os.MkdirAll(s.DataDir(), 0755); err != nil {
 		return err
 	}
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
@@ -163,10 +165,10 @@ func (s *Service) Save(cfg AppConfig) error {
 // into the new split format. It is a no-op when config_local.json already exists
 // or when config.json does not exist yet.
 func (s *Service) maybeMigrate() {
-	if _, err := os.Stat(s.localConfigPath); err == nil {
+	if _, err := os.Stat(s.store.LocalPath()); err == nil {
 		return
 	}
-	data, err := os.ReadFile(s.configPath)
+	data, err := os.ReadFile(s.store.SharedPath())
 	if err != nil {
 		return
 	}
@@ -184,16 +186,13 @@ func (s *Service) maybeMigrate() {
 }
 
 func (s *Service) loadShared() (sharedConfig, error) {
-	data, err := os.ReadFile(s.configPath)
+	var sc sharedConfig
+	exists, err := s.store.ReadShared(&sc)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return s.defaultShared(), nil
-		}
 		return sharedConfig{}, err
 	}
-	var sc sharedConfig
-	if err := json.Unmarshal(data, &sc); err != nil {
-		return sharedConfig{}, err
+	if !exists {
+		return s.defaultShared(), nil
 	}
 	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
@@ -204,7 +203,8 @@ func (s *Service) loadShared() (sharedConfig, error) {
 		Cloud CloudConfig  `json:"cloud"`
 		Proxy *ProxyConfig `json:"proxy"`
 	}
-	if err := json.Unmarshal(data, &legacy); err == nil {
+	data, err := os.ReadFile(s.store.SharedPath())
+	if err == nil && json.Unmarshal(data, &legacy) == nil {
 		provider := strings.TrimSpace(legacy.Cloud.Provider)
 		if provider != "" {
 			if sc.Cloud.Provider == "" {
@@ -227,28 +227,22 @@ func (s *Service) loadShared() (sharedConfig, error) {
 }
 
 func (s *Service) loadLocal() localConfig {
-	data, err := os.ReadFile(s.localConfigPath)
-	if err != nil {
-		return s.defaultLocal()
-	}
 	var lc localConfig
-	if err := json.Unmarshal(data, &lc); err != nil {
+	exists, err := s.store.ReadLocal(&lc)
+	if err != nil || !exists {
 		return s.defaultLocal()
 	}
-	if lc.SkillsStorageDir == "" {
-		lc.SkillsStorageDir = filepath.Join(s.dataDir, "skills")
-	}
-	lc.AutoPushAgents = NormalizeAgentNameList(lc.AutoPushAgents)
+	lc.RepoCacheDir = normalizeRepoCacheDir(lc.RepoCacheDir, s.DataDir())
+	lc.AutoPushAgents = agentapp.NormalizeAutoPushAgentNames(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
-	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
-	if lc.Window != nil {
-		normalized := NormalizeWindowState(*lc.Window)
-		if normalized.Width == 0 || normalized.Height == 0 {
-			lc.Window = nil
-		} else {
-			lc.Window = &normalized
-		}
-	}
+	normalizedShell := shellsettings.NormalizeLocalSettings(shellsettings.LocalSettings{
+		LaunchAtLogin: lc.LaunchAtLogin,
+		Proxy:         lc.Proxy,
+		Window:        lc.Window,
+	})
+	lc.LaunchAtLogin = normalizedShell.LaunchAtLogin
+	lc.Proxy = normalizedShell.Proxy
+	lc.Window = normalizedShell.Window
 	return lc
 }
 
@@ -257,81 +251,73 @@ func (s *Service) saveShared(sc sharedConfig) error {
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
 	sc.SkillStatusVisibility = NormalizeSkillStatusVisibility(sc.SkillStatusVisibility)
 	sc.CloudProfiles = splitSharedCloudProfiles(sc.CloudProfiles)
-	data, err := json.MarshalIndent(sc, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(s.configPath, data, 0644)
+	return s.store.WriteShared(sc)
 }
 
 func (s *Service) saveLocal(lc localConfig) error {
 	lc.CloudCredentials = nil
-	lc.AutoPushAgents = NormalizeAgentNameList(lc.AutoPushAgents)
+	lc.RepoCacheDir = normalizeRepoCacheDir(lc.RepoCacheDir, s.DataDir())
+	lc.AutoPushAgents = agentapp.NormalizeAutoPushAgentNames(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
-	lc.Proxy = NormalizeProxyConfig(lc.Proxy)
-	if lc.Window != nil {
-		normalized := NormalizeWindowState(*lc.Window)
-		if normalized.Width == 0 || normalized.Height == 0 {
-			lc.Window = nil
-		} else {
-			lc.Window = &normalized
-		}
-	}
-	data, err := json.MarshalIndent(lc, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(s.localConfigPath, data, 0644)
+	normalizedShell := shellsettings.NormalizeLocalSettings(shellsettings.LocalSettings{
+		LaunchAtLogin: lc.LaunchAtLogin,
+		Proxy:         lc.Proxy,
+		Window:        lc.Window,
+	})
+	lc.LaunchAtLogin = normalizedShell.LaunchAtLogin
+	lc.Proxy = normalizedShell.Proxy
+	lc.Window = normalizedShell.Window
+	return s.store.WriteLocal(lc)
 }
 
 func (s *Service) LoadWindowState() (WindowState, bool) {
-	local := s.loadLocal()
-	if local.Window == nil {
+	state, ok, err := s.store.LoadWindowState()
+	if err != nil {
 		return WindowState{}, false
 	}
-	return *local.Window, true
+	return state, ok
 }
 
 func (s *Service) SaveWindowState(state WindowState) error {
-	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
-		return err
-	}
-	normalized := NormalizeWindowState(state)
-	if normalized.Width == 0 || normalized.Height == 0 {
-		return nil
-	}
-	local := s.loadLocal()
-	local.Window = &normalized
-	return s.saveLocal(local)
+	return s.store.SaveWindowState(state)
 }
 
 func (s *Service) defaultShared() sharedConfig {
-	agents := make([]sharedAgentConfig, 0, len(builtinAgents))
-	for _, name := range builtinAgents {
-		agents = append(agents, sharedAgentConfig{Name: name, Enabled: true})
+	defaultAgentSettings := agentapp.DefaultSharedSettings()
+	defaultSkillSettings := skillcatalogapp.DefaultSharedSettings()
+	defaultShellSettings := shellsettings.DefaultSharedSettings()
+
+	agents := make([]sharedAgentConfig, 0, len(defaultAgentSettings.Agents))
+	for _, agent := range defaultAgentSettings.Agents {
+		agents = append(agents, sharedAgentConfig{Name: agent.Name, Enabled: agent.Enabled})
 	}
 	return sharedConfig{
-		DefaultCategory:       "Default",
-		LogLevel:              DefaultLogLevel,
-		RepoScanMaxDepth:      DefaultRepoScanMaxDepth,
+		DefaultCategory:       defaultSkillSettings.DefaultCategory,
+		LogLevel:              defaultShellSettings.LogLevel,
+		RepoScanMaxDepth:      defaultAgentSettings.RepoScanMaxDepth,
 		SkillStatusVisibility: DefaultSkillStatusVisibility(),
 		Agents:                agents,
 	}
 }
 
 func (s *Service) defaultLocal() localConfig {
-	agents := make([]localAgentConfig, 0, len(builtinAgents))
-	for _, name := range builtinAgents {
+	defaultAgentSettings := agentapp.DefaultLocalSettings()
+	defaultShellSettings := shellsettings.DefaultLocalSettings()
+
+	agents := make([]localAgentConfig, 0, len(defaultAgentSettings.Agents))
+	for _, agent := range defaultAgentSettings.Agents {
 		agents = append(agents, localAgentConfig{
-			Name:     name,
-			ScanDirs: DefaultAgentScanDirs(name),
-			PushDir:  DefaultAgentPushDir(name),
+			Name:     agent.Name,
+			ScanDirs: append([]string(nil), agent.ScanDirs...),
+			PushDir:  agent.PushDir,
+			Custom:   agent.Custom,
+			Enabled:  agent.Enabled,
 		})
 	}
 	return localConfig{
-		SkillsStorageDir: filepath.Join(s.dataDir, "skills"),
+		RepoCacheDir:     appdata.RepoCacheDir(s.DataDir()),
 		Agents:           agents,
-		Proxy:            ProxyConfig{Mode: ProxyModeNone},
+		Proxy:            defaultShellSettings.Proxy,
 	}
 }
 
@@ -350,8 +336,9 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		sharedMap[sa.Name] = sa
 	}
 
-	agents := make([]AgentConfig, 0, len(builtinAgents)+len(local.Agents))
-	for _, name := range builtinAgents {
+	builtinNames := agentdomain.BuiltinAgentNames()
+	agents := make([]AgentConfig, 0, len(builtinNames)+len(local.Agents))
+	for _, name := range builtinNames {
 		sa, ok := sharedMap[name]
 		enabled := true
 		if ok {
@@ -360,11 +347,12 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		la := localMap[name]
 		scanDirs := la.ScanDirs
 		pushDir := la.PushDir
+		defaultProfile := agentdomain.DefaultProfile(name)
 		if len(scanDirs) == 0 {
-			scanDirs = DefaultAgentScanDirs(name)
+			scanDirs = defaultProfile.ScanDirs
 		}
 		if pushDir == "" {
-			pushDir = DefaultAgentPushDir(name)
+			pushDir = defaultProfile.PushDir
 		}
 		agents = append(agents, AgentConfig{
 			Name:     name,
@@ -388,7 +376,7 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
-		SkillsStorageDir:      local.SkillsStorageDir,
+		RepoCacheDir:          local.RepoCacheDir,
 		AutoUpdateSkills:      local.AutoUpdateSkills,
 		AutoPushAgents:        NormalizeAgentNameList(local.AutoPushAgents),
 		LaunchAtLogin:         local.LaunchAtLogin,
@@ -439,7 +427,7 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 	}
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return localConfig{
-		SkillsStorageDir:           cfg.SkillsStorageDir,
+		RepoCacheDir:               cfg.RepoCacheDir,
 		AutoUpdateSkills:           cfg.AutoUpdateSkills,
 		AutoPushAgents:             NormalizeAgentNameList(cfg.AutoPushAgents),
 		LaunchAtLogin:              cfg.LaunchAtLogin,
@@ -449,11 +437,18 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 	}
 }
 
+func normalizeRepoCacheDir(path string, dataDir string) string {
+	if strings.TrimSpace(path) == "" {
+		return appdata.RepoCacheDir(dataDir)
+	}
+	return strings.TrimSpace(path)
+}
+
 func (s *Service) migrateCloudStorage(shared *sharedConfig, local *localConfig) bool {
 	changed := shared.legacyCloudMigrated
 
 	if shared.legacyProxyMigrated {
-		if isZeroProxyConfig(local.Proxy) {
+		if shellsettings.IsZeroProxyConfig(local.Proxy) {
 			local.Proxy = NormalizeProxyConfig(shared.legacyProxy)
 		}
 		changed = true
@@ -912,12 +907,6 @@ func credentialMapsEqual(left, right map[string]string) bool {
 		}
 	}
 	return true
-}
-
-func isZeroProxyConfig(proxy ProxyConfig) bool {
-	mode := ProxyMode(strings.ToLower(strings.TrimSpace(string(proxy.Mode))))
-	url := strings.TrimSpace(proxy.URL)
-	return url == "" && (mode == "" || mode == ProxyModeNone)
 }
 
 func isSharedCloudCredentialKey(key string) bool {

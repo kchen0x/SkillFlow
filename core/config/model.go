@@ -1,54 +1,36 @@
 package config
 
-import "strings"
-
-type AgentConfig struct {
-	Name     string   `json:"name"`
-	ScanDirs []string `json:"scanDirs"`
-	PushDir  string   `json:"pushDir"`
-	Enabled  bool     `json:"enabled"`
-	Custom   bool     `json:"custom"`
-}
-
-type CloudConfig struct {
-	Provider            string            `json:"provider"`
-	Enabled             bool              `json:"enabled"`
-	BucketName          string            `json:"bucketName"`
-	RemotePath          string            `json:"remotePath"`
-	Credentials         map[string]string `json:"credentials"`
-	SyncIntervalMinutes int               `json:"syncIntervalMinutes"` // 0 = on mutation only
-}
-
-type CloudProviderConfig struct {
-	BucketName  string            `json:"bucketName"`
-	RemotePath  string            `json:"remotePath"`
-	Credentials map[string]string `json:"credentials"`
-}
-
-const DefaultCloudRemotePath = "skillflow/"
-
-// ProxyMode controls how outbound HTTP requests are routed.
-// "none" = direct, "system" = read HTTP_PROXY/HTTPS_PROXY env vars, "manual" = use URL field.
-type ProxyMode string
-
-const (
-	ProxyModeNone   ProxyMode = "none"
-	ProxyModeSystem ProxyMode = "system"
-	ProxyModeManual ProxyMode = "manual"
+import (
+	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	backupapp "github.com/shinerio/skillflow/core/backup/app"
+	"github.com/shinerio/skillflow/core/platform/logging"
+	"github.com/shinerio/skillflow/core/platform/shellsettings"
 )
 
-type ProxyConfig struct {
-	Mode ProxyMode `json:"mode"` // "none" | "system" | "manual"
-	URL  string    `json:"url"`  // used when Mode == "manual", e.g. "http://127.0.0.1:7890"
-}
+type AgentConfig = agentdomain.AgentProfile
+type CloudConfig = backupapp.CloudConfig
+type CloudProviderConfig = backupapp.CloudProviderConfig
+type ProxyMode = shellsettings.ProxyMode
+type ProxyConfig = shellsettings.ProxyConfig
+type WindowState = shellsettings.WindowState
 
-type WindowState struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-}
+const (
+	DefaultCloudRemotePath  = backupapp.DefaultCloudRemotePath
+	ProxyModeNone           = shellsettings.ProxyModeNone
+	ProxyModeSystem         = shellsettings.ProxyModeSystem
+	ProxyModeManual         = shellsettings.ProxyModeManual
+	LogLevelDebug           = "debug"
+	LogLevelInfo            = "info"
+	LogLevelError           = "error"
+	DefaultLogLevel         = logging.DefaultLevelString
+	DefaultRepoScanMaxDepth = agentapp.DefaultRepoScanMaxDepth
+	MinRepoScanMaxDepth     = agentapp.MinRepoScanMaxDepth
+	MaxRepoScanMaxDepth     = agentapp.MaxRepoScanMaxDepth
+)
 
 type AppConfig struct {
-	SkillsStorageDir      string                         `json:"skillsStorageDir"`
+	RepoCacheDir          string                         `json:"repoCacheDir"`
 	AutoUpdateSkills      bool                           `json:"autoUpdateSkills"`
 	AutoPushAgents        []string                       `json:"autoPushAgents"`
 	LaunchAtLogin         bool                           `json:"launchAtLogin"`
@@ -63,107 +45,26 @@ type AppConfig struct {
 	SkippedUpdateVersion  string                         `json:"skippedUpdateVersion,omitempty"` // version tag to suppress startup update prompt
 }
 
-const (
-	LogLevelDebug           = "debug"
-	LogLevelInfo            = "info"
-	LogLevelError           = "error"
-	DefaultLogLevel         = LogLevelError
-	DefaultRepoScanMaxDepth = 5
-	MinRepoScanMaxDepth     = 1
-	MaxRepoScanMaxDepth     = 20
-	MinWindowWidth          = 640
-	MinWindowHeight         = 480
-)
-
 func NormalizeLogLevel(level string) string {
-	switch strings.ToLower(strings.TrimSpace(level)) {
-	case LogLevelDebug:
-		return LogLevelDebug
-	case LogLevelError:
-		return LogLevelError
-	default:
-		return DefaultLogLevel
-	}
+	return logging.NormalizeLevelString(level)
 }
 
 func NormalizeAgentNameList(names []string) []string {
-	if len(names) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(names))
-	normalized := make([]string, 0, len(names))
-	for _, name := range names {
-		trimmed := strings.TrimSpace(name)
-		if trimmed == "" {
-			continue
-		}
-		if _, exists := seen[trimmed]; exists {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		normalized = append(normalized, trimmed)
-	}
-	if len(normalized) == 0 {
-		return nil
-	}
-	return normalized
+	return agentapp.NormalizeAutoPushAgentNames(names)
 }
 
 func NormalizeRepoScanMaxDepth(depth int) int {
-	if depth < MinRepoScanMaxDepth {
-		return DefaultRepoScanMaxDepth
-	}
-	if depth > MaxRepoScanMaxDepth {
-		return MaxRepoScanMaxDepth
-	}
-	return depth
+	return agentapp.NormalizeRepoScanMaxDepth(depth)
 }
 
 func NormalizeCloudRemotePath(path string) string {
-	trimmed := strings.TrimSpace(strings.ReplaceAll(path, "\\", "/"))
-	if trimmed == "" {
-		return DefaultCloudRemotePath
-	}
-
-	parts := make([]string, 0)
-	for _, part := range strings.Split(trimmed, "/") {
-		part = strings.TrimSpace(part)
-		if part == "" || part == "." {
-			continue
-		}
-		parts = append(parts, part)
-	}
-
-	if len(parts) == 0 {
-		return DefaultCloudRemotePath
-	}
-	if parts[len(parts)-1] != "skillflow" {
-		parts = append(parts, "skillflow")
-	}
-	return strings.Join(parts, "/") + "/"
+	return backupapp.NormalizeCloudRemotePath(path)
 }
 
 func NormalizeProxyConfig(proxy ProxyConfig) ProxyConfig {
-	mode := ProxyMode(strings.ToLower(strings.TrimSpace(string(proxy.Mode))))
-	switch mode {
-	case ProxyModeSystem, ProxyModeManual:
-		proxy.Mode = mode
-	default:
-		proxy.Mode = ProxyModeNone
-	}
-	proxy.URL = strings.TrimSpace(proxy.URL)
-	return proxy
+	return shellsettings.NormalizeProxyConfig(proxy)
 }
 
 func NormalizeWindowState(state WindowState) WindowState {
-	if state.Width < MinWindowWidth {
-		state.Width = 0
-	}
-	if state.Height < MinWindowHeight {
-		state.Height = 0
-	}
-	if state.Width == 0 || state.Height == 0 {
-		return WindowState{}
-	}
-	return state
+	return shellsettings.NormalizeWindowState(state)
 }

@@ -3,15 +3,15 @@ package main
 import (
 	"testing"
 
-	"github.com/shinerio/skillflow/core/prompt"
+	promptcatalogapp "github.com/shinerio/skillflow/core/promptcatalog/app"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPromptImportSessionStoreRoundTrip(t *testing.T) {
 	store := newPromptImportSessionStore()
-	preview := &prompt.ImportPreview{
-		Creates: []prompt.ImportPrompt{{Name: "Prompt A", Category: "Default", Content: "Content A"}},
+	preview := &promptcatalogapp.ImportPreview{
+		Creates: []promptcatalogapp.ImportPrompt{{Name: "Prompt A", Category: "Default", Content: "Content A"}},
 	}
 
 	sessionID := store.Create("import.json", preview)
@@ -27,7 +27,7 @@ func TestPromptImportSessionStoreRoundTrip(t *testing.T) {
 
 func TestPromptImportSessionStoreDeleteRemovesSession(t *testing.T) {
 	store := newPromptImportSessionStore()
-	sessionID := store.Create("import.json", &prompt.ImportPreview{})
+	sessionID := store.Create("import.json", &promptcatalogapp.ImportPreview{})
 
 	store.Delete(sessionID)
 
@@ -38,11 +38,11 @@ func TestPromptImportSessionStoreDeleteRemovesSession(t *testing.T) {
 
 func TestPromptImportSessionStoreTakeConsumesOneSessionOnly(t *testing.T) {
 	store := newPromptImportSessionStore()
-	firstID := store.Create("first.json", &prompt.ImportPreview{
-		Creates: []prompt.ImportPrompt{{Name: "Prompt A", Category: "Default", Content: "Content A"}},
+	firstID := store.Create("first.json", &promptcatalogapp.ImportPreview{
+		Creates: []promptcatalogapp.ImportPrompt{{Name: "Prompt A", Category: "Default", Content: "Content A"}},
 	})
-	secondID := store.Create("second.json", &prompt.ImportPreview{
-		Conflicts: []prompt.ImportPrompt{{Name: "Prompt B", Category: "Writing", Content: "Content B"}},
+	secondID := store.Create("second.json", &promptcatalogapp.ImportPreview{
+		Conflicts: []promptcatalogapp.ImportPrompt{{Name: "Prompt B", Category: "Writing", Content: "Content B"}},
 	})
 
 	session, ok := store.Take(firstID)

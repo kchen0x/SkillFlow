@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	"github.com/shinerio/skillflow/core/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,4 +55,15 @@ func TestSaveAndLoadConfigWithAgentTerminology(t *testing.T) {
 	assert.Contains(t, string(localData), `"autoPushAgents"`)
 	assert.NotContains(t, string(localData), `"tools"`)
 	assert.NotContains(t, string(localData), `"autoPushTools"`)
+}
+
+func TestConfigAgentsCanBeConsumedDirectlyByAgentIntegration(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := config.DefaultConfig(dir)
+
+	profile, ok := agentapp.FindProfile(cfg.Agents, "codex")
+	require.True(t, ok)
+	assert.Equal(t, "codex", profile.Name)
+	assert.True(t, profile.Enabled)
 }

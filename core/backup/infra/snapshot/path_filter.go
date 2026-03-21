@@ -1,0 +1,47 @@
+package snapshot
+
+import (
+	"path/filepath"
+	"strings"
+)
+
+var excludedDirs = []string{
+	"cache",
+	"runtime",
+	"logs",
+	"meta_local",
+	".git",
+}
+
+var excludedFiles = []string{
+	".DS_Store",
+	"config_local.json",
+	"star_repos_local.json",
+}
+
+func ExcludedDirectories() []string {
+	return append([]string(nil), excludedDirs...)
+}
+
+func ExcludedFiles() []string {
+	return append([]string(nil), excludedFiles...)
+}
+
+func ShouldSkipBackupPath(rel string) bool {
+	normalized := filepath.ToSlash(filepath.Clean(strings.TrimSpace(rel)))
+	if normalized == "." || normalized == "" {
+		return false
+	}
+	for _, dir := range excludedDirs {
+		if normalized == dir || strings.HasPrefix(normalized, dir+"/") {
+			return true
+		}
+	}
+	base := normalized[strings.LastIndex(normalized, "/")+1:]
+	for _, file := range excludedFiles {
+		if base == file {
+			return true
+		}
+	}
+	return false
+}

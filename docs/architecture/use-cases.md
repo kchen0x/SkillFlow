@@ -1,0 +1,298 @@
+# Application Use Cases
+
+## Purpose
+
+This document defines which commands and queries belong to each bounded context, which flows should be handled through shared orchestration, and which UI-oriented views should be served through read models instead of domain services.
+
+The main rule is:
+
+- if an operation changes business truth owned by one context, it belongs to that context's application layer
+- if an operation changes truth across multiple contexts, it should use explicit orchestration
+- if an operation only assembles data for UI consumption, it belongs to `readmodel/`
+
+## Use-Case Ownership by Context
+
+## `skillcatalog`
+
+### Commands
+
+- `ImportLocalSkill`
+- `CreateInstalledSkillFromSource`
+- `DeleteInstalledSkill`
+- `MoveInstalledSkillToCategory`
+- `CreateSkillCategory`
+- `RenameSkillCategory`
+- `DeleteSkillCategory`
+- `UpdateInstalledSkillFromSource`
+- `ReconcileInstalledSkillVersionState`
+
+### Queries
+
+- `GetInstalledSkill`
+- `ListInstalledSkills`
+- `ListSkillCategories`
+- `GetInstalledSkillVersionState`
+- `FindInstalledSkillByLogicalKey`
+
+### Notes
+
+- `CreateInstalledSkillFromSource` should enforce the `repo + subpath -> one installed skill` constraint for repository-backed skills.
+- `ImportLocalSkill` should generate `LogicalSkillKey` from a canonicalized content snapshot for manually imported skills and persist that key because there is no `SkillSourceRef` to derive from later.
+- update checks that only refresh version state stay in this context even if source hints come from `skillsource`.
+
+## `promptcatalog`
+
+### Commands
+
+- `CreatePrompt`
+- `UpdatePrompt`
+- `DeletePrompt`
+- `CreatePromptCategory`
+- `RenamePromptCategory`
+- `DeletePromptCategory`
+- `MovePromptToCategory`
+- `PreparePromptImport`
+- `ApplyPromptImport`
+- `ExportPromptBundle`
+
+### Queries
+
+- `GetPrompt`
+- `ListPrompts`
+- `ListPromptCategories`
+- `PreviewPromptImportConflicts`
+
+### Notes
+
+- import sessions are application-flow objects, not aggregate roots
+- current prompt import conflict behavior is name-based overwrite detection
+- export formatting belongs to the application layer or infrastructure, not the prompt domain model
+
+## `agentintegration`
+
+### Commands
+
+- `RegisterAgentProfile`
+- `UpdateAgentProfile`
+- `RemoveAgentProfile`
+- `EnableAgentProfile`
+- `DisableAgentProfile`
+- `PushInstalledSkills`
+- `PushInstalledSkillsForce`
+- `PullSkillsFromAgent`
+- `PullSkillsFromAgentForce`
+- `DeleteAgentSkill`
+- `ReconcileAutoPushPolicy`
+
+### Queries
+
+- `GetAgentProfile`
+- `ListAgentProfiles`
+- `ScanAgentSkills`
+- `ListAgentSkills`
+- `CheckMissingAgentPushDirs`
+- `ResolveAgentSkillPresence`
+
+### Notes
+
+- push and pull conflict detection belongs here, not in shell adapters or source-management code
+- this context should consume installed-skill summaries rather than holding `skillcatalog` aggregates directly
+
+## `skillsource`
+
+### Commands
+
+- `TrackStarRepo`
+- `TrackStarRepoWithCredentials`
+- `UntrackStarRepo`
+- `RefreshStarRepo`
+- `RefreshAllStarRepos`
+- `MarkStarRepoSyncFailure`
+- `ClearStarRepoSyncFailure`
+
+### Queries
+
+- `GetStarRepo`
+- `ListStarRepos`
+- `ListSkillSourcesByRepo`
+- `ListAllSkillSources`
+- `ListSourceSkillCandidates`
+- `GetSourceVersionHint`
+
+### Notes
+
+- `StarRepo` is the repository-level model
+- `SkillSource` is the logical per-skill source model identified by `repo + subpath`
+- installed/imported/updatable flags for source candidates should be derived by combining `skillsource` data with `skillcatalog` and `agentintegration` published language, usually in read models
+
+## `backup`
+
+### Commands
+
+- `SaveBackupProfile`
+- `RunBackup`
+- `RunAutoBackup`
+- `RestoreBackup`
+- `ResolveGitBackupConflict`
+- `RecordBackupSnapshot`
+
+### Queries
+
+- `GetBackupProfile`
+- `ListRemoteBackupFiles`
+- `GetLastBackupResult`
+- `GetLastBackupCompletedAt`
+- `PreviewBackupChanges`
+
+### Notes
+
+- backup owns backup execution semantics but not the post-restore business rebuild of every context
+- restore compensation that spans contexts should use orchestration
+
+## Shell and Platform Operations
+
+The following operations are shell or platform concerns, not bounded-context use cases:
+
+- `SetLaunchAtLogin`
+- `PersistWindowState`
+- `ShowMainWindow`
+- `HideMainWindow`
+- `CheckAppUpdate`
+- `DownloadAppUpdate`
+- `ApplyAppUpdate`
+- `SetSkippedUpdateVersion`
+
+They should remain in `cmd/skillflow/` and `platform/` rather than being modeled as a separate bounded context.
+
+## Shared Orchestration
+
+The following flows should not be owned by a single bounded context.
+
+### `ImportSkillFromSourceOrchestrator`
+
+Typical sequence:
+
+1. read candidate source data from `skillsource`
+2. create or reconcile installed skill in `skillcatalog`
+3. optionally push to configured agents through `agentintegration`
+4. optionally trigger backup through `backup`
+
+### `ImportLocalSkillOrchestrator`
+
+Typical sequence:
+
+1. validate local source directory
+2. create installed skill in `skillcatalog`
+3. optionally push to configured agents
+4. optionally trigger backup
+
+### `UpdateInstalledSkillOrchestrator`
+
+Typical sequence:
+
+1. resolve source hint from `skillsource`
+2. update installed skill content and version state in `skillcatalog`
+3. refresh pushed agent copies through `agentintegration`
+4. optionally trigger backup
+
+### `RestoreSystemOrchestrator`
+
+Typical sequence:
+
+1. restore backup payload through `backup`
+2. rebuild context-local settings, caches, and projections
+3. refresh derived read models
+4. emit post-restore events
+
+These orchestrators belong in `core/orchestration` and are the required path for the corresponding Wails-facing transport methods.
+
+## Shell Coordination
+
+These flows are coordination concerns, but they are better owned by the shell composition layer than by `core/orchestration/`.
+
+### `SettingsSaveCoordinator`
+
+`Settings` is a composition surface. In the current implementation, saving it goes through shell coordination plus `core/config`, then dispatches to the owning components:
+
+- skill-library settings such as `defaultCategory` -> `skillcatalog`
+- source-cache settings such as `repoCacheDir` -> `skillsource`, plus shell rebuild of repo-cache-dependent runtime adapters
+- agent profiles, auto-push, and recursive scan depth -> `agentintegration`
+- backup provider selection, sync interval, and cloud profile split -> `backup`
+- card-status visibility -> `readmodel/preferences`
+- shell preferences such as launch-at-login, proxy, log level, skipped update version, and window state -> `cmd/skillflow` and `platform/`
+
+Prompt persistence currently lives under `prompts/` and is not edited through the Settings page. Starred-repo identity tracking still lives under `star_repos*.json`, while the local repo-cache root is edited through Settings and must rewire cache-dependent shell services after save.
+
+### `StartupBootstrapSequence`
+
+Startup sequencing should live in shell startup files such as `cmd/skillflow/app_startup.go`, `cmd/skillflow/main.go`, and `cmd/skillflow/process_bootstrap_mode*.go`:
+
+- load settings
+- initialize shell adapters
+- refresh or repair runtime state
+- schedule background source refresh, update checks, and backup tasks
+
+## Read Models
+
+The following views should live in `readmodel/` rather than inside one bounded context.
+
+### `DashboardReadModel`
+
+Combines:
+
+- installed skills from `skillcatalog`
+- version hints from `skillsource`
+- pushed state from `agentintegration`
+
+### `MyAgentsReadModel`
+
+Combines:
+
+- agent profiles from `agentintegration`
+- agent-side scan results from `agentintegration`
+- installed-state overlays from `skillcatalog`
+
+### `StarRepoReadModel`
+
+Combines:
+
+- tracked repositories and skill sources from `skillsource`
+- installed-state overlays from `skillcatalog`
+- pushed-state overlays from `agentintegration`
+
+## Settings Facade
+
+`Settings` is the main exception to the "UI composition belongs in `readmodel/`" rule.
+
+Current implementation uses `core/config` as a settings facade for `GetConfig` / `SaveConfig`. It merges:
+
+- skill-library settings from `skillcatalog`
+- agent and auto-push settings from `agentintegration`
+- backup settings from `backup`
+- card-status visibility from `readmodel/preferences`
+- shell/platform settings
+
+Prompt storage and starred-repo tracking remain outside this facade unless they gain dedicated settings keys later.
+
+## Transport Adapter Mapping
+
+The Wails-facing `App` methods in `cmd/skillflow/` stay thin transport adapters that delegate to context application services, orchestration services, or read models.
+
+Examples:
+
+- `ListSkills` -> `readmodel/skills`
+- `ListAllStarSkills` / `ListRepoStarSkills` -> `readmodel/skills`
+- `ImportLocal` / `PushToAgents` / `PullFromAgent` / `UpdateSkill` -> `core/orchestration`
+- `ImportStarSkills` -> `orchestration/ImportSkillFromSourceOrchestrator`
+- `GetConfig` / `SaveConfig` -> `core/config` facade plus shell `SettingsSaveCoordinator`
+- `CreatePrompt` -> `promptcatalog/app`
+- `CheckAppUpdate` -> shell/platform update service
+
+## Design Constraints
+
+- no use case should directly depend on another context's infrastructure implementation
+- command handlers should return domain-oriented results, then let transport adapters map them to transport DTOs
+- cross-context writes must remain explicit
+- UI labels such as `imported` may differ from internal semantics such as `installed`, but the mapping belongs outside the domain layer
+
+*Last updated: 2026-03-21*

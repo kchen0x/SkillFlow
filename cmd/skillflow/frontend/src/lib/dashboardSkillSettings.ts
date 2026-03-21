@@ -12,6 +12,11 @@ export type DashboardSkillSettings = {
 
 export type DashboardToolbarActionKey = 'update' | 'batchDelete' | 'import' | 'autoUpdate'
 
+export type DashboardAutoUpdateActionState = {
+  buttonTone: 'primary' | 'secondary'
+  visualState: 'enabled' | 'disabled'
+}
+
 const DASHBOARD_TOOLBAR_ACTION_KEYS: readonly DashboardToolbarActionKey[] = [
   'update',
   'batchDelete',
@@ -28,6 +33,20 @@ export function readDashboardSkillSettings(cfg?: DashboardSkillConfig | null): D
 
 export function listDashboardToolbarActionKeys(): DashboardToolbarActionKey[] {
   return [...DASHBOARD_TOOLBAR_ACTION_KEYS]
+}
+
+export function getDashboardAutoUpdateActionState(autoUpdateSkills: boolean): DashboardAutoUpdateActionState {
+  if (autoUpdateSkills) {
+    return {
+      buttonTone: 'primary',
+      visualState: 'enabled',
+    }
+  }
+
+  return {
+    buttonTone: 'secondary',
+    visualState: 'disabled',
+  }
 }
 
 export function toggleDashboardAutoPushAgent(currentAgents: string[], agentName: string): string[] {

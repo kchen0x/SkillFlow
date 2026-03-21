@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { GetConfig, SaveConfig, ListCloudProviders, AddCustomAgent, RemoveCustomAgent, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir, TestProxyConnection } from '../../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, ListCloudProviders, AddCustomAgent, RemoveCustomAgent, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir, TestProxyConnection, GetAppDataDir, OpenAppDataDir } from '../../wailsjs/go/main/App'
 import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star } from 'lucide-react'
 import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
@@ -14,7 +14,9 @@ import {
   type SkillStatusKey,
   type SkillStatusPageKey,
 } from '../lib/skillStatusVisibility'
+import { orderCloudProviders } from '../lib/cloudProviderOrder'
 import { DEFAULT_PROXY_TEST_URL, buildProxyConnectionPayload } from '../lib/proxyConnection'
+import { buildSettingsPathRows } from '../lib/settingsPaths'
 
 type Tab = 'agents' | 'cloud' | 'general' | 'network'
 type ProxyMode = 'none' | 'system' | 'manual'
@@ -61,11 +63,6 @@ const CLOUD_PROVIDER_LABEL_KEYS: Record<string, TranslationKey> = {
   tencent: 'settings.cloudProviderTencent',
   huawei: 'settings.cloudProviderHuawei',
   git: 'settings.cloudProviderGit',
-}
-
-const CLOUD_PROVIDER_PRIORITY: Record<string, number> = {
-  git: 0,
-  huawei: 1,
 }
 
 const CLOUD_FIELD_LABEL_KEYS: Record<string, Record<string, TranslationKey>> = {
@@ -140,20 +137,6 @@ function getCloudProviderDisplayName(name: string, t: (key: TranslationKey) => s
 function getCloudFieldLabel(providerName: string | undefined, fieldKey: string, fallback: string, t: (key: TranslationKey) => string) {
   const key = providerName ? CLOUD_FIELD_LABEL_KEYS[providerName]?.[fieldKey] : undefined
   return key ? t(key) : fallback
-}
-
-function orderCloudProviders(providerList: any[]) {
-  return providerList
-    .map((provider, index) => ({ provider, index }))
-    .sort((left, right) => {
-      const leftPriority = CLOUD_PROVIDER_PRIORITY[left.provider?.name] ?? Number.MAX_SAFE_INTEGER
-      const rightPriority = CLOUD_PROVIDER_PRIORITY[right.provider?.name] ?? Number.MAX_SAFE_INTEGER
-      if (leftPriority !== rightPriority) {
-        return leftPriority - rightPriority
-      }
-      return left.index - right.index
-    })
-    .map(({ provider }) => provider)
 }
 
 function splitCloudRemoteSegments(value: string | undefined) {
@@ -412,6 +395,7 @@ export default function SettingsPage() {
   const [newAgent, setNewAgent] = useState({ name: '', pushDir: '' })
   const [newScanDirs, setNewScanDirs] = useState<Record<string, string>>({})
   const [appVersion, setAppVersion] = useState('')
+  const [appDataDir, setAppDataDir] = useState('')
   const [logDir, setLogDir] = useState('')
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateResult, setUpdateResult] = useState<string | null>(null)
@@ -480,13 +464,17 @@ export default function SettingsPage() {
       },
     },
   ]
+  const settingsPathRows = buildSettingsPathRows(cfg, appDataDir)
+  const appDataDirRow = settingsPathRows.find(row => row.key === 'appDataDir')
+  const repoCacheDirRow = settingsPathRows.find(row => row.key === 'repoCacheDir')
 
   useEffect(() => {
-    Promise.all([GetConfig(), ListCloudProviders(), GetAppVersion(), GetLogDir()]).then(([c, p, v, logPath]) => {
+    Promise.all([GetConfig(), ListCloudProviders(), GetAppVersion(), GetLogDir(), GetAppDataDir()]).then(([c, p, v, logPath, dataPath]) => {
       setCfg(syncActiveCloudProfile(c))
       setProviders(orderCloudProviders(p ?? []))
       setAppVersion(v as string)
       setLogDir(logPath as string)
+      setAppDataDir(dataPath as string)
     })
   }, [])
 
@@ -1148,23 +1136,41 @@ export default function SettingsPage() {
             </div>
             <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.logDirHint')}</p>
           </div>
-          <div>
-            <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.skillsDir')}</p>
-            <div className="flex gap-2">
-              <input
-                value={cfg.skillsStorageDir ?? ''}
-                onChange={e => setCfg((p: any) => ({ ...p, skillsStorageDir: e.target.value }))}
-                className="input-base flex-1 font-mono"
-              />
-              <button
-                onClick={() => pickDir(d => setCfg((p: any) => ({ ...p, skillsStorageDir: d })), cfg.skillsStorageDir ?? '')}
-                className="btn-secondary px-2.5 rounded-lg"
-                title={t('settings.selectDir')}
-              >
-                <FolderOpen size={16} />
-              </button>
+          {appDataDirRow && (
+            <div>
+              <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.appDataDir')}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => { await OpenAppDataDir() }}
+                  className="btn-secondary px-3 py-1.5 rounded-lg text-sm"
+                >
+                  {t('settings.openAppDataDir')}
+                </button>
+                <span className="text-xs font-mono break-all" style={{ color: 'var(--text-muted)' }}>{appDataDirRow.value}</span>
+              </div>
+              <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.appDataDirHint')}</p>
             </div>
-          </div>
+          )}
+          {repoCacheDirRow && (
+            <div>
+              <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.repoCacheDir')}</p>
+              <div className="flex gap-2">
+                <input
+                  value={repoCacheDirRow.value}
+                  onChange={e => setCfg((p: any) => ({ ...p, repoCacheDir: e.target.value }))}
+                  className="input-base flex-1 font-mono"
+                />
+                <button
+                  onClick={() => pickDir(d => setCfg((p: any) => ({ ...p, repoCacheDir: d })), repoCacheDirRow.value)}
+                  className="btn-secondary px-2.5 rounded-lg"
+                  title={t('settings.selectDir')}
+                >
+                  <FolderOpen size={16} />
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>{t('settings.repoCacheDirHint')}</p>
+            </div>
+          )}
           <div>
             <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.repoScanMaxDepth')}</p>
             <input

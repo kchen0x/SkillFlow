@@ -6,9 +6,13 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
-	coregit "github.com/shinerio/skillflow/core/git"
-	"github.com/shinerio/skillflow/core/skill"
-	"github.com/shinerio/skillflow/core/viewstate"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	"github.com/shinerio/skillflow/core/platform/appdata"
+	"github.com/shinerio/skillflow/core/readmodel/viewstate"
+	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
+	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
+	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
+	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -61,7 +65,7 @@ func TestListAllStarSkillsUsesCachedSnapshotWhenFingerprintMatches(t *testing.T)
 
 	fingerprint, err := app.allStarSkillsFingerprint()
 	require.NoError(t, err)
-	cached := []coregit.StarSkill{{Name: "cached-skill", Path: "/tmp/cached"}}
+	cached := []StarSkillEntry{{Name: "cached-skill", Path: "/tmp/cached"}}
 	require.NoError(t, app.viewCache.Save(allStarSkillsSnapshotName, fingerprint, cached))
 
 	skills, err := app.ListAllStarSkills()
@@ -70,17 +74,19 @@ func TestListAllStarSkillsUsesCachedSnapshotWhenFingerprintMatches(t *testing.T)
 }
 
 func TestListAllStarSkillsRebuildsWhenCachedSnapshotIsStale(t *testing.T) {
-	app, dataDir, _, _ := newViewStateTestApp(t)
-	repoDir := filepath.Join(dataDir, "repos", "demo")
+	app, _, _, _ := newViewStateTestApp(t)
+	repoURL := "https://example.com/demo/repo.git"
+	repoDir, err := platformgit.CacheDir(app.repoCacheDir(), repoURL)
+	require.NoError(t, err)
 	writeTestSkillDir(t, repoDir, "repo-skill", "# Repo Skill\n")
-	require.NoError(t, app.starStorage.Save([]coregit.StarredRepo{{
-		URL:      "https://example.com/demo.git",
+	require.NoError(t, app.starStorage.Save([]sourcedomain.StarRepo{{
+		URL:      repoURL,
 		Name:     "demo/repo",
 		Source:   "demo/repo",
 		LocalDir: repoDir,
 	}}))
 
-	require.NoError(t, app.viewCache.Save(allStarSkillsSnapshotName, "stale-fingerprint", []coregit.StarSkill{{
+	require.NoError(t, app.viewCache.Save(allStarSkillsSnapshotName, "stale-fingerprint", []StarSkillEntry{{
 		Name: "cached-skill",
 		Path: "/tmp/cached",
 	}}))
@@ -92,18 +98,39 @@ func TestListAllStarSkillsRebuildsWhenCachedSnapshotIsStale(t *testing.T) {
 	assert.Equal(t, filepath.Join(repoDir, "repo-skill"), skills[0].Path)
 }
 
+func TestInstalledSkillsFingerprintUsesAppDataMetaDirs(t *testing.T) {
+	app, dataDir, _, _ := newViewStateTestApp(t)
+	metaDir := filepath.Join(dataDir, "meta")
+	metaLocalDir := filepath.Join(dataDir, "meta_local")
+	require.NoError(t, os.MkdirAll(metaDir, 0755))
+	require.NoError(t, os.MkdirAll(metaLocalDir, 0755))
+
+	first, err := app.installedSkillsFingerprint()
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(metaDir, "demo.json"), []byte(`{"name":"demo"}`), 0644))
+	second, err := app.installedSkillsFingerprint()
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(metaLocalDir, "demo.json"), []byte(`{"state":"local"}`), 0644))
+	third, err := app.installedSkillsFingerprint()
+	require.NoError(t, err)
+
+	assert.NotEqual(t, first, second)
+	assert.NotEqual(t, second, third)
+}
+
 func newViewStateTestApp(t *testing.T) (*App, string, string, string) {
 	t.Helper()
 
 	dataDir := t.TempDir()
-	skillsDir := filepath.Join(dataDir, "library", "skills")
+	skillsDir := appdata.SkillsDir(dataDir)
 	pushDir := filepath.Join(dataDir, "tool-skills")
 	cacheDir := filepath.Join(dataDir, "cache")
 	starsPath := filepath.Join(dataDir, "star_repos.json")
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
-	cfg.SkillsStorageDir = skillsDir
 	cfg.Agents = []config.AgentConfig{
 		{
 			Name:     "codex",
@@ -117,9 +144,9 @@ func newViewStateTestApp(t *testing.T) (*App, string, string, string) {
 
 	app := NewApp()
 	app.config = svc
-	app.storage = skill.NewStorage(skillsDir)
+	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = cacheDir
 	app.viewCache = viewstate.NewManager(filepath.Join(cacheDir, "viewstate"))
-	app.starStorage = coregit.NewStarStorage(starsPath)
+	app.starStorage = sourcerepo.NewStarRepoStorageWithCacheDir(starsPath, cfg.RepoCacheDir)
 	return app, dataDir, skillsDir, pushDir
 }

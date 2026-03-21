@@ -5,6 +5,7 @@ import {
   toggleDashboardAutoPushAgent,
   createDashboardSkillEventSubscriptions,
   createToolSkillsEventSubscriptions,
+  getDashboardAutoUpdateActionState,
   listDashboardToolbarActionKeys,
 } from '../.tmp-tests/dashboardSkillSettings.js'
 
@@ -61,4 +62,18 @@ test('dashboard toolbar actions replace remote install with auto update', () => 
     'import',
     'autoUpdate',
   ])
+})
+
+test('auto update action state shows enable action when auto update is off', () => {
+  assert.deepEqual(getDashboardAutoUpdateActionState(false), {
+    buttonTone: 'secondary',
+    visualState: 'disabled',
+  })
+})
+
+test('auto update action state shows disable action when auto update is on', () => {
+  assert.deepEqual(getDashboardAutoUpdateActionState(true), {
+    buttonTone: 'primary',
+    visualState: 'enabled',
+  })
 })

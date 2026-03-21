@@ -6,11 +6,11 @@
 
 Slogan: Master once. Apply everywhere.
 
-SkillFlow is a cross-platform desktop app for managing skills and reusable prompts across diverse agentic AI environments. It combines local-first skill management, cross-environment sync, starred repo browsing, update checking, and cloud backup in one workflow.
+SkillFlow is a cross-platform desktop app for managing reusable skills and prompts across agent environments. It keeps a local skill library, syncs selected skills to multiple agents, tracks repo-backed sources, checks for updates, and backs up sync-safe data to object storage or Git.
 
-![skilflow](docs/skillflow.gif)
+![SkillFlow](docs/skillflow.gif)
 
-## What Problems Does SkillFlow Solve?
+## What SkillFlow Does
 
 - **📦 Turn discoveries into assets**: Solve the "saved means forgotten" problem by turning scattered skills from blogs and videos into personal assets you can manage, iterate on, retire, and update deliberately.
 - **🎛️ Stay in control**: Avoid black-box skill management by organizing large skill collections by scenario, so developers always understand and control an agent's capability boundaries.
@@ -18,31 +18,32 @@ SkillFlow is a cross-platform desktop app for managing skills and reusable promp
 - **🖥️ Keep environments consistent**: Build a cloud-backed workflow across macOS and Windows devices so your development environment and skill configuration stay aligned wherever you work.
 - **⚡ Iterate automatically**: Replace tedious manual maintenance with automatic skill updates, so distributed sources do not turn into stale versions.
 - **📝 Version prompts intentionally**: Manage prompts as versioned assets instead of rewriting them ad hoc, improving consistency, optimization, and standardization over time.
-- **🛠️ Focus on real work**: Move beyond repetitive toy exercises and use AI practice to solve real productivity problems while building tools that matter in day-to-day development.
 
 ## Download & Install
 
-Get the latest release from **[GitHub Releases →](https://github.com/shinerio/SkillFlow/releases/latest)**
+Get the latest release from **[GitHub Releases](https://github.com/shinerio/SkillFlow/releases/latest)**.
 
 | Platform | File |
 |----------|------|
-| macOS (Apple Silicon) | `SkillFlow-macos-apple-silicon` |
-| macOS (Intel) | `SkillFlow-macos-intel` |
-| Windows (x64) | `SkillFlow-windows-amd64.exe` |
+| macOS (Apple Silicon) | `SkillFlow-macos-apple-silicon.dmg` |
+| macOS (Intel) | `SkillFlow-macos-intel.dmg` |
+| Windows (x64) | `SkillFlow-windows.exe` |
 
 ## Highlights
 
 | Feature | Description |
 |---------|-------------|
-| **Skill Library** | Manage a local library of skills with categories, search, sorting, drag-and-drop organization, batch delete, smoother startup/page re-entry through local derived snapshots, and adaptive large-list motion. |
-| **My Prompts** | Store reusable prompts as synced prompt cards with scoped export, conflict-aware import, one-click copy, related image previews, and markdown-style web links. |
-| **Cross-agent Sync** | Push or pull skills across Claude Code, OpenCode, Codex, Gemini CLI, OpenClaw, and custom agents. |
-| **Starred Repos** | Watch Git repos, browse their skills, and import or push them without installing everything into My Skills first. |
-| **Cloud Backup** | Back up skills, prompts, and sync-safe metadata to object storage providers or Git, while keeping secrets and high-churn local runtime metadata on-device only. |
-| **Update Detection** | Check git-backed skills for newer commits, optionally auto-update matching My Skills after starred-repo refresh, and update installed copies from the app with push-dir refresh plus auto-sync target overwrite to keep selected agents current while leaving other agents manually updatable. |
-| **Desktop Experience** | Bilingual UI, multiple themes with Young as the default, helper-backed tray/menu bar reopen after window close, launch-at-login, per-agent settings, and immediate page continuity when the window is reopened after being hidden or inactive. |
+| **Skill Library** | Local library with categories, search, sorting, drag-and-drop organization, batch delete, update checks, and auto-push targets. |
+| **My Prompts** | Synced prompt cards with category management, scoped export, conflict-aware import, copy, image previews, and web links. |
+| **Cross-agent Sync** | Push or pull skills across built-in and custom agents. |
+| **Starred Repos** | Track Git repos, browse discovered skills, and import or push them without installing everything first. |
+| **Cloud Backup** | Back up sync-safe skills, prompts, and metadata to object storage providers or Git. |
+| **Desktop Experience** | Bilingual UI, multiple themes, tray/menu bar reopen, launch-at-login, proxy testing, and in-app update checks. |
 
-For the complete UI/UX reference, including cloud backup behavior and provider details, see **[docs/features.md](docs/features.md)**.
+Detailed references:
+
+- UI/UX behavior: [docs/features.md](docs/features.md)
+- Persisted files and config schema: [docs/config.md](docs/config.md)
 
 ## Supported Agents
 
@@ -54,11 +55,11 @@ Built-in adapters:
 - **Gemini CLI**
 - **OpenClaw**
 
-You can also add **custom agents** in Settings by pointing SkillFlow at local scan and push directories.
+You can also add **custom agents** in Settings by configuring local scan and push directories.
 
 ## Skill Format
 
-A valid skill directory must contain a `skill.md` file at its root.
+A valid skill directory must contain a root `skill.md` file. Filename matching is case-insensitive.
 
 ```text
 my-skill/
@@ -66,4 +67,4 @@ my-skill/
   ...other files
 ```
 
-For contributing guidelines and building from source, see **[docs/contributing.md](contributing.md)**.
+For contributing guidelines and building from source, see **[contributing.md](contributing.md)**.

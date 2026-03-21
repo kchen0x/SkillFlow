@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,7 @@ func TestGetEnabledAgentsReturnsEnabledAgents(t *testing.T) {
 }
 
 func TestPushConflictUsesAgentNameField(t *testing.T) {
-	conflict := PushConflict{
+	conflict := agentdomain.PushConflict{
 		SkillName:  "demo-skill",
 		AgentName:  "codex",
 		TargetPath: "/tmp/codex/demo-skill",

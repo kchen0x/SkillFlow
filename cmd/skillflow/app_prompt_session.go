@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/shinerio/skillflow/core/prompt"
+	promptcatalogapp "github.com/shinerio/skillflow/core/promptcatalog/app"
 )
 
 type PromptImportPrepareResult struct {
-	SessionID string                `json:"sessionId"`
-	Creates   []prompt.ImportPrompt `json:"creates"`
-	Conflicts []prompt.ImportPrompt `json:"conflicts"`
+	SessionID string                          `json:"sessionId"`
+	Creates   []promptcatalogapp.ImportPrompt `json:"creates"`
+	Conflicts []promptcatalogapp.ImportPrompt `json:"conflicts"`
 }
 
 type promptImportSession struct {
 	FilePath string
-	Preview  *prompt.ImportPreview
+	Preview  *promptcatalogapp.ImportPreview
 }
 
 type promptImportSessionStore struct {
@@ -30,7 +30,7 @@ func newPromptImportSessionStore() *promptImportSessionStore {
 	}
 }
 
-func (s *promptImportSessionStore) Create(filePath string, preview *prompt.ImportPreview) string {
+func (s *promptImportSessionStore) Create(filePath string, preview *promptcatalogapp.ImportPreview) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -82,12 +82,12 @@ func clonePromptImportSession(session *promptImportSession) *promptImportSession
 	}
 }
 
-func clonePromptImportPreview(preview *prompt.ImportPreview) *prompt.ImportPreview {
+func clonePromptImportPreview(preview *promptcatalogapp.ImportPreview) *promptcatalogapp.ImportPreview {
 	if preview == nil {
 		return nil
 	}
-	return &prompt.ImportPreview{
-		Creates:   append([]prompt.ImportPrompt(nil), preview.Creates...),
-		Conflicts: append([]prompt.ImportPrompt(nil), preview.Conflicts...),
+	return &promptcatalogapp.ImportPreview{
+		Creates:   append([]promptcatalogapp.ImportPrompt(nil), preview.Creates...),
+		Conflicts: append([]promptcatalogapp.ImportPrompt(nil), preview.Conflicts...),
 	}
 }

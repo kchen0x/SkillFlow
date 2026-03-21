@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/shinerio/skillflow/core/notify"
+	"github.com/shinerio/skillflow/core/platform/eventbus"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func forwardEvents(ctx context.Context, hub *notify.Hub) {
+func forwardEvents(ctx context.Context, hub *eventbus.Hub) {
 	ch := hub.Subscribe()
 	for {
 		select {

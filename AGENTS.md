@@ -1,195 +1,243 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with this repository.
 
-## Directory Organization Rule — MANDATORY
+## Directory Organization Rule - MANDATORY
 
 The root directory must contain **no Go source files**. All code lives in clearly scoped subdirectories:
 
-```
-/ (project root — no .go files here)
-  go.mod, go.sum         ← module definition (must stay at root)
-  Makefile               ← build orchestration
+```text
+/ (project root - no .go files here)
+  go.mod, go.sum
+  Makefile
+  AGENTS.md (→ CLAUDE.md symlink)
   README.md, README_zh.md
+  contributing.md, contributing_zh.md
   LICENSE, .gitignore, .github/
-  docs/                  ← all documentation
-  core/                  ← reusable internal packages (no package main)
-    skill/               ← Skill model, Storage, Validator
-    config/              ← AppConfig model, Service
-    notify/              ← event Hub
-    install/             ← Installer interface + implementations
-    sync/                ← AgentAdapter interface + FilesystemAdapter
-    backup/              ← CloudProvider interface + implementations
-    update/              ← update Checker
-    registry/            ← global adapter/provider maps
-    git/                 ← git operations, starred repo storage
-    upgrade/             ← startup cutover and schema/terminology migration
+  changelog/
+  chats/
+  docs/
+    agents/
+      skill_directory.md
+      memory_directory.md
+    architecture/
+      README.md
+      README_zh.md
+      overview.md
+      overview_zh.md
+      contexts.md
+      contexts_zh.md
+      layers.md
+      layers_zh.md
+      use-cases.md
+      use-cases_zh.md
+      runtime-and-storage.md
+      runtime-and-storage_zh.md
+    features.md
+    features_zh.md
+    config.md
+    config_zh.md
+    plans/
+    superpowers/
+  core/
+    config/
+    platform/
+    shared/
+    orchestration/
+    readmodel/
+    skillcatalog/
+      app/
+      domain/
+      infra/
+    promptcatalog/
+      app/
+      domain/
+      infra/
+    agentintegration/
+      app/
+      domain/
+      infra/
+    skillsource/
+      app/
+      domain/
+      infra/
+    backup/
+      app/
+      domain/
+      infra/
   cmd/
-    skillflow/           ← package main (Wails desktop app)
-      main.go            ← entry point + //go:embed all:frontend/dist
-      app.go, app_update.go, app_log.go
+    skillflow/
+      main.go
+      app.go, app_*.go
       adapters.go, providers.go, events.go, version.go
-      tray_darwin.go, tray_windows.go, tray_stub.go
-      single_instance_other.go, single_instance_windows.go
-      wails.json         ← Wails project config (must be co-located with frontend/)
-      build/             ← Wails build assets + binary output
-        darwin/          ← macOS resources (iconfile.icns, Info.plist)
-        windows/         ← Windows resources (icon.ico, installer/)
-        appicon.png
-        bin/             ← compiled output (git-ignored)
-      frontend/          ← React/TypeScript app
-        src/             ← source code
-        dist/            ← built output (git-ignored, embedded by Go)
-        package.json, vite.config.ts, tsconfig.json
+      process_*.go
+      tray_*.go
+      window_*.go
+      single_instance_*.go
+      wails.json
+      build/
+      frontend/
 ```
 
 **Rules:**
-- Never add `.go` files to the project root. New application code goes in `cmd/skillflow/`; new reusable packages go in `core/<name>/`.
-- `wails.json` must be co-located with `frontend/` inside `cmd/skillflow/`. All `wails dev/build/generate` commands must be run from `cmd/skillflow/` (the Makefile handles this).
+- Never add `.go` files to the project root.
+- New backend business code must go under a bounded context in `core/<context>/app`, `core/<context>/domain`, or `core/<context>/infra`.
+- Cross-context write coordination belongs in `core/orchestration/`.
+- Cross-context read composition belongs in `core/readmodel/`.
+- Pure technical capabilities with no business ownership belong in `core/platform/`.
+- `core/config/` is a frontend-facing settings facade and split/merge persistence adapter. Do not treat it as a bounded context.
+- `core/shared/` is only for highly stable shared kernel concepts. Do not move context-local IDs or business rules there unless they are genuinely cross-context.
+- `cmd/skillflow/` remains the Wails desktop shell, transport adapter layer, process host, and composition root.
+- `wails.json` must stay co-located with `frontend/` inside `cmd/skillflow/`.
 - The `//go:embed all:frontend/dist` directive in `main.go` works because both are in `cmd/skillflow/`.
-- `go test ./core/...` is run from the module root (where `go.mod` is).
-- Import paths use the full module path: `github.com/shinerio/skillflow/core/...` (no change from before).
-- **`cmd/skillflow/*.go` files must remain flat (no subdirectories).** Go requires all files in a package to be in the same directory; since Wails binds to `package main`, splitting into subdirectories is not possible. Use file-name prefixes as the organization convention:
-  - `app.go`, `app_log.go`, `app_update.go` — App struct and method groups
-  - `events.go` — event type definitions and emitters
-  - `adapters.go`, `providers.go` — registration of `core/` implementations
-  - `tray_darwin.go`, `tray_windows.go`, `tray_stub.go` — platform-specific system tray
-  - `single_instance_other.go`, `single_instance_windows.go` — platform-specific single-instance lock
-  - `version.go` — build-time version constant; `main.go` — entry point
-- When a concern grows large enough to warrant its own package, extract it to `core/<name>/` (reusable, no Wails dependency) rather than creating a subdirectory inside `cmd/skillflow/`.
+- `go test ./core/...` is run from the module root.
+- Import paths use the full module path: `github.com/shinerio/skillflow/core/...`.
+- **`cmd/skillflow/*.go` files must remain flat.** Wails bindings require a single `package main` directory, so do not create subdirectories under `cmd/skillflow/`.
+- Use file-name prefixes inside `cmd/skillflow/` as the organization convention:
+  - `app.go`, `app_*.go` for Wails-facing transport methods
+  - `events.go` for shell event types and emitters
+  - `adapters.go`, `providers.go` for shell-side wiring
+  - `process_*.go`, `tray_*.go`, `window_*.go`, `single_instance_*.go` for shell/runtime concerns
+- When a concern grows large enough to warrant its own package, extract it to `core/` rather than creating a subdirectory inside `cmd/skillflow/`.
 
-## Documentation Organization Rule — MANDATORY
+## Documentation Organization Rule - MANDATORY
 
-**Root directory must contain only `README.md` and `README_zh.md` as documentation files.**
+**Root directory may contain only `README.md`, `README_zh.md`, `contributing.md`, `contributing_zh.md`, and `AGENTS.md` (with `CLAUDE.md` as symlink) as documentation files.**
 
 All other documentation lives under `docs/`:
 
 | File | Purpose |
 |------|---------|
+| `docs/agents/skill_directory.md` | Built-in agent scan/push directory reference |
+| `docs/agents/memory_directory.md` | Common agent memory-file reference |
 | `docs/features.md` | Complete UI/UX feature reference in English |
 | `docs/features_zh.md` | Complete UI/UX feature reference in Chinese |
-| `docs/architecture.md` | Internal architecture, packages, data models, extension guides (English) |
-| `docs/architecture_zh.md` | Same in Chinese |
+| `docs/architecture/README.md` | Architecture index and reading order (English) |
+| `docs/architecture/README_zh.md` | Architecture index and reading order (Chinese) |
+| `docs/architecture/overview.md` | High-level architecture overview (English) |
+| `docs/architecture/overview_zh.md` | High-level architecture overview (Chinese) |
+| `docs/architecture/` | Detailed DDD architecture set: overview, contexts, layers, use cases, and storage |
 | `docs/config.md` | Persisted config and metadata file reference (English) |
 | `docs/config_zh.md` | Same in Chinese |
 | `docs/plans/` | Design and implementation plans |
-| `docs/skill_directory.md` | Skill directory format specification |
+| `docs/<module>/...` | Module-scoped design notes, plans, and reference docs such as `docs/superpowers/` |
 
 **Rules:**
-- `README.md` / `README_zh.md` — user-facing only: features overview, download/install links, skill format, cloud backup config, contributing/build instructions. **No internal code snippets, no package tables, no architecture diagrams.**
-- Never add new standalone `.md` files to the root directory. If you need new documentation, put it under `docs/`.
+- `README.md` / `README_zh.md` are user-facing only: features overview, download/install links, skill format, cloud backup config, contributing/build instructions. No internal code snippets, no package tables, no architecture diagrams.
+- `contributing.md` / `contributing_zh.md` are contributor-facing only: prerequisites, build/test/generate commands, and pointers to deeper architecture docs.
+- Never add new standalone `.md` files to the root directory beyond those four entrypoint documents. If you need new documentation, put it under `docs/`.
 
-## Documentation Sync Rule — MANDATORY
+## Documentation Sync Rule - MANDATORY
 
 **Any time a meaningful user-facing feature is added, changed, or removed, you MUST update the following files in the same commit:**
 
 | File | What to update |
 |------|---------------|
-| `docs/features.md` | Add / edit / remove the corresponding section(s) in English. Update the "Last updated" date at the bottom. |
+| `docs/features.md` | Add, edit, or remove the corresponding section(s) in English. Update the "Last updated" date at the bottom. |
 | `docs/features_zh.md` | Same changes in Chinese. Update the "最后更新" date at the bottom. |
 | `README.md` | Update only when the high-level description changes or an existing Highlights row needs a coarse-grained capability update. |
 | `README_zh.md` | Same in Chinese. |
 
 **Rules:**
-- A "feature change" means a clear user-facing capability or usage-flow change: for example a new UI control that enables a new action, a behavior change, removal of a control, a new backend method callable from the frontend, or a new event type.
-- Pure presentation-only adjustments are **not** feature changes for this rule. Do **not** update `docs/features.md`, `docs/features_zh.md`, `README.md`, or `README_zh.md` for small copy tweaks, label renames, icon swaps, visual reordering, spacing/layout polish, or other changes that do not obviously change how the feature is used.
-- Do **not** leave the docs stale. Never commit a feature change without the corresponding doc update in the same commit.
-- `docs/features.md` / `docs/features_zh.md` are the source of truth for UX details, but only for meaningful UX/feature behavior. Do not churn them for low-signal presentation-only edits unless the user explicitly asks.
-- `README.md` / `README_zh.md` must stay high-level and only describe coarse-grained product capabilities. Avoid adding small UI wording/layout details that increase reading burden.
-- Small user-facing helpers inside existing flows, narrow diagnostics, settings-page utilities, and similarly scoped UX additions should normally update `docs/features.md` / `docs/features_zh.md` only, and should **not** touch `README.md` / `README_zh.md` unless they materially change a top-level product capability.
-- If a frontend/backend feature change also changes architecture, module boundaries, cross-module contracts, core data flow, persistence model, or extension points, update `docs/architecture.md` in the same commit. When the Chinese architecture doc is being maintained in parallel, update `docs/architecture_zh.md` as well.
-- If a change needs detailed module-level design or implementation documentation, create or update files under a coarse-grained module folder in `docs/` such as `docs/<module>/...` instead of adding more root-level markdown files. Keep module categories broad and stable; do not create many small folders for individual pages, components, or one-off tweaks.
+- A "feature change" means a clear user-facing capability or usage-flow change: a new UI control that enables a new action, a behavior change, removal of a control, a new backend method callable from the frontend, or a new event type.
+- Pure presentation-only adjustments are **not** feature changes for this rule. Do not update `docs/features.md`, `docs/features_zh.md`, `README.md`, or `README_zh.md` for small copy tweaks, label renames, icon swaps, visual reordering, spacing/layout polish, or other changes that do not change how the feature is used.
+- Do not leave the docs stale. Never commit a feature change without the corresponding doc update in the same commit.
+- `docs/features.md` / `docs/features_zh.md` are the source of truth for UX details, but only for meaningful UX and feature behavior.
+- `README.md` / `README_zh.md` must stay high-level and only describe coarse-grained product capabilities.
+- Small user-facing helpers inside existing flows, narrow diagnostics, settings-page utilities, and similarly scoped UX additions should normally update `docs/features.md` / `docs/features_zh.md` only, and should not touch `README.md` / `README_zh.md` unless they materially change a top-level product capability.
+- If a frontend or backend feature change also changes architecture, module boundaries, cross-module contracts, core data flow, persistence model, or extension points, update the relevant files under `docs/architecture/` in the same commit. Keep `docs/architecture/README.md` and `docs/architecture/README_zh.md` aligned as the architecture index and reading entry.
+- If a change needs detailed module-level design or implementation documentation, create or update files under a coarse-grained module folder in `docs/` such as `docs/<module>/...` instead of adding more root-level markdown files.
 
-## Configuration Documentation Sync Rule — MANDATORY
+## Configuration Documentation Sync Rule - MANDATORY
 
-**Any time a repo-tracked persisted config or metadata file is added, removed, renamed, or its on-disk schema/semantics change, you MUST update the following files in the same commit:**
+**Any time a repo-tracked persisted config or metadata file is added, removed, renamed, or its on-disk schema or semantics change, you MUST update the following files in the same commit:**
 
 | File | What to update |
 |------|---------------|
-| `docs/config.md` | Update the English examples, key tables, file-name notes, path/sync-scope notes, and any added/removed/renamed fields. |
+| `docs/config.md` | Update the English examples, key tables, file-name notes, path and sync-scope notes, and any added, removed, or renamed fields. |
 | `docs/config_zh.md` | Same changes in Chinese. |
 
 **Rules:**
 - This rule applies to persisted config and metadata files such as `config.json`, `config_local.json`, `star_repos.json`, `meta/*.json`, and future repo-tracked files that document on-disk configuration or sync metadata.
-- Update the docs when a field is added, removed, renamed, split, merged, moved between files, changes meaning, changes persistence scope, or when the canonical file name/path changes.
+- Update the docs when a field is added, removed, renamed, split, merged, moved between files, changes meaning, changes persistence scope, or when the canonical file name or path changes.
 - Keep examples aligned with the actual persisted format on disk, not just the in-memory runtime model.
 - Pure formatting-only changes that do not change persisted keys, file names, storage location, or semantics do not require doc churn.
-- Do not merge config/schema changes while `docs/config.md` and `docs/config_zh.md` are stale.
+- Do not merge config or schema changes while `docs/config.md` and `docs/config_zh.md` are stale.
 
-## Upgrade Cutover Rule — MANDATORY
+## Upgrade Cutover Rule - MANDATORY
 
 Any persisted schema, terminology, or config-structure upgrade that changes repo-tracked on-disk data must use an explicit startup cutover rather than long-term backward compatibility in business code.
 
 **Rules:**
-- Put upgrade/cutover code under `core/upgrade/`.
+- Put upgrade and cutover code under `core/platform/upgrade/`.
 - Run the cutover automatically during startup **before** loading config or other persisted business data.
-- Rewrite persisted files in place to the latest schema/terminology so the rest of the codebase reads only the new format.
+- Rewrite persisted files in place to the latest schema and terminology so the rest of the codebase reads only the new format.
 - Do **not** keep business-layer compatibility branches for the old on-disk schema after the cutover is in place.
 - When an upgrade rewrites config or metadata files, update `docs/config.md` and `docs/config_zh.md` in the same commit.
-- When the upgrade changes user-facing terminology or flows, also update `README.md`, `README_zh.md`, `docs/features.md`, `docs/features_zh.md`, and architecture docs as needed in the same commit.
+- When the upgrade changes user-facing terminology or flows, also update `README.md`, `README_zh.md`, `docs/features.md`, `docs/features_zh.md`, and the relevant architecture docs in the same commit.
 
-## Path Persistence Rule — MANDATORY
+## Path Persistence Rule - MANDATORY
 
 Any repo-tracked file that can be backed up or synced across devices must avoid machine-specific absolute paths.
 
-- Synced files such as `config.json`, `meta/*.json`, `star_repos.json`, and future backup/sync data files must store local filesystem paths as **forward-slash relative paths** whenever the target is inside the synchronized root.
+- Synced files such as `config.json`, `meta/*.json`, `star_repos.json`, and future backup or sync data files must store local filesystem paths as **forward-slash relative paths** whenever the target is inside the synchronized root.
 - The synchronized root is normally `config.AppDataDir()`. When `SkillsStorageDir` is moved outside that directory, treat the shared parent of `skills/` and `meta/` as the synchronized root for persisted skill metadata.
 - Any path that points **outside** the synchronized root is platform-specific and must live only in `config_local.json`.
 - `config_local.json` is local-only and must remain excluded from cloud backup and git sync.
-- Runtime APIs may expand persisted relative paths back to absolute paths before returning them to frontend/backend callers, but the on-disk synced representation must stay relative.
+- Runtime APIs may expand persisted relative paths back to absolute paths before returning them to frontend or backend callers, but the on-disk synced representation must stay relative.
 
-## Logging Rule — MANDATORY
+## Logging Rule - MANDATORY
 
 All backend code changes must follow consistent logging standards for troubleshooting.
 
 ### Log level policy
 
 - `error`:
-  - Required for any failed operation, exception, unexpected branch, external dependency failure.
+  - Required for any failed operation, exception, unexpected branch, or external dependency failure.
 - `info`:
   - Required for important flow milestones (`start` / `completed`) of key operations.
 - `debug`:
-  - For detailed diagnostics and branch-level context, must be suppressible by configured log level.
+  - For detailed diagnostics and branch-level context, and must be suppressible by configured log level.
 
 ### Key operations that MUST log
 
-The following operations must have reasonable logs (at minimum `info` on start/success, `error` on failure):
+The following operations must have reasonable logs, at minimum `info` on start and success, and `error` on failure:
 
 - Git operations:
-  - clone, fetch, pull, push, conflict detection/resolution, reset/force update.
+  - clone, fetch, pull, push, conflict detection and resolution, reset, force update
 - API operations:
-  - external API calls (GitHub / cloud providers / remote services), especially failures.
+  - external API calls such as GitHub, cloud providers, and remote services, especially failures
 - Sync operations:
-  - scan, import, update, push, pull, backup, restore.
-- Resource mutations (state-changing operations):
-  - create / delete / rename / move / overwrite.
+  - scan, import, update, push, pull, backup, restore
+- Resource mutations:
+  - create, delete, rename, move, overwrite
 - Config mutations:
-  - settings save, log-level changes, provider/agent config updates.
+  - settings save, log-level changes, provider or agent config updates
 
 ### Message quality requirements
 
-- Log message should include:
+- Log messages should include:
   - operation name
-  - target/resource identifier (skill id/name, repo url/name, agent/provider, path, etc.)
-  - result status (`started` / `completed` / `failed`)
+  - target or resource identifier such as skill id or name, repo url or name, agent or provider, or path
+  - result status: `started`, `completed`, or `failed`
   - failure reason for `error` logs
 - Keep wording stable and searchable across the same operation.
-- Avoid noisy/duplicated logs and avoid logging every trivial getter.
+- Avoid noisy or duplicated logs and avoid logging every trivial getter.
 
 ### Security requirements
 
 - Never log secrets or sensitive data:
-  - access token, password, secret key, credential raw content, authorization header, cookie.
+  - access token, password, secret key, credential raw content, authorization header, cookie
 - If needed for diagnosis, log only masked or non-sensitive metadata.
 
 ### Rotation and file-size rule
 
 - Log file strategy must remain bounded:
-  - keep only 2 files (`skillflow.log`, `skillflow.log.1`)
+  - keep only 2 files: `skillflow.log` and `skillflow.log.1`
   - max 1MB per file
-  - rotate and overwrite oldest when size limit is reached
+  - rotate and overwrite the oldest file when the size limit is reached
 
-## Python Tooling Rule — MANDATORY
+## Python Tooling Rule - MANDATORY
 
 Any Python-related work in this repository must use `uv` for interpreter management, dependency management, and script execution, while preserving functional correctness.
 
@@ -211,7 +259,7 @@ Any Python-related work in this repository must use `uv` for interpreter managem
 ```bash
 make dev              # Run in dev mode (hot-reload for Go + frontend)
 make build            # Build production binary
-make test             # Run all Go tests
+make test             # Run core Go tests and frontend unit tests
 make tidy             # Sync Go module dependencies
 make generate         # Regenerate TypeScript bindings after App method changes
 make install-frontend # Install frontend npm dependencies
@@ -235,16 +283,14 @@ cd cmd/skillflow && ~/go/bin/wails generate module
 ### Go (backend)
 
 ```bash
-# Run all tests (from project root)
+# Run all core tests (from project root)
 go test ./core/...
 
-# Run tests for a single package
-go test ./core/skill/...
-go test ./core/update/...
-go test ./core/git/...
+# Run shell tests when cmd/skillflow is touched
+go test ./cmd/skillflow
 
-# Run a single test function
-go test ./core/skill/... -run TestSkillHasUpdate
+# Run a single test name across core packages
+go test ./core/... -run TestName
 
 # Sync dependencies after modifying go.mod
 go mod tidy
@@ -261,43 +307,63 @@ npm run build      # production build (output: cmd/skillflow/frontend/dist/)
 
 ## Architecture
 
-SkillFlow is a Wails v2 desktop app (Go 1.23). The Go backend exposes methods directly to the React frontend via Wails bindings. There is **no REST API**.
+SkillFlow is a Wails v2 desktop app (Go 1.25). The Go backend exposes methods directly to the React frontend via Wails bindings. There is **no REST API**.
 
-For comprehensive architecture docs, data models, and extension guides, see **[docs/architecture.md](docs/architecture.md)**.
+The target backend architecture is a DDD-oriented modular monolith:
 
-## Cross-Module Skill Identity Rule — MANDATORY
+- `cmd/skillflow/` is the desktop shell, Wails transport adapter layer, process host, and composition root
+- bounded contexts live under `core/`
+- each bounded context is organized as `app`, `domain`, and `infra`
+- cross-context write coordination goes through `core/orchestration/`
+- cross-context read composition goes through `core/readmodel/`
+- `core/config/` is a frontend-facing settings facade
+- pure technical capabilities live in `core/platform/`
+- only highly stable shared kernel concepts live in `core/shared/`
 
-Any change touching skill identity, install/import/push/pull state, starred repo correlation, agent scan correlation, or skill update badges **must** follow the **"Unified Skill Identity & State Model"** section in `docs/architecture.md` and `docs/architecture_zh.md`.
+For comprehensive architecture docs, data models, and extension guides, see **[docs/architecture/README.md](docs/architecture/README.md)** and the detailed documents under `docs/architecture/`.
 
-- Distinguish **instance identity** (`Skill.ID`) from **logical identity** (stable cross-module key).
-- Do **not** use `Name` or absolute `Path` as the primary cross-module identity.
-- `imported` is the external-source wording for `installed`.
+## Cross-Module Skill Identity Rule - MANDATORY
+
+Any change touching skill identity, install/import/push/pull state, starred repo correlation, agent scan correlation, or skill update badges **must** follow the **"Unified Skill Identity and State Model"** section in `docs/architecture/contexts.md` and `docs/architecture/contexts_zh.md`.
+
+- Distinguish **instance identity** (`SkillID`) from **logical identity** (`LogicalSkillKey`).
+- Do **not** use `Name` or absolute `Path` as the primary cross-context identity.
+- For repository-backed skills, `LogicalSkillKey` is derived from `SkillSourceRef` using the canonical form `git:<repo-source>#<subpath>` and should not be persisted as a separate field when `SkillSourceRef` already exists.
+- For manually imported or non-repository-backed skills, generate `LogicalSkillKey` at import time as a stable content-based key such as `content:<hash>`, computed from a canonicalized content snapshot rather than absolute paths or local-only metadata.
+- `imported` is the external-source wording alias for `installed`.
 - `pushed` means the logical skill exists in an agent's configured `PushDir`.
 - `seenInAgentScan` means the logical skill was detected in an agent's configured `ScanDirs`; it does **not** imply SkillFlow previously pushed it.
-- Git-backed update detection must be keyed by normalized repo source + subpath, and compare installed `SourceSHA` against the latest remote SHA for that same logical source.
+- Git-backed update detection must be keyed by normalized repo source plus subpath, and compare installed source state against the latest known remote state for that same logical source.
+- One logical source identified by `repo + subpath` should correspond to exactly one installed skill in the library. Re-importing the same logical source must be treated as an already-installed conflict or update path, not as a second installed instance.
 
 ### Key Design Decisions
 
-- **`core/sync` import alias** — always import as `agentsync "github.com/shinerio/skillflow/core/sync"` (conflicts with stdlib `sync`)
-- **`package main` files in `cmd/skillflow/`** — `app.go`, `adapters.go`, `providers.go`, `events.go` are all `package main` alongside `main.go` in `cmd/skillflow/` because Wails requires the app struct in the same package as `main`
-- **Wails bindings are auto-generated** — after adding/removing exported methods on `App`, run `make generate` to update `cmd/skillflow/frontend/wailsjs/go/main/App.{js,d.ts}`; also manually add entries to `App.js` and `App.d.ts` if Wails CLI is unavailable
-- **Installed skill instances are UUID-based, but cross-module identity must use a stable logical key** — see `docs/architecture.md#unified-skill-identity--state-model`
-- **GitHub as source of truth** — update checker polls GitHub Commits API to compare SHA values
-- **`SkippedUpdateVersion` in AppConfig** — persists which app version the user chose to skip on startup; `checkAppUpdateOnStartup` respects this; `CheckAppUpdateAndNotify` (manual check) always notifies regardless
+- Wails-bound transport adapters remain in `cmd/skillflow/` because bindings require a single `package main` directory.
+- `cmd/skillflow/App` methods should stay thin and delegate to one bounded context, `core/orchestration/`, `core/readmodel/`, or `core/config`.
+- Bounded contexts are `skillcatalog`, `promptcatalog`, `agentintegration`, `skillsource`, and `backup`.
+- `Skill` and `Prompt` are parallel core business concepts.
+- `Settings`, `Dashboard`, and `My Agents` are composed UI read surfaces, not bounded contexts.
+- `core/config` is a settings facade for transport and shell coordination, not a source-of-truth bounded context.
+- Shell concerns such as tray, window state, launch-at-login, single-instance behavior, and app update stay in `cmd/skillflow/` and `core/platform/`.
+- In `skillsource`, `StarRepo` is the repository-level model and `SkillSource` is the skill-level source model identified by `repo + subpath`.
+- The long-term settings model is context-owned configuration namespaces stored through a platform settings store, not one global domain config object.
+- Wails bindings are auto-generated. After adding or removing exported methods on `App`, run `make generate` to update `cmd/skillflow/frontend/wailsjs/go/main/App.{js,d.ts}`.
 
 ### Adding a New App Method (Frontend-callable)
 
-1. Add exported method to `App` struct in `cmd/skillflow/app.go` (or a new `package main` file in `cmd/skillflow/`)
-2. Run `make generate` (or `cd cmd/skillflow && wails generate module`) to update `cmd/skillflow/frontend/wailsjs/go/main/App.{js,d.ts}`
-3. Import and call from frontend: `import { MyNewMethod } from '../../wailsjs/go/main/App'`
+1. Add an exported method to `App` in `cmd/skillflow/app.go` or another flat `package main` file under `cmd/skillflow/`.
+2. Keep that method as a thin transport adapter: validate inputs, convert DTOs, and delegate to one bounded context application service, `core/orchestration/`, `core/readmodel/`, or `core/config`.
+3. Run `make generate` or `cd cmd/skillflow && wails generate module` to update `cmd/skillflow/frontend/wailsjs/go/main/App.{js,d.ts}`.
+4. Import and call it from the frontend via `../../wailsjs/go/main/App`.
 
 ### Adding a New Cloud Provider
 
-1. Create `core/backup/<name>.go` implementing `backup.CloudProvider`
-2. Register in `cmd/skillflow/providers.go`: `registry.RegisterCloudProvider(NewXxxProvider())`
-3. Settings page auto-renders credential fields from `RequiredCredentials()`
+1. Implement the provider adapter under `core/backup/infra/`.
+2. Expose it through the backup context's ports and wire it in the shell composition root under `cmd/skillflow/`.
+3. Keep provider-specific API integration inside backup infrastructure code, not in Wails transport methods.
 
 ### Adding a New Agent Adapter
 
-Standard flat-directory agents: add to `registerAdapters()` in `cmd/skillflow/adapters.go`.
-Custom behavior: implement `agentsync.AgentAdapter` and register via `registry.RegisterAdapter()`.
+1. Implement the adapter under `core/agentintegration/infra/`.
+2. Wire it from the shell composition root in `cmd/skillflow/`.
+3. Keep scan, push, pull, and conflict semantics inside `agentintegration`, not in `App` methods or UI DTO builders.

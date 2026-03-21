@@ -1,0 +1,113 @@
+package update_test
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/shinerio/skillflow/core/platform/update"
+	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestCheckerDetectsUpdate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode([]map[string]any{{"sha": "newsha123"}})
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
+		SourceURL:     "https://github.com/user/repo",
+		SourceSubPath: "skills/skill-a",
+		SourceSHA:     "oldsha456",
+	}
+	result, err := checker.Check(context.Background(), sk)
+	require.NoError(t, err)
+	assert.True(t, result.HasUpdate)
+	assert.Equal(t, "newsha123", result.LatestSHA)
+}
+
+func TestCheckerNoUpdateWhenSHAMatches(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode([]map[string]any{{"sha": "sameSHA"}})
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skilldomain.InstalledSkill{
+		Source:    skilldomain.SourceGitHub,
+		SourceSHA: "sameSHA",
+	}
+	result, err := checker.Check(context.Background(), sk)
+	require.NoError(t, err)
+	assert.False(t, result.HasUpdate)
+}
+
+func TestCheckerSupportsSSHSourceURL(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		json.NewEncoder(w).Encode([]map[string]any{{"sha": "newsha123"}})
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
+		SourceURL:     "git@github.com:user/repo.git",
+		SourceSubPath: "skills/skill-a",
+		SourceSHA:     "oldsha",
+	}
+	_, err := checker.Check(context.Background(), sk)
+	require.NoError(t, err)
+	assert.Equal(t, "/repos/user/repo/commits", gotPath)
+}
+
+func TestCheckerOmitsPathFilterForRepoRootSkill(t *testing.T) {
+	var gotPath string
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		json.NewEncoder(w).Encode([]map[string]any{{"sha": "newsha123"}})
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
+		SourceURL:     "https://github.com/user/repo",
+		SourceSubPath: ".",
+		SourceSHA:     "oldsha",
+	}
+	_, err := checker.Check(context.Background(), sk)
+	require.NoError(t, err)
+	assert.Equal(t, "/repos/user/repo/commits", gotPath)
+	assert.Equal(t, "per_page=1", gotQuery)
+}
+
+func TestCheckerReturnsGitHubStatusError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"message": "API rate limit exceeded",
+		}))
+	}))
+	defer srv.Close()
+
+	checker := update.NewChecker(srv.URL, nil)
+	sk := &skilldomain.InstalledSkill{
+		Source:        skilldomain.SourceGitHub,
+		SourceURL:     "https://github.com/user/repo",
+		SourceSubPath: "skills/skill-a",
+	}
+	_, err := checker.Check(context.Background(), sk)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "github status 403")
+	assert.Contains(t, err.Error(), "API rate limit exceeded")
+}

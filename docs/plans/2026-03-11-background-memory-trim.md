@@ -99,8 +99,8 @@ Expected: PASS
 **Files:**
 - Modify: `docs/features.md`
 - Modify: `docs/features_zh.md`
-- Modify: `docs/architecture.md`
-- Modify: `docs/architecture_zh.md`
+- Modify: `docs/architecture/README.md`
+- Modify: `docs/architecture/README_zh.md`
 - Modify: `README.md`
 - Modify: `README_zh.md`
 
