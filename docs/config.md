@@ -4,14 +4,14 @@
 
 This document explains the on-disk format of SkillFlow's persisted configuration and metadata files.
 
-Examples below use placeholders such as `<AppDataDir>` and `<SyncRoot>`:
+Examples below use placeholders such as `<AppDataDir>` and `<RepoCacheDir>`:
 
 - `<AppDataDir>`: the app data directory returned by `config.AppDataDir()`
-- `<SyncRoot>`: the active backup root that contains `skills/`, `meta/`, `meta_local/`, and `prompts/`; by default it is the same as `<AppDataDir>`, but it moves to the shared parent of those directories when `skillsStorageDir` is relocated outside the default app data directory
+- `<RepoCacheDir>`: the local repo-clone cache root from `config_local.json.repoCacheDir`; it defaults to `<AppDataDir>/cache/repos`
 
 The actual starred-repository file name is `star_repos.json` (plural), not `star_repo.json`.
 
-Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, `star_repos.json`, and `star_repos_local.json` remain under `<AppDataDir>`. The `skills/`, `meta/`, `meta_local/`, and `prompts/` trees move under `<SyncRoot>`.
+All synced app content now lives under `<AppDataDir>`. Only the heavyweight starred-repo clone cache may move to a different local-only `<RepoCacheDir>`.
 
 ## Quick Summary
 
@@ -19,7 +19,7 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, `star_repos.js
 |------|---------|--------|
 | `config.json` | Shared, sync-safe settings | Yes |
 | `config_local.json` | Machine-specific paths, secrets, and local runtime state | No |
-| `star_repos.json` | Starred repository cache metadata | Yes |
+| `star_repos.json` | Starred repository identity metadata | Yes |
 | `star_repos_local.json` | Local-only starred-repo runtime sync state overlay | No |
 | `prompts/<category>/<name>/prompt.json` | Prompt metadata such as description, related images, and web links | Yes |
 | `meta/<skill-id>.json` | One sidecar metadata file per installed skill | Yes |
@@ -27,7 +27,7 @@ Even when `<SyncRoot>` moves, `config.json`, `config_local.json`, `star_repos.js
 | `cache/viewstate/*.json` | Local derived UI/cache snapshots | No |
 | `runtime/*.json`, `runtime/helper.lock` | Local helper/UI process coordination state | No |
 
-The table describes file roles. When `skillsStorageDir` points outside `<AppDataDir>`, the content trees under `<SyncRoot>` move together, while the config and starred-repo JSON files remain in `<AppDataDir>`.
+The table describes file roles. Synced content trees stay under `<AppDataDir>`, while starred-repo clone data may live under a separate local-only `<RepoCacheDir>`.
 
 ## `cache/viewstate/*.json`
 
@@ -161,7 +161,7 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
 
 ```json
 {
-  "skillsStorageDir": "/Users/demo/Library/Application Support/SkillFlow/skills",
+  "repoCacheDir": "/Users/demo/Library/Application Support/SkillFlow/cache/repos",
   "autoUpdateSkills": true,
   "autoPushAgents": ["codex", "gemini-cli"],
   "launchAtLogin": true,
@@ -211,7 +211,7 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
 
 | Key | Type | Meaning |
 |-----|------|---------|
-| `skillsStorageDir` | string | Absolute local path of the installed `skills/` directory. |
+| `repoCacheDir` | string | Absolute local root used for cloned starred-repository caches. Defaults to `<AppDataDir>/cache/repos` when empty. |
 | `autoUpdateSkills` | boolean | Whether starred-repo refresh on this device should automatically update matching installed git-backed skills in **My Skills**. |
 | `autoPushAgents` | string[] | Agent names that should receive auto-push after import/update flows. Values are trimmed and deduplicated. |
 | `launchAtLogin` | boolean | Whether SkillFlow should register itself as a login/startup item on the current machine. |
@@ -248,7 +248,7 @@ These keys are intentionally kept out of `config.json`:
 
 Path: `<AppDataDir>/star_repos.json`
 
-`star_repos.json` stores the local cache state of starred repositories.
+`star_repos.json` stores the synced identity state of tracked starred repositories.
 
 ### Example
 
@@ -257,8 +257,7 @@ Path: `<AppDataDir>/star_repos.json`
   {
     "url": "https://github.com/example/awesome-skills.git",
     "name": "example/awesome-skills",
-    "source": "github.com/example/awesome-skills",
-    "localDir": "cache/github.com/example/awesome-skills"
+    "source": "github.com/example/awesome-skills"
   }
 ]
 ```
@@ -270,7 +269,8 @@ Path: `<AppDataDir>/star_repos.json`
 | `url` | string | Original Git clone URL entered or seeded for the repository. |
 | `name` | string | Human-friendly repo name, usually `<owner>/<repo>` or `<group>/<subgroup>/<repo>`. |
 | `source` | string | Canonical repo source key used for matching across modules, usually `<host>/<repo-path>`. |
-| `localDir` | string | Local clone/cache directory. When it lives inside `<AppDataDir>`, it is stored as a forward-slash relative path such as `cache/github.com/example/awesome-skills`. |
+
+Runtime `StarRepo.LocalDir` is re-derived from the current `config_local.json.repoCacheDir` plus the repo URL. It is no longer persisted in the synced `star_repos.json` payload.
 
 ## `star_repos_local.json`
 
@@ -301,7 +301,7 @@ This local-only overlay stores per-repo volatile sync state that should not be s
 
 ## `prompts/<category>/<name>/prompt.json`
 
-Path: `<SyncRoot>/prompts/<category>/<name>/prompt.json`
+Path: `<AppDataDir>/prompts/<category>/<name>/prompt.json`
 
 Each prompt keeps its body in the sibling `system.md` file and stores prompt-card metadata in `prompt.json`.
 
@@ -345,7 +345,7 @@ Each prompt keeps its body in the sibling `system.md` file and stores prompt-car
 
 ## `meta/<skill-id>.json`
 
-Path: `<SyncRoot>/meta/<skill-id>.json`
+Path: `<AppDataDir>/meta/<skill-id>.json`
 
 Each installed skill gets one JSON sidecar file named after `Skill.ID` rather than the skill name.
 
@@ -389,7 +389,7 @@ Each installed skill gets one JSON sidecar file named after `Skill.ID` rather th
 
 ## `meta_local/<skill-id>.local.json`
 
-Path: `<SyncRoot>/meta_local/<skill-id>.local.json`
+Path: `<AppDataDir>/meta_local/<skill-id>.local.json`
 
 This file stores local-only, high-churn per-skill fields that should not be synced across devices.
 

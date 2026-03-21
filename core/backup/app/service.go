@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	snapshotinfra "github.com/shinerio/skillflow/core/backup/infra/snapshot"
+	"github.com/shinerio/skillflow/core/platform/appdata"
 )
 
 type ProviderResolver func(name string) (backupdomain.CloudProvider, bool)
@@ -139,13 +139,7 @@ func (s *Service) ResolveGitConflict(profile backupdomain.BackupProfile, useLoca
 }
 
 func (s *Service) BackupRootDir(profile backupdomain.BackupProfile) string {
-	appDataDir := filepath.Clean(profile.AppDataDir)
-	skillsDir := filepath.Clean(profile.SkillsStorageDir)
-	if rel, err := filepath.Rel(appDataDir, skillsDir); err == nil &&
-		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return appDataDir
-	}
-	return filepath.Dir(skillsDir)
+	return filepath.Clean(profile.AppDataDir)
 }
 
 func (s *Service) prepareRoot(profile backupdomain.BackupProfile) (string, error) {
@@ -153,7 +147,7 @@ func (s *Service) prepareRoot(profile backupdomain.BackupProfile) (string, error
 	if profile.Provider != backupdomain.GitProviderName {
 		return root, nil
 	}
-	_, _, err := snapshotinfra.MigrateLegacyNestedGitDir(profile.SkillsStorageDir, root)
+	_, _, err := snapshotinfra.MigrateLegacyNestedGitDir(appdata.SkillsDir(root), root)
 	if err != nil {
 		return "", err
 	}

@@ -52,6 +52,8 @@ export function ExportPrompts():Promise<string>;
 
 export function ExportPromptsByNames(arg1:Array<string>):Promise<string>;
 
+export function GetAppDataDir():Promise<string>;
+
 export function GetAppVersion():Promise<string>;
 
 export function GetConfig():Promise<config.AppConfig>;
@@ -103,6 +105,8 @@ export function ListStarredRepos():Promise<Array<domain.StarRepo>>;
 export function MovePromptCategory(arg1:string,arg2:string):Promise<void>;
 
 export function MoveSkillCategory(arg1:string,arg2:string):Promise<void>;
+
+export function OpenAppDataDir():Promise<void>;
 
 export function OpenFolderDialog(arg1:string):Promise<string>;
 

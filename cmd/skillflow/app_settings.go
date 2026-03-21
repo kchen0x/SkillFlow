@@ -13,6 +13,21 @@ func (a *App) GetConfig() (config.AppConfig, error) {
 	return cfg, nil
 }
 
+func (a *App) GetAppDataDir() string {
+	return a.dataDir()
+}
+
+func (a *App) OpenAppDataDir() error {
+	appDataDir := a.dataDir()
+	a.logInfof("open app data dir started: appDataDir=%s", appDataDir)
+	if err := a.OpenPath(appDataDir); err != nil {
+		a.logErrorf("open app data dir failed: appDataDir=%s err=%v", appDataDir, err)
+		return err
+	}
+	a.logInfof("open app data dir completed: appDataDir=%s", appDataDir)
+	return nil
+}
+
 func (a *App) SaveConfig(cfg config.AppConfig) error {
 	return a.newSettingsSaveCoordinator().Save(cfg)
 }
@@ -39,6 +54,7 @@ func (c *settingsSaveCoordinator) Save(cfg config.AppConfig) error {
 		c.app.logErrorf("save config failed: %v", err)
 		return err
 	}
+	c.app.rebuildPathBoundServices(cfg.RepoCacheDir)
 	c.syncExistingSkillsForNewAutoPushAgents(prevCfg, cfg)
 	if prevCfg.LaunchAtLogin != cfg.LaunchAtLogin {
 		if err := c.app.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
@@ -53,6 +69,7 @@ func (c *settingsSaveCoordinator) Save(cfg config.AppConfig) error {
 			} else {
 				persistedCfg = rollbackCfg
 			}
+			c.app.rebuildPathBoundServices(persistedCfg.RepoCacheDir)
 			c.app.setLoggerLevel(persistedCfg.LogLevel)
 			c.app.startAutoSyncTimer(persistedCfg.Cloud.SyncIntervalMinutes)
 			c.app.logErrorf("save config failed: apply launch-at-login failed: %v", err)

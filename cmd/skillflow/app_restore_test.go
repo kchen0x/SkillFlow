@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/shinerio/skillflow/core/config"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
+	"github.com/shinerio/skillflow/core/platform/appdata"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
@@ -59,15 +61,28 @@ func TestHandleRestoredCloudStateClonesNewlyRestoredStarredRepos(t *testing.T) {
 		t.Skip("git not installed")
 	}
 
-	app, _, _, starsPath := newRestoreTestApp(t, nil)
+	app, _, _, _ := newRestoreTestApp(t, nil)
 	before := app.captureCloudRestoreState()
 	sourceRepo := newLocalGitRepo(t)
-	cloneDir := filepath.Join(filepath.Dir(starsPath), "cache", "restored-repo")
+	repoURL := "https://example.com/restored/test.git"
+	cloneDir, err := platformgit.CacheDir(app.repoCacheDir(), repoURL)
+	require.NoError(t, err)
+
+	prevCloneOrUpdateRepo := cloneOrUpdateRepo
+	cloneOrUpdateRepo = func(ctx context.Context, gotRepoURL, dir, proxyURL string) error {
+		if gotRepoURL != repoURL {
+			return exec.ErrNotFound
+		}
+		return platformgit.CloneOrUpdate(ctx, sourceRepo, dir, proxyURL)
+	}
+	t.Cleanup(func() {
+		cloneOrUpdateRepo = prevCloneOrUpdateRepo
+	})
 
 	require.NoError(t, app.starStorage.Save([]sourcedomain.StarRepo{{
-		URL:      sourceRepo,
+		URL:      repoURL,
 		Name:     "local/test-repo",
-		Source:   "local/test-repo",
+		Source:   "example.com/restored/test",
 		LocalDir: cloneDir,
 	}}))
 
@@ -88,12 +103,11 @@ func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, str
 
 	dataDir := t.TempDir()
 	pushDir := filepath.Join(dataDir, "agent-skills")
-	skillsDir := filepath.Join(dataDir, "library", "skills")
+	skillsDir := appdata.SkillsDir(dataDir)
 	starsPath := filepath.Join(dataDir, "star_repos.json")
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
-	cfg.SkillsStorageDir = skillsDir
 	cfg.AutoPushAgents = autoPushAgents
 	cfg.Agents = []config.AgentConfig{{
 		Name:     "codex",
@@ -107,7 +121,7 @@ func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, str
 	app.config = svc
 	app.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(skillsDir))
 	app.cacheDir = filepath.Join(dataDir, "cache")
-	app.starStorage = sourcerepo.NewStarRepoStorage(starsPath)
+	app.starStorage = sourcerepo.NewStarRepoStorageWithCacheDir(starsPath, cfg.RepoCacheDir)
 	return app, pushDir, skillsDir, starsPath
 }
 

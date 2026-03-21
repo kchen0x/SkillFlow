@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/platform/appdata"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
 	"github.com/stretchr/testify/assert"
@@ -72,11 +73,10 @@ func newAutoPushTestApp(t *testing.T, autoPushAgents []string) (*App, string, st
 
 	dataDir := t.TempDir()
 	pushDir := filepath.Join(dataDir, "agent-skills")
-	skillsDir := filepath.Join(dataDir, "library", "skills")
+	skillsDir := appdata.SkillsDir(dataDir)
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
-	cfg.SkillsStorageDir = skillsDir
 	cfg.AutoPushAgents = autoPushAgents
 	cfg.Agents = []config.AgentConfig{
 		{

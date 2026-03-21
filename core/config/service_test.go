@@ -15,7 +15,7 @@ func TestLoadDefaultConfig(t *testing.T) {
 	svc := config.NewService(dir)
 	cfg, err := svc.Load()
 	require.NoError(t, err)
-	assert.NotEmpty(t, cfg.SkillsStorageDir)
+	assert.Equal(t, filepath.Join(dir, "cache", "repos"), cfg.RepoCacheDir)
 	assert.Equal(t, "Default", cfg.DefaultCategory)
 	assert.False(t, cfg.AutoUpdateSkills)
 	assert.Equal(t, config.DefaultLogLevel, cfg.LogLevel)
@@ -223,26 +223,28 @@ func TestConfigFileCreatedOnFirstLoad(t *testing.T) {
 	assert.NoError(t, err, "config_local.json should be created on first load")
 }
 
-func TestSaveCreatesLocalConfigWithPaths(t *testing.T) {
+func TestSaveCreatesLocalConfigWithRepoCacheDir(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
-	cfg.SkillsStorageDir = filepath.Join(dir, "custom-skills")
+	cfg.RepoCacheDir = filepath.Join(dir, "volumes", "repo-cache")
 	require.NoError(t, svc.Save(cfg))
 
 	loaded, err := svc.Load()
 	require.NoError(t, err)
-	assert.Equal(t, cfg.SkillsStorageDir, loaded.SkillsStorageDir)
+	assert.Equal(t, cfg.RepoCacheDir, loaded.RepoCacheDir)
 
-	// config.json must NOT contain skillsStorageDir (it belongs in config_local.json)
+	// config.json must NOT contain repoCacheDir (it belongs in config_local.json)
 	data, err := os.ReadFile(filepath.Join(dir, "config.json"))
 	require.NoError(t, err)
+	assert.NotContains(t, string(data), "repoCacheDir")
 	assert.NotContains(t, string(data), "skillsStorageDir")
 
-	// config_local.json must contain the path
+	// config_local.json must contain the repo cache path
 	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(localData), "skillsStorageDir")
+	assert.Contains(t, string(localData), "repoCacheDir")
+	assert.NotContains(t, string(localData), "skillsStorageDir")
 }
 
 func TestProxyStoredOnlyInLocalConfig(t *testing.T) {
@@ -498,11 +500,12 @@ func TestLoadMigratesCloudSecretsOutOfSharedConfig(t *testing.T) {
 	assert.Contains(t, string(localData), "cloudCredentialsByProvider")
 	assert.Contains(t, string(localData), `"git"`)
 	assert.Contains(t, string(localData), `"proxy"`)
+	assert.Contains(t, string(localData), "repoCacheDir")
 	assert.Contains(t, string(localData), "secret-token")
 	assert.NotContains(t, string(localData), "repo_url")
 	assert.NotContains(t, string(localData), "branch")
 	assert.NotContains(t, string(localData), "username")
-	assert.Contains(t, string(localData), "skillsStorageDir")
+	assert.NotContains(t, string(localData), "skillsStorageDir")
 }
 
 func TestLoadMigratesProxyOutOfSharedConfig(t *testing.T) {
@@ -585,6 +588,11 @@ func TestMigrationFromLegacyConfig(t *testing.T) {
 	// After migration config_local.json must exist
 	_, err = os.Stat(filepath.Join(dir, "config_local.json"))
 	assert.NoError(t, err, "migration should create config_local.json")
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), "repoCacheDir")
+	assert.NotContains(t, string(localData), "skillsStorageDir")
 
 	// config.json must no longer contain skillsStorageDir
 	data, err := os.ReadFile(filepath.Join(dir, "config.json"))

@@ -101,7 +101,7 @@ func TestRunIsNoOpForAlreadyUpgradedConfigFiles(t *testing.T) {
 }`), 0o644))
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config_local.json"), []byte(`{
-  "skillsStorageDir": "/tmp/skills",
+  "repoCacheDir": "/tmp/cache/repos",
   "autoPushAgents": ["codex"],
   "agents": [
     {

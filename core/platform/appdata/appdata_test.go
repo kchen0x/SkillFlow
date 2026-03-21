@@ -26,3 +26,8 @@ func TestSkillsDirJoinsUnderDataDir(t *testing.T) {
 	root := filepath.Join("tmp", "skillflow-data")
 	assert.Equal(t, filepath.Join(root, "skills"), appdata.SkillsDir(root))
 }
+
+func TestRepoCacheDirJoinsUnderDataDir(t *testing.T) {
+	root := filepath.Join("tmp", "skillflow-data")
+	assert.Equal(t, filepath.Join(root, "cache", "repos"), appdata.RepoCacheDir(root))
+}

@@ -33,18 +33,19 @@ func (a *App) ensureViewCache() *viewstate.Manager {
 }
 
 func (a *App) installedSkillsFingerprint() (string, error) {
-	cfg, err := a.config.Load()
-	if err != nil {
-		return "", err
-	}
-
-	metaDir := filepath.Join(filepath.Dir(filepath.Clean(cfg.SkillsStorageDir)), "meta")
+	dataDir := a.dataDir()
+	metaDir := filepath.Join(dataDir, "meta")
 	metaFingerprint, err := directorySummaryFingerprint(metaDir)
 	if err != nil {
 		return "", err
 	}
-	metaLocalDir := filepath.Join(filepath.Dir(filepath.Clean(cfg.SkillsStorageDir)), "meta_local")
+	metaLocalDir := filepath.Join(dataDir, "meta_local")
 	metaLocalFingerprint, err := directorySummaryFingerprint(metaLocalDir)
+	if err != nil {
+		return "", err
+	}
+
+	cfg, err := a.config.Load()
 	if err != nil {
 		return "", err
 	}

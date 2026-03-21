@@ -214,13 +214,14 @@
 
 `Settings` 是组合界面。当前实现里，它会先经过壳层协调与 `core/config`，再拆发到各自的归属组件：
 
-- 技能库设置，例如 `skillsStorageDir`、`defaultCategory` -> `skillcatalog`
+- 技能库设置，例如 `defaultCategory` -> `skillcatalog`
+- 源仓库缓存设置，例如 `repoCacheDir` -> `skillsource`，同时由壳层重建依赖 repo cache 的运行时适配器
 - Agent 配置、自动推送和递归扫描深度 -> `agentintegration`
 - 备份 provider 选择、同步间隔与云配置拆分 -> `backup`
 - 卡片状态可见性 -> `readmodel/preferences`
 - 开机自启、代理、日志级别、跳过更新版本、窗口状态等壳层偏好 -> `cmd/skillflow` 与 `platform/`
 
-Prompt 持久化目前直接位于 `prompts/` 目录树；收藏仓库跟踪状态位于 `star_repos*.json` 与 repo cache。这两部分当前都不通过 Settings 页面编辑。
+Prompt 持久化目前直接位于 `prompts/` 目录树，且不通过 Settings 页面编辑。收藏仓库身份跟踪仍位于 `star_repos*.json`，而本地 repo cache 根目录则通过 Settings 编辑，保存后需要同步重建依赖 cache 的壳层服务。
 
 ### `StartupBootstrapSequence`
 

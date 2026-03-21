@@ -28,7 +28,7 @@ func TestStarRepoStorageSaveLoad(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
 	s := NewStarRepoStorage(path)
-	localDir := filepath.Join(dir, "cache", "github.com", "a", "b")
+	localDir := filepath.Join(dir, "cache", "repos", "github.com", "a", "b")
 	want := []sourcedomain.StarRepo{
 		{URL: "https://github.com/a/b", Name: "a/b", LocalDir: localDir, LastSync: time.Time{}},
 	}
@@ -39,8 +39,8 @@ func TestStarRepoStorageSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), `"localDir": "cache/github.com/a/b"`) {
-		t.Fatalf("expected relative localDir in persisted file, got %s", string(raw))
+	if strings.Contains(string(raw), `"localDir"`) {
+		t.Fatalf("expected synced file to exclude localDir, got %s", string(raw))
 	}
 	if strings.Contains(string(raw), `"lastSync"`) || strings.Contains(string(raw), `"syncError"`) {
 		t.Fatalf("expected synced file to exclude local fields, got %s", string(raw))
@@ -58,7 +58,7 @@ func TestStarRepoStorageSaveLoadPersistsLocalStateInLocalFileOnly(t *testing.T) 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
 	s := NewStarRepoStorage(path)
-	localDir := filepath.Join(dir, "cache", "github.com", "a", "b")
+	localDir := filepath.Join(dir, "cache", "repos", "github.com", "a", "b")
 	lastSync := time.Now().UTC().Truncate(time.Second)
 	want := []sourcedomain.StarRepo{
 		{
@@ -112,7 +112,7 @@ func TestStarRepoStorageLoadMigratesLegacyLocalFieldsToLocalFile(t *testing.T) {
 		URL:       "https://github.com/a/b",
 		Name:      "a/b",
 		Source:    "github.com/a/b",
-		LocalDir:  "cache/github.com/a/b",
+		LocalDir:  "cache/repos/github.com/a/b",
 		LastSync:  time.Now().UTC().Truncate(time.Second),
 		SyncError: "legacy err",
 	}}
@@ -140,8 +140,8 @@ func TestStarRepoStorageLoadMigratesLegacyLocalFieldsToLocalFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(syncedRaw), `"lastSync"`) || strings.Contains(string(syncedRaw), `"syncError"`) {
-		t.Fatalf("expected migrated synced file to drop local fields, got %s", string(syncedRaw))
+	if strings.Contains(string(syncedRaw), `"lastSync"`) || strings.Contains(string(syncedRaw), `"syncError"`) || strings.Contains(string(syncedRaw), `"localDir"`) {
+		t.Fatalf("expected migrated synced file to drop local-only fields, got %s", string(syncedRaw))
 	}
 	if _, err := os.Stat(filepath.Join(dir, "star_repos_local.json")); err != nil {
 		t.Fatalf("expected local state file created after migration: %v", err)
@@ -163,7 +163,7 @@ func TestStarRepoStorageLoadCorrupt(t *testing.T) {
 func TestStarRepoStorageLoadMigratesAbsoluteLocalDir(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "star_repos.json")
-	localDir := filepath.Join(dir, "cache", "github.com", "a", "b")
+	localDir := filepath.Join(dir, "cache", "repos", "github.com", "a", "b")
 	repos := []sourcedomain.StarRepo{{URL: "https://github.com/a/b", Name: "a/b", LocalDir: localDir}}
 	data, err := json.MarshalIndent(repos, "", "  ")
 	if err != nil {
@@ -185,8 +185,43 @@ func TestStarRepoStorageLoadMigratesAbsoluteLocalDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), `"localDir": "cache/github.com/a/b"`) {
-		t.Fatalf("expected migrated relative localDir, got %s", string(raw))
+	if strings.Contains(string(raw), `"localDir"`) {
+		t.Fatalf("expected migrated synced file to drop localDir, got %s", string(raw))
+	}
+}
+
+func TestStarRepoStorageResolvesLocalDirFromCustomRepoCacheRoot(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "star_repos.json")
+	cacheRoot := filepath.Join(dir, "volumes", "repo-cache")
+	s := NewStarRepoStorageWithCacheDir(path, cacheRoot)
+	repos := []sourcedomain.StarRepo{{
+		URL:    "https://github.com/a/b",
+		Name:   "a/b",
+		Source: "github.com/a/b",
+	}}
+	if err := s.Save(repos); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 repo, got %+v", got)
+	}
+	wantLocalDir := filepath.Join(cacheRoot, "github.com", "a", "b")
+	if got[0].LocalDir != wantLocalDir {
+		t.Fatalf("unexpected localDir: got %q want %q", got[0].LocalDir, wantLocalDir)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"localDir"`) {
+		t.Fatalf("expected synced file to exclude localDir, got %s", string(raw))
 	}
 }
 

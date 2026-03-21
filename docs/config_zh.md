@@ -4,12 +4,12 @@
 
 本文档说明 SkillFlow 持久化到磁盘的配置文件与元数据文件格式。
 
-下文使用了 `<AppDataDir>` 与 `<SyncRoot>` 这类占位符：
+下文使用了 `<AppDataDir>` 与 `<RepoCacheDir>` 这类占位符：
 
 - `<AppDataDir>`：`config.AppDataDir()` 返回的应用数据目录
-- `<SyncRoot>`：当前生效的备份根目录，包含 `skills/`、`meta/`、`meta_local/`、`prompts/`；默认等于 `<AppDataDir>`，但当 `skillsStorageDir` 被移到外部目录时，会切换到这些目录的共享父目录
+- `<RepoCacheDir>`：`config_local.json.repoCacheDir` 中保存的本地仓库克隆缓存根目录；默认为 `<AppDataDir>/cache/repos`
 
-即使 `<SyncRoot>` 发生变化，`config.json`、`config_local.json`、`star_repos.json`、`star_repos_local.json` 仍然保留在 `<AppDataDir>` 下；`skills/`、`meta/`、`meta_local/`、`prompts/` 这几棵目录树会一起移动到 `<SyncRoot>` 下。
+当前所有会参与同步的应用内容都固定保存在 `<AppDataDir>` 下。只有体积较大的收藏仓库 clone cache 可以单独迁移到本地专属的 `<RepoCacheDir>`。
 
 ## 快速概览
 
@@ -17,7 +17,7 @@
 |------|------|--------------|
 | `config.json` | 共享的、可同步的安全配置 | 是 |
 | `config_local.json` | 机器相关路径、敏感信息和本地运行状态 | 否 |
-| `star_repos.json` | 收藏仓库的本地缓存元数据 | 是 |
+| `star_repos.json` | 收藏仓库的身份元数据 | 是 |
 | `star_repos_local.json` | 收藏仓库本地同步状态覆盖文件 | 否 |
 | `prompts/<category>/<name>/prompt.json` | 提示词卡片元数据，如描述、关联图片和网页链接 | 是 |
 | `meta/<skill-id>.json` | 每个已安装 Skill 的 sidecar 元数据 | 是 |
@@ -25,7 +25,7 @@
 | `cache/viewstate/*.json` | 本地派生 UI / 缓存快照 | 否 |
 | `runtime/*.json`、`runtime/helper.lock` | 本地 helper/UI 进程协调状态 | 否 |
 
-这个表描述的是文件职责。若 `skillsStorageDir` 指向 `<AppDataDir>` 外部，则 `<SyncRoot>` 下的内容目录会一起迁移，而配置与收藏仓库相关 JSON 仍保留在 `<AppDataDir>`。
+这个表描述的是文件职责。会参与同步的内容目录固定保存在 `<AppDataDir>` 下；而收藏仓库的 clone 数据则允许位于单独的本地 `<RepoCacheDir>`。
 
 ## `cache/viewstate/*.json`
 
@@ -159,7 +159,7 @@
 
 ```json
 {
-  "skillsStorageDir": "/Users/demo/Library/Application Support/SkillFlow/skills",
+  "repoCacheDir": "/Users/demo/Library/Application Support/SkillFlow/cache/repos",
   "autoUpdateSkills": true,
   "autoPushAgents": ["codex", "gemini-cli"],
   "launchAtLogin": true,
@@ -209,7 +209,7 @@
 
 | 键 | 类型 | 作用 |
 |----|------|------|
-| `skillsStorageDir` | string | 已安装 `skills/` 目录的本机绝对路径。 |
+| `repoCacheDir` | string | 本机用于保存收藏仓库 clone cache 的绝对根路径。为空时会回退到 `<AppDataDir>/cache/repos`。 |
 | `autoUpdateSkills` | boolean | 当前设备在刷新收藏仓库后，是否应自动把匹配的已安装 Git Skill 更新到 **我的skills**。 |
 | `autoPushAgents` | string[] | 在导入/更新后自动推送到哪些智能体。保存前会去空格并去重。 |
 | `launchAtLogin` | boolean | 当前设备上是否把 SkillFlow 注册为开机/登录自启动项。 |
@@ -246,7 +246,7 @@
 
 路径：`<AppDataDir>/star_repos.json`
 
-`star_repos.json` 保存收藏仓库在本地的缓存状态。
+`star_repos.json` 保存已跟踪收藏仓库的可同步身份状态。
 
 ### 示例
 
@@ -255,8 +255,7 @@
   {
     "url": "https://github.com/example/awesome-skills.git",
     "name": "example/awesome-skills",
-    "source": "github.com/example/awesome-skills",
-    "localDir": "cache/github.com/example/awesome-skills"
+    "source": "github.com/example/awesome-skills"
   }
 ]
 ```
@@ -268,7 +267,8 @@
 | `url` | string | 用户输入或系统内置的原始 Git 克隆地址。 |
 | `name` | string | 便于展示的仓库名，通常是 `<owner>/<repo>` 或 `<group>/<subgroup>/<repo>`。 |
 | `source` | string | 跨模块关联使用的规范化仓库源键，通常形如 `<host>/<repo-path>`。 |
-| `localDir` | string | 本地克隆/缓存目录。如果目录位于 `<AppDataDir>` 内，会以正斜杠相对路径保存，例如 `cache/github.com/example/awesome-skills`。 |
+
+运行时里的 `StarRepo.LocalDir` 会根据当前 `config_local.json.repoCacheDir` 和仓库 URL 即时推导，不再写入可同步的 `star_repos.json`。
 
 ## `star_repos_local.json`
 
@@ -299,7 +299,7 @@
 
 ## `prompts/<category>/<name>/prompt.json`
 
-路径：`<SyncRoot>/prompts/<category>/<name>/prompt.json`
+路径：`<AppDataDir>/prompts/<category>/<name>/prompt.json`
 
 每个提示词的正文保存在同级的 `system.md` 中，提示词卡片元数据则保存在 `prompt.json`。
 
@@ -343,7 +343,7 @@
 
 ## `meta/<skill-id>.json`
 
-路径：`<SyncRoot>/meta/<skill-id>.json`
+路径：`<AppDataDir>/meta/<skill-id>.json`
 
 每个已安装 Skill 都会有一个 sidecar JSON，文件名使用 `Skill.ID`，而不是 Skill 名称。
 
@@ -387,7 +387,7 @@
 
 ## `meta_local/<skill-id>.local.json`
 
-路径：`<SyncRoot>/meta_local/<skill-id>.local.json`
+路径：`<AppDataDir>/meta_local/<skill-id>.local.json`
 
 这个文件用于保存当前设备本地、变化频繁且不应跨设备同步的 Skill 字段。
 

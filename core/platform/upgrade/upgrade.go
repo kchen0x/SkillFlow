@@ -13,7 +13,12 @@ func Run(dataDir string) error {
 	if err := migrateJSONFile(filepath.Join(dataDir, "config.json"), migrateSharedConfig); err != nil {
 		return err
 	}
-	if err := migrateJSONFile(filepath.Join(dataDir, "config_local.json"), migrateLocalConfig); err != nil {
+	if err := migrateJSONFile(filepath.Join(dataDir, "config_local.json"), func(payload map[string]any) (bool, error) {
+		return migrateLocalConfig(payload, dataDir)
+	}); err != nil {
+		return err
+	}
+	if err := migrateStarReposFile(filepath.Join(dataDir, "star_repos.json")); err != nil {
 		return err
 	}
 	return nil
@@ -67,11 +72,51 @@ func migrateSharedConfig(payload map[string]any) (bool, error) {
 	return changed || visibilityChanged, nil
 }
 
-func migrateLocalConfig(payload map[string]any) (bool, error) {
+func migrateLocalConfig(payload map[string]any, dataDir string) (bool, error) {
 	changed := false
 	changed = renameKey(payload, "tools", "agents") || changed
 	changed = renameKey(payload, "autoPushTools", "autoPushAgents") || changed
+	if _, ok := payload["repoCacheDir"]; !ok || isEmptyJSONValue(payload["repoCacheDir"]) {
+		payload["repoCacheDir"] = filepath.ToSlash(filepath.Join(dataDir, "cache", "repos"))
+		changed = true
+	}
+	if _, ok := payload["skillsStorageDir"]; ok {
+		delete(payload, "skillsStorageDir")
+		changed = true
+	}
 	return changed, nil
+}
+
+func migrateStarReposFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", filepath.Base(path), err)
+	}
+
+	var payload []map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return fmt.Errorf("parse %s: %w", filepath.Base(path), err)
+	}
+
+	changed := false
+	for _, repo := range payload {
+		if _, ok := repo["localDir"]; ok {
+			delete(repo, "localDir")
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+
+	encoded, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode %s: %w", filepath.Base(path), err)
+	}
+	return writeFileAtomically(path, encoded, 0o644)
 }
 
 func migrateVisibilityConfig(payload map[string]any) (bool, error) {

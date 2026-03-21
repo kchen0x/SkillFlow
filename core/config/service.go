@@ -9,6 +9,7 @@ import (
 
 	agentapp "github.com/shinerio/skillflow/core/agentintegration/app"
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
+	"github.com/shinerio/skillflow/core/platform/appdata"
 	"github.com/shinerio/skillflow/core/platform/settingsstore"
 	"github.com/shinerio/skillflow/core/platform/shellsettings"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
@@ -45,7 +46,7 @@ type sharedAgentConfig struct {
 // localConfig is stored in config_local.json and never synced to cloud/git.
 // It holds all file system paths and sensitive cloud credentials.
 type localConfig struct {
-	SkillsStorageDir           string                       `json:"skillsStorageDir"`
+	RepoCacheDir               string                       `json:"repoCacheDir"`
 	AutoUpdateSkills           bool                         `json:"autoUpdateSkills"`
 	AutoPushAgents             []string                     `json:"autoPushAgents"`
 	LaunchAtLogin              bool                         `json:"launchAtLogin"`
@@ -77,7 +78,7 @@ type Service struct {
 }
 
 type LocalRuntimeConfig struct {
-	SkillsStorageDir string
+	RepoCacheDir string
 }
 
 func NewService(dataDir string) *Service {
@@ -97,7 +98,7 @@ func (s *Service) LocalConfigPath() string { return s.store.LocalPath() }
 func (s *Service) LoadLocalRuntimeConfig() LocalRuntimeConfig {
 	local := s.loadLocal()
 	return LocalRuntimeConfig{
-		SkillsStorageDir: local.SkillsStorageDir,
+		RepoCacheDir: local.RepoCacheDir,
 	}
 }
 
@@ -231,10 +232,7 @@ func (s *Service) loadLocal() localConfig {
 	if err != nil || !exists {
 		return s.defaultLocal()
 	}
-	lc.SkillsStorageDir = skillcatalogapp.NormalizeLocalSettings(
-		skillcatalogapp.LocalSettings{SkillsStorageDir: lc.SkillsStorageDir},
-		s.DataDir(),
-	).SkillsStorageDir
+	lc.RepoCacheDir = normalizeRepoCacheDir(lc.RepoCacheDir, s.DataDir())
 	lc.AutoPushAgents = agentapp.NormalizeAutoPushAgentNames(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	normalizedShell := shellsettings.NormalizeLocalSettings(shellsettings.LocalSettings{
@@ -258,10 +256,7 @@ func (s *Service) saveShared(sc sharedConfig) error {
 
 func (s *Service) saveLocal(lc localConfig) error {
 	lc.CloudCredentials = nil
-	lc.SkillsStorageDir = skillcatalogapp.NormalizeLocalSettings(
-		skillcatalogapp.LocalSettings{SkillsStorageDir: lc.SkillsStorageDir},
-		s.DataDir(),
-	).SkillsStorageDir
+	lc.RepoCacheDir = normalizeRepoCacheDir(lc.RepoCacheDir, s.DataDir())
 	lc.AutoPushAgents = agentapp.NormalizeAutoPushAgentNames(lc.AutoPushAgents)
 	lc.CloudCredentialsByProvider = normalizeCredentialProfiles(lc.CloudCredentialsByProvider)
 	normalizedShell := shellsettings.NormalizeLocalSettings(shellsettings.LocalSettings{
@@ -307,7 +302,6 @@ func (s *Service) defaultShared() sharedConfig {
 
 func (s *Service) defaultLocal() localConfig {
 	defaultAgentSettings := agentapp.DefaultLocalSettings()
-	defaultSkillSettings := skillcatalogapp.DefaultLocalSettings(s.DataDir())
 	defaultShellSettings := shellsettings.DefaultLocalSettings()
 
 	agents := make([]localAgentConfig, 0, len(defaultAgentSettings.Agents))
@@ -321,7 +315,7 @@ func (s *Service) defaultLocal() localConfig {
 		})
 	}
 	return localConfig{
-		SkillsStorageDir: defaultSkillSettings.SkillsStorageDir,
+		RepoCacheDir:     appdata.RepoCacheDir(s.DataDir()),
 		Agents:           agents,
 		Proxy:            defaultShellSettings.Proxy,
 	}
@@ -382,7 +376,7 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
-		SkillsStorageDir:      local.SkillsStorageDir,
+		RepoCacheDir:          local.RepoCacheDir,
 		AutoUpdateSkills:      local.AutoUpdateSkills,
 		AutoPushAgents:        NormalizeAgentNameList(local.AutoPushAgents),
 		LaunchAtLogin:         local.LaunchAtLogin,
@@ -433,7 +427,7 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 	}
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return localConfig{
-		SkillsStorageDir:           cfg.SkillsStorageDir,
+		RepoCacheDir:               cfg.RepoCacheDir,
 		AutoUpdateSkills:           cfg.AutoUpdateSkills,
 		AutoPushAgents:             NormalizeAgentNameList(cfg.AutoPushAgents),
 		LaunchAtLogin:              cfg.LaunchAtLogin,
@@ -441,6 +435,13 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 		CloudCredentialsByProvider: splitLocalCloudCredentialsByProvider(profiles),
 		Proxy:                      NormalizeProxyConfig(cfg.Proxy),
 	}
+}
+
+func normalizeRepoCacheDir(path string, dataDir string) string {
+	if strings.TrimSpace(path) == "" {
+		return appdata.RepoCacheDir(dataDir)
+	}
+	return strings.TrimSpace(path)
 }
 
 func (s *Service) migrateCloudStorage(shared *sharedConfig, local *localConfig) bool {

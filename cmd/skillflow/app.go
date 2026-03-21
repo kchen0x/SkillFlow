@@ -18,6 +18,7 @@ import (
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
 	"github.com/shinerio/skillflow/core/orchestration"
+	"github.com/shinerio/skillflow/core/platform/appdata"
 	"github.com/shinerio/skillflow/core/platform/eventbus"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/platform/logging"
@@ -98,6 +99,35 @@ func NewApp() *App {
 	}
 }
 
+func (a *App) dataDir() string {
+	if a != nil && a.config != nil {
+		return a.config.DataDir()
+	}
+	return appDataDirFunc()
+}
+
+func (a *App) repoCacheDir() string {
+	dataDir := a.dataDir()
+	if a == nil || a.config == nil {
+		return appdata.RepoCacheDir(dataDir)
+	}
+	repoCacheDir := strings.TrimSpace(a.config.LoadLocalRuntimeConfig().RepoCacheDir)
+	if repoCacheDir == "" {
+		return appdata.RepoCacheDir(dataDir)
+	}
+	return repoCacheDir
+}
+
+func (a *App) rebuildPathBoundServices(repoCacheDir string) {
+	dataDir := a.dataDir()
+	a.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(appdata.SkillsDir(dataDir)))
+	a.starStorage = sourcerepo.NewStarRepoStorageWithBuiltinsAndCacheDir(
+		filepath.Join(dataDir, "star_repos.json"),
+		builtinStarredRepoURLs,
+		repoCacheDir,
+	)
+}
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	dataDir := appDataDirFunc()
@@ -126,10 +156,9 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
 		a.logErrorf("application startup launch-at-login reconcile failed: %v", err)
 	}
-	a.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(cfg.SkillsStorageDir))
+	a.rebuildPathBoundServices(cfg.RepoCacheDir)
 	a.cacheDir = filepath.Join(dataDir, "cache")
 	a.viewCache = viewstate.NewManager(filepath.Join(a.cacheDir, "viewstate"))
-	a.starStorage = sourcerepo.NewStarRepoStorageWithBuiltins(filepath.Join(dataDir, "star_repos.json"), builtinStarredRepoURLs)
 	registerAdapters()
 	registerProviders()
 	if ctx != nil {
@@ -331,7 +360,7 @@ func (a *App) reloadStateFromDisk() {
 	if err != nil {
 		return
 	}
-	a.storage = skillcatalogapp.NewService(skillrepo.NewFilesystemStorage(cfg.SkillsStorageDir))
+	a.rebuildPathBoundServices(cfg.RepoCacheDir)
 	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
 }
 
@@ -1178,7 +1207,7 @@ func (a *App) cachedSkillSourceDir(sk *skilldomain.InstalledSkill) (string, stri
 		return "", "", fmt.Errorf("config service is not initialized")
 	}
 
-	cacheDir, err := platformgit.CacheDir(a.config.DataDir(), sk.SourceURL)
+	cacheDir, err := platformgit.CacheDir(a.repoCacheDir(), sk.SourceURL)
 	if err != nil {
 		return "", "", err
 	}
@@ -1279,7 +1308,7 @@ func (a *App) Greet(name string) string {
 
 func (a *App) AddStarredRepo(repoURL string) (*sourcedomain.StarRepo, error) {
 	a.logInfof("add starred repo requested: %s", repoURL)
-	repo, err := a.newSkillsourceService().TrackStarRepo(a.cloneContext(), filepath.Dir(a.cacheDir), repoURL, a.gitProxyURL())
+	repo, err := a.newSkillsourceService().TrackStarRepo(a.cloneContext(), a.repoCacheDir(), repoURL, a.gitProxyURL())
 	if err != nil {
 		if platformgit.IsSSHAuthError(err) {
 			a.logErrorf("add starred repo failed: %v", err)
@@ -1300,7 +1329,7 @@ func (a *App) AddStarredRepo(repoURL string) (*sourcedomain.StarRepo, error) {
 // removing any previously failed entry for the same URL first.
 func (a *App) AddStarredRepoWithCredentials(repoURL, username, password string) (*sourcedomain.StarRepo, error) {
 	a.logInfof("add starred repo with credentials requested: %s", repoURL)
-	repo, err := a.newSkillsourceService().TrackStarRepoWithCredentials(a.cloneContext(), filepath.Dir(a.cacheDir), repoURL, a.gitProxyURL(), username, password)
+	repo, err := a.newSkillsourceService().TrackStarRepoWithCredentials(a.cloneContext(), a.repoCacheDir(), repoURL, a.gitProxyURL(), username, password)
 	if err != nil {
 		a.logErrorf("add starred repo with credentials failed: %v", err)
 		return nil, err

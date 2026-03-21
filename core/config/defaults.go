@@ -30,7 +30,7 @@ func DefaultConfig(dataDir string) AppConfig {
 		})
 	}
 	return AppConfig{
-		SkillsStorageDir:      skillSettings.Local.SkillsStorageDir,
+		RepoCacheDir:          appdata.RepoCacheDir(dataDir),
 		DefaultCategory:       skillSettings.Shared.DefaultCategory,
 		LogLevel:              shellSharedSettings.LogLevel,
 		RepoScanMaxDepth:      agentSettings.Shared.RepoScanMaxDepth,

@@ -30,7 +30,7 @@ const (
 )
 
 type AppConfig struct {
-	SkillsStorageDir      string                         `json:"skillsStorageDir"`
+	RepoCacheDir          string                         `json:"repoCacheDir"`
 	AutoUpdateSkills      bool                           `json:"autoUpdateSkills"`
 	AutoPushAgents        []string                       `json:"autoPushAgents"`
 	LaunchAtLogin         bool                           `json:"launchAtLogin"`

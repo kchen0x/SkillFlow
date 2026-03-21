@@ -88,16 +88,16 @@ func TestCloneOrUpdate(t *testing.T) {
 }
 
 func TestCacheDir(t *testing.T) {
-	dir, err := CacheDir("/data", "https://github.com/owner/repo")
+	dir, err := CacheDir("/data/repos", "https://github.com/owner/repo")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join("/data", "cache", "github.com", "owner", "repo")
+	want := filepath.Join("/data", "repos", "github.com", "owner", "repo")
 	if dir != want {
 		t.Errorf("got %q, want %q", dir, want)
 	}
 
-	sshDir, err := CacheDir("/data", "git@github.com:owner/repo.git")
+	sshDir, err := CacheDir("/data/repos", "git@github.com:owner/repo.git")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,11 +105,11 @@ func TestCacheDir(t *testing.T) {
 		t.Errorf("got %q, want %q", sshDir, want)
 	}
 
-	giteeDir, err := CacheDir("/data", "https://gitee.com/owner/repo.git")
+	giteeDir, err := CacheDir("/data/repos", "https://gitee.com/owner/repo.git")
 	if err != nil {
 		t.Fatal(err)
 	}
-	giteeWant := filepath.Join("/data", "cache", "gitee.com", "owner", "repo")
+	giteeWant := filepath.Join("/data", "repos", "gitee.com", "owner", "repo")
 	if giteeDir != giteeWant {
 		t.Errorf("got %q, want %q", giteeDir, giteeWant)
 	}

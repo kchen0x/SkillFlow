@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shinerio/skillflow/core/platform/appdata"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
-	"github.com/shinerio/skillflow/core/platform/pathutil"
 	sourcedomain "github.com/shinerio/skillflow/core/skillsource/domain"
 )
 
@@ -18,6 +18,7 @@ type StarRepoStorage struct {
 	path            string
 	localPath       string
 	dataDir         string
+	cacheRoot       string
 	builtinRepoURLs []string
 	mu              sync.Mutex
 }
@@ -26,7 +27,16 @@ func NewStarRepoStorage(path string) *StarRepoStorage {
 	return NewStarRepoStorageWithBuiltins(path, nil)
 }
 
+func NewStarRepoStorageWithCacheDir(path string, cacheRoot string) *StarRepoStorage {
+	return NewStarRepoStorageWithBuiltinsAndCacheDir(path, nil, cacheRoot)
+}
+
 func NewStarRepoStorageWithBuiltins(path string, builtinRepoURLs []string) *StarRepoStorage {
+	cleanPath := filepath.Clean(path)
+	return NewStarRepoStorageWithBuiltinsAndCacheDir(path, builtinRepoURLs, appdata.RepoCacheDir(filepath.Dir(cleanPath)))
+}
+
+func NewStarRepoStorageWithBuiltinsAndCacheDir(path string, builtinRepoURLs []string, cacheRoot string) *StarRepoStorage {
 	cleanPath := filepath.Clean(path)
 	builtins := append([]string(nil), builtinRepoURLs...)
 	dataDir := filepath.Dir(cleanPath)
@@ -34,6 +44,7 @@ func NewStarRepoStorageWithBuiltins(path string, builtinRepoURLs []string) *Star
 		path:            cleanPath,
 		localPath:       filepath.Join(dataDir, "star_repos_local.json"),
 		dataDir:         dataDir,
+		cacheRoot:       filepath.Clean(cacheRoot),
 		builtinRepoURLs: builtins,
 	}
 }
@@ -131,18 +142,16 @@ func (s *StarRepoStorage) saveLocked(repos []sourcedomain.StarRepo) error {
 }
 
 type syncedStarRepo struct {
-	URL      string `json:"url"`
-	Name     string `json:"name"`
-	Source   string `json:"source"`
-	LocalDir string `json:"localDir"`
+	URL    string `json:"url"`
+	Name   string `json:"name"`
+	Source string `json:"source"`
 }
 
 func (s *StarRepoStorage) serializedRepo(repo sourcedomain.StarRepo) syncedStarRepo {
 	return syncedStarRepo{
-		URL:      repo.URL,
-		Name:     repo.Name,
-		Source:   repo.Source,
-		LocalDir: pathutil.StorePath(s.dataDir, repo.LocalDir, s.derivedLocalDir(repo.URL)),
+		URL:    repo.URL,
+		Name:   repo.Name,
+		Source: repo.Source,
 	}
 }
 
@@ -231,13 +240,17 @@ func (s *StarRepoStorage) loadLocalStateLocked() (map[string]localRepoState, err
 }
 
 func (s *StarRepoStorage) resolveLocalDir(repo *sourcedomain.StarRepo) bool {
-	resolved, needsMigration := pathutil.ResolveStoredPath(s.dataDir, repo.LocalDir, s.derivedLocalDir(repo.URL))
-	repo.LocalDir = resolved
-	return needsMigration
+	derived := s.derivedLocalDir(repo.URL)
+	if strings.TrimSpace(repo.LocalDir) == "" {
+		repo.LocalDir = derived
+		return false
+	}
+	repo.LocalDir = derived
+	return true
 }
 
 func (s *StarRepoStorage) derivedLocalDir(repoURL string) string {
-	dir, err := platformgit.CacheDir(s.dataDir, repoURL)
+	dir, err := platformgit.CacheDir(s.cacheRoot, repoURL)
 	if err != nil {
 		return ""
 	}

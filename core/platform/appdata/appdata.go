@@ -19,3 +19,7 @@ func Dir() string {
 func SkillsDir(dataDir string) string {
 	return filepath.Join(dataDir, "skills")
 }
+
+func RepoCacheDir(dataDir string) string {
+	return filepath.Join(dataDir, "cache", "repos")
+}

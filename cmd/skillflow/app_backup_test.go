@@ -9,13 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBackupProfileUsesConfigServiceDataDir(t *testing.T) {
+func TestBackupProfileUsesConfigServiceDataDirOnly(t *testing.T) {
 	dataDir := t.TempDir()
-	skillsDir := filepath.Join(dataDir, "library", "skills")
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
-	cfg.SkillsStorageDir = skillsDir
 	require.NoError(t, svc.Save(cfg))
 
 	prevAppDataDirFunc := appDataDirFunc
@@ -31,5 +29,4 @@ func TestBackupProfileUsesConfigServiceDataDir(t *testing.T) {
 
 	profile := app.backupProfile(cfg)
 	assert.Equal(t, dataDir, profile.AppDataDir)
-	assert.Equal(t, skillsDir, profile.SkillsStorageDir)
 }

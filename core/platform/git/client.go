@@ -147,7 +147,7 @@ func normalizeRepoPath(path string) (string, bool) {
 	return strings.Join(parts, "/"), true
 }
 
-func CacheDir(dataDir, repoURL string) (string, error) {
+func CacheDir(cacheRoot, repoURL string) (string, error) {
 	source, err := RepoSource(repoURL)
 	if err != nil {
 		return "", err
@@ -158,7 +158,7 @@ func CacheDir(dataDir, repoURL string) (string, error) {
 	if len(parts) == 2 {
 		repoPath = parts[1]
 	}
-	return filepath.Join(dataDir, "cache", hostPart, filepath.FromSlash(repoPath)), nil
+	return filepath.Join(cacheRoot, hostPart, filepath.FromSlash(repoPath)), nil
 }
 
 func CloneOrUpdate(ctx context.Context, repoURL, dir, proxyURL string) error {

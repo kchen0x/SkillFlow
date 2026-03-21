@@ -58,8 +58,8 @@ func (appSkillsourceGitClient) RepoSource(repoURL string) (string, error) {
 	return platformgit.RepoSource(repoURL)
 }
 
-func (appSkillsourceGitClient) CacheDir(dataDir, repoURL string) (string, error) {
-	return platformgit.CacheDir(dataDir, repoURL)
+func (appSkillsourceGitClient) CacheDir(cacheRoot, repoURL string) (string, error) {
+	return platformgit.CacheDir(cacheRoot, repoURL)
 }
 
 func (appSkillsourceGitClient) SameRepo(repoA, repoB string) bool {
@@ -95,16 +95,11 @@ func (a *App) newBackupService() *backupapp.Service {
 }
 
 func (a *App) backupProfile(cfg config.AppConfig) backupdomain.BackupProfile {
-	dataDir := config.AppDataDir()
-	if a != nil && a.config != nil {
-		dataDir = a.config.DataDir()
-	}
 	return backupdomain.BackupProfile{
-		Provider:         cfg.Cloud.Provider,
-		BucketName:       cfg.Cloud.BucketName,
-		RemotePath:       cfg.Cloud.RemotePath,
-		Credentials:      cfg.Cloud.Credentials,
-		SkillsStorageDir: cfg.SkillsStorageDir,
-		AppDataDir:       dataDir,
+		Provider:    cfg.Cloud.Provider,
+		BucketName:  cfg.Cloud.BucketName,
+		RemotePath:  cfg.Cloud.RemotePath,
+		Credentials: cfg.Cloud.Credentials,
+		AppDataDir:  a.dataDir(),
 	}
 }

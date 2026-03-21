@@ -87,7 +87,7 @@ SkillFlow 采用 helper/UI 双进程模型：
 
 逻辑归属按 bounded context 拆分，物理存储保持简单可运维。
 
-当前持久化布局分为应用数据根目录和当前同步根目录两部分：
+当前持久化布局分为固定的应用数据根目录，以及可选的本地仓库缓存根目录两部分：
 
 ```text
 <AppDataDir>/
@@ -95,19 +95,19 @@ SkillFlow 采用 helper/UI 双进程模型：
   config_local.json    # local-only 设置、路径、密钥与运行时状态
   star_repos.json      # skillsource 的仓库跟踪状态
   star_repos_local.json
-  cache/
-    viewstate/
-    <git-cache-hosts...>
-  runtime/
-  logs/
-
-<SyncRoot>/            # 默认等于 <AppDataDir>；当 SkillsStorageDir 位于外部目录时，会切到 skills/、meta/、meta_local/、prompts/ 的共享父目录
   skills/
     <category>/<skill>/
   meta/
   meta_local/
   prompts/
     <category>/<name>/
+  cache/
+    viewstate/
+  runtime/
+  logs/
+
+<RepoCacheDir>/        # 本地专属的仓库 clone cache 根目录；默认值为 <AppDataDir>/cache/repos
+  <git-cache-hosts...>
 ```
 
 `config.json` 和 `config_local.json` 是通过 `core/config` 管理的扁平 shared/local 负载。字段归属是逻辑上的，而不是字面上的顶层 namespace，因此物理文件不需要与 bounded context 做 1:1 映射。
@@ -119,8 +119,9 @@ SkillFlow 采用 helper/UI 双进程模型：
 逻辑归属：
 
 - `skillcatalog`
-  - 技能库路径
   - 默认技能分类
+- `skillsource`
+  - 收藏仓库 clone cache 的本地根目录
 - `agentintegration`
   - Agent 配置
   - 自动推送策略
@@ -143,7 +144,7 @@ SkillFlow 采用 helper/UI 双进程模型：
   - `prompts/` 下的 Prompt 内容与元数据
 - `skillsource`
   - `star_repos.json` / `star_repos_local.json` 中的收藏仓库状态
-  - `<AppDataDir>/cache/` 下的 repo cache
+  - 当前 `repoCacheDir` 下的 repo cache（默认 `<AppDataDir>/cache/repos`）
 
 实现归属：
 

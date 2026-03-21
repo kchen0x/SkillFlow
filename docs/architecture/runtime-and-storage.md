@@ -87,7 +87,7 @@ SkillFlow uses a helper/UI split:
 
 Logical ownership is split by bounded context, while physical storage remains operationally simple.
 
-Current persisted layout is split between the app-data root and the active sync root:
+Current persisted layout is split between the fixed app-data root and the optional local repo-cache root:
 
 ```text
 <AppDataDir>/
@@ -95,19 +95,19 @@ Current persisted layout is split between the app-data root and the active sync 
   config_local.json    # local-only settings, paths, secrets, and runtime state
   star_repos.json      # tracked repository state for skillsource
   star_repos_local.json
-  cache/
-    viewstate/
-    <git-cache-hosts...>
-  runtime/
-  logs/
-
-<SyncRoot>/            # same as <AppDataDir> by default; moves to the shared parent of skills/, meta/, meta_local/, and prompts/ when SkillsStorageDir is external
   skills/
     <category>/<skill>/
   meta/
   meta_local/
   prompts/
     <category>/<name>/
+  cache/
+    viewstate/
+  runtime/
+  logs/
+
+<RepoCacheDir>/        # local-only repo clone cache root; defaults to <AppDataDir>/cache/repos
+  <git-cache-hosts...>
 ```
 
 `config.json` and `config_local.json` are flat shared/local payloads managed through `core/config`. Ownership is logical rather than literal top-level namespacing, so the physical files do not mirror bounded contexts 1:1.
@@ -119,8 +119,9 @@ Current persisted layout is split between the app-data root and the active sync 
 Logical ownership:
 
 - `skillcatalog`
-  - skill library location
   - default skill category
+- `skillsource`
+  - local repo cache root for starred-repo clones
 - `agentintegration`
   - agent profiles
   - auto-push policy
@@ -143,7 +144,7 @@ Additional persisted ownership outside `config*.json`:
   - prompt content and metadata under `prompts/`
 - `skillsource`
   - tracked repo state in `star_repos.json` / `star_repos_local.json`
-  - repo cache directories under `<AppDataDir>/cache/`
+  - repo cache directories under the current `repoCacheDir` (default `<AppDataDir>/cache/repos`)
 
 Implementation ownership:
 

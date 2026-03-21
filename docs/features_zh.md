@@ -418,13 +418,13 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 - 已删除文件显示删除标记，不显示文件大小。
 - 点击刷新会重新读取当前应用会话里最近一次备份结果。
 - 可滚动容器（最大高度限制）。
-- **统一备份范围（所有服务商）** — 备份使用当前生效的备份根目录。默认情况下它等于应用数据根目录；当 `SkillsStorageDir` 被挪到外部目录时，SkillFlow 会切到 `skills/`、`meta/`、`meta_local/`、`prompts/` 的共享父目录。仅本地文件 `cache/`、`runtime/`、`logs/`、`meta_local/`、`.git/`、`config_local.json`、`star_repos_local.json` 会被排除。
+- **统一备份范围（所有服务商）** — 备份始终以 `AppDataDir` 作为 Git/cloud 工作根目录。会参与同步的内容固定位于其中的 `skills/`、`meta/`、`prompts/` 等目录；本地专属的 `cache/`、`runtime/`、`logs/`、`meta_local/`、`.git/`、`config_local.json`、`star_repos_local.json` 会被排除。收藏仓库的 clone cache 位于 `repoCacheDir`，也不会进入备份范围。
 - **对象存储自定义前缀** — 对象存储服务商允许用户填写父级 `remotePath`；SkillFlow 最终总是写入 `<存储桶>/<remotePath>/skillflow/`（若父级路径为空，则为 `<存储桶>/skillflow/`）。
 - **云服务商独立配置档案** — 每个云服务商都会保留自己独立的存储桶、路径和凭据配置；在设置中切换服务商时，会恢复该服务商上次保存的表单值，而不会覆盖其他服务商的配置。
-- **同步路径可移植** — `meta/*.json`、`star_repos.json` 等同步元数据中的本地路径会以同步根目录下的正斜杠相对路径保存，确保 macOS 与 Windows 间恢复后仍能正确定位。
+- **同步路径可移植** — `meta/*.json` 等同步元数据中的本地路径会以 `AppDataDir` 下的正斜杠相对路径保存，确保 macOS 与 Windows 间恢复后仍能正确定位。
 - **Skill 易变检查时间仅本地保存** — 变化频繁的 `LastCheckedAt` 会写入本地 `meta_local/*.local.json`，不参与 git/云端同步，降低多机并行时的冲突概率。
 - **收藏仓库同步运行态仅本地保存** — 每个仓库的 `lastSync` 与 `syncError` 会写入本地 `star_repos_local.json`，避免某台设备后台同步导致其他设备的同步元数据频繁抖动与冲突。
-- **本地路径配置隔离** — `config_local.json` 保存机器相关的文件系统路径与代理设置，例如应用目录外的 `SkillsStorageDir`、智能体 `ScanDirs` / `PushDir` 以及代理配置；该文件不参与备份和 git 同步。
+- **本地路径配置隔离** — `config_local.json` 保存机器相关的文件系统路径与代理设置，例如 `repoCacheDir`、智能体 `ScanDirs` / `PushDir` 以及代理配置；该文件不参与备份和 git 同步。
 - **其他设备本地状态仅本地保存** — 自动推送目标智能体、开机自启注册状态、最近一次窗口尺寸等设备级状态会继续保存在 `config_local.json` 中，因此某一台机器执行恢复时不会覆盖另一台机器的本地使用习惯。
 - **云端敏感凭据仅本地保存** — Access Key ID、Secret Key、访问令牌等敏感云凭据只会写入 `config_local.json` 中按服务商分组的本地配置；可同步的 `config.json` 仅保留云服务商、存储桶、远端路径、Endpoint、仓库地址、分支等非敏感配置。
 - **Git 备份兼容处理** — 当 Git 备份以父目录作为工作树时，SkillFlow 会自动迁移旧的 `skills/.git` 嵌套元数据，避免真实 Skill 文件被当作嵌套仓库而无法跟踪。
@@ -516,7 +516,8 @@ UpdateStarredRepo(url)                       UpdateSkill(skillID)
 | **语言** | 两个按钮 **中文** 与 **English** 可立即切换整个前端界面语言；与侧边栏顶部的 **Languages** 快捷按钮共享同一状态，并持久化到 `localStorage` |
 | **外观主题** | 以三张预览卡片展示 **Young**（默认，由原浅色主题演化而来，改成更柔和的纸感浅蓝）、**Dark**（重做为石墨灰底色 + 雾蓝点缀）和 **Light**（新增，参考 Messor 的低饱和灰白 + 苹果蓝强调色）；持久化到 `localStorage`；切换立即生效，无需重启；旧版存储的 `Light` 偏好会自动迁移到 `Young` |
 | **卡片状态显示** | 一个紧凑的逐行设置区，用于控制每个页面默认支持的状态是否显示。页面原本不支持的状态不会提供可选项。默认策略：**我的skills** = 可更新 + 已推送智能体；**我的智能体** = 已导入 + 可更新 + 已推送智能体；**推送到智能体** = 已推送智能体；**从智能体拉取** = 已导入；**仓库收藏** = 已导入 + 已推送智能体 |
-| **本地 Skills 存储目录** | 所有 Skills 在磁盘上的根路径；支持直接输入和文件夹选择按钮，选择器会定位到当前路径或最近存在的父目录 |
+| **应用数据目录** | 当前设备上已安装 Skills、Prompts、元数据以及备份工作状态的固定根目录；只读展示，并提供一键打开 |
+| **仓库缓存目录** | 收藏仓库 clone cache 的本地专属根路径；支持直接输入和文件夹选择按钮，选择器会定位到当前路径或最近存在的父目录；默认值为 `<AppDataDir>/cache/repos` |
 | **Skill 递归扫描深度** | 扫描本地智能体目录与 Starred Repos 时允许的最大递归深度；默认 `5`；保存时会自动限制在 `1-20` 之间，以避免异常嵌套目录 |
 | **默认分类** | 固定系统兜底分类 `Default`（只读），用于未指定分类的拉取/导入 |
 | **日志级别按钮** | 在 `debug`、`info`、`error` 间切换运行日志级别（默认：`error`）；保存设置后生效 |

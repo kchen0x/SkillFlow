@@ -30,7 +30,6 @@ type BackupProfile struct {
 	BucketName       string
 	RemotePath       string
 	Credentials      map[string]string
-	SkillsStorageDir string
 	AppDataDir       string
 }
 

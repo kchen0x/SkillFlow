@@ -118,5 +118,7 @@ func TestStartupRunsUpgradeBeforeConfigLoad(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(localData), `"agents"`)
 	assert.Contains(t, string(localData), `"autoPushAgents"`)
+	assert.Contains(t, string(localData), `"repoCacheDir"`)
 	assert.NotContains(t, string(localData), `"autoPushTools"`)
+	assert.NotContains(t, string(localData), `"skillsStorageDir"`)
 }

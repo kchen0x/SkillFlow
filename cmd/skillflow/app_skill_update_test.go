@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
+	"github.com/shinerio/skillflow/core/platform/appdata"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
@@ -205,11 +206,10 @@ func newUpdateSkillTestApp(t *testing.T) (*App, string, string, string) {
 	dataDir := t.TempDir()
 	codexPushDir := filepath.Join(dataDir, "codex-skills")
 	claudePushDir := filepath.Join(dataDir, "claude-skills")
-	skillsDir := filepath.Join(dataDir, "library", "skills")
+	skillsDir := appdata.SkillsDir(dataDir)
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
-	cfg.SkillsStorageDir = skillsDir
 	cfg.AutoPushAgents = []string{"codex"}
 	cfg.Agents = []config.AgentConfig{
 		{
@@ -257,7 +257,7 @@ func setupStarredRepoAutoUpdateFixture(t *testing.T, app *App, dataDir, repoURL,
 	remoteRepoDir := t.TempDir()
 	oldSHA := seedLocalRemoteSkillRepo(t, remoteRepoDir, skillSubPath, oldContent)
 
-	cacheDir, err := platformgit.CacheDir(dataDir, repoURL)
+	cacheDir, err := platformgit.CacheDir(app.repoCacheDir(), repoURL)
 	require.NoError(t, err)
 	require.NoError(t, platformgit.CloneOrUpdate(context.Background(), remoteRepoDir, cacheDir, ""))
 
@@ -269,7 +269,7 @@ func setupStarredRepoAutoUpdateFixture(t *testing.T, app *App, dataDir, repoURL,
 	require.NoError(t, app.storage.UpdateMeta(sk))
 
 	if app.starStorage == nil {
-		app.starStorage = sourcerepo.NewStarRepoStorage(filepath.Join(dataDir, "star_repos.json"))
+		app.starStorage = sourcerepo.NewStarRepoStorageWithCacheDir(filepath.Join(dataDir, "star_repos.json"), app.repoCacheDir())
 	}
 	repos, err := app.starStorage.Load()
 	require.NoError(t, err)
@@ -293,7 +293,7 @@ func seedCachedSkillRepo(t *testing.T, dataDir, repoURL, skillSubPath, oldConten
 	t.Helper()
 	requireGitAvailable(t)
 
-	repoDir, err := platformgit.CacheDir(dataDir, repoURL)
+	repoDir, err := platformgit.CacheDir(appdata.RepoCacheDir(dataDir), repoURL)
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(repoDir, 0755))
 
