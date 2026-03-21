@@ -95,12 +95,16 @@ func (a *App) newBackupService() *backupapp.Service {
 }
 
 func (a *App) backupProfile(cfg config.AppConfig) backupdomain.BackupProfile {
+	dataDir := config.AppDataDir()
+	if a != nil && a.config != nil {
+		dataDir = a.config.DataDir()
+	}
 	return backupdomain.BackupProfile{
 		Provider:         cfg.Cloud.Provider,
 		BucketName:       cfg.Cloud.BucketName,
 		RemotePath:       cfg.Cloud.RemotePath,
 		Credentials:      cfg.Cloud.Credentials,
 		SkillsStorageDir: cfg.SkillsStorageDir,
-		AppDataDir:       config.AppDataDir(),
+		AppDataDir:       dataDir,
 	}
 }

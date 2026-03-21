@@ -23,6 +23,10 @@ type GitProvider struct {
 
 func NewGitProvider() *GitProvider { return &GitProvider{} }
 
+func init() {
+	RegisterProviderFactory(func() backupdomain.CloudProvider { return NewGitProvider() })
+}
+
 func (p *GitProvider) Name() string { return backupdomain.GitProviderName }
 
 func (p *GitProvider) RequiredCredentials() []backupdomain.CredentialField {
