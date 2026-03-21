@@ -10,9 +10,12 @@ The root directory must contain **no Go source files**. All code lives in clearl
 / (project root - no .go files here)
   go.mod, go.sum
   Makefile
+  AGENTS.md (→ CLAUDE.md symlink)
   README.md, README_zh.md
   contributing.md, contributing_zh.md
   LICENSE, .gitignore, .github/
+  changelog/
+  chats/
   docs/
     agents/
       skill_directory.md
@@ -99,7 +102,7 @@ The root directory must contain **no Go source files**. All code lives in clearl
 
 ## Documentation Organization Rule - MANDATORY
 
-**Root directory may contain only `README.md`, `README_zh.md`, `contributing.md`, and `contributing_zh.md` as documentation files.**
+**Root directory may contain only `README.md`, `README_zh.md`, `contributing.md`, `contributing_zh.md`, and `AGENTS.md` (with `CLAUDE.md` as symlink) as documentation files.**
 
 All other documentation lives under `docs/`:
 
@@ -304,7 +307,7 @@ npm run build      # production build (output: cmd/skillflow/frontend/dist/)
 
 ## Architecture
 
-SkillFlow is a Wails v2 desktop app (Go 1.23). The Go backend exposes methods directly to the React frontend via Wails bindings. There is **no REST API**.
+SkillFlow is a Wails v2 desktop app (Go 1.25). The Go backend exposes methods directly to the React frontend via Wails bindings. There is **no REST API**.
 
 The target backend architecture is a DDD-oriented modular monolith:
 

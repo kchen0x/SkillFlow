@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - macOS 11+ or Windows 10+
-- Go 1.23+
+- Go 1.25+
 - Node.js 18+
 - Wails v2 CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 

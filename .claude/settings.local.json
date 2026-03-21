@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep -r \"app/command\\\\|app/query\" /Users/shinerio/Workspace/code/SkillFlow/core/ --include=*.go -l)",
+      "Bash(grep -n \"func.*GetConfig\\\\|func.*SaveConfig\\\\|func.*CreatePrompt\\\\|func.*CheckAppUpdate\" /Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/*.go)",
+      "Bash(grep -v \"^frontend$\\\\|^build$\\\\|^tools$\")",
+      "Bash(grep -rn \"app_services\\\\|app_log\\\\|app_path\\\\|app_perf\\\\|app_proxy\\\\|app_visibility\\\\|skill_state\\\\|uttype\" /Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/*.go)",
+      "Bash(git -C /Users/shinerio/Workspace/code/SkillFlow log --oneline)",
+      "Bash(git -C /Users/shinerio/Workspace/code/SkillFlow show 22d5c2e --stat)"
     ]
   }
 }
