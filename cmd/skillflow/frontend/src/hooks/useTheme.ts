@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export const THEMES = ['dark', 'young', 'light'] as const
+export const THEMES = ['dark', 'young', 'light', 'sport'] as const
 
 export type Theme = typeof THEMES[number]
 
@@ -11,6 +11,7 @@ export const THEME_LABELS: Record<Theme, string> = {
   dark: 'Dark',
   young: 'Young',
   light: 'Light',
+  sport: 'Sport',
 }
 
 function isTheme(value: string | null): value is Theme {

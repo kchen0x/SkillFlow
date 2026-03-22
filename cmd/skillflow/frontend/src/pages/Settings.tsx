@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { GetConfig, SaveConfig, ListCloudProviders, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir, TestProxyConnection, GetAppDataDir, OpenAppDataDir } from '../../wailsjs/go/main/App'
-import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check } from 'lucide-react'
+import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Activity } from 'lucide-react'
 import AnimatedDialog from '../components/ui/AnimatedDialog'
 import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
@@ -402,6 +402,25 @@ export default function SettingsPage() {
         text: '#172434',
         textMuted: '#59687b',
         divider: 'rgba(15, 23, 42, 0.12)',
+      },
+    },
+    {
+      id: 'sport',
+      label: 'Sport',
+      tone: 'Field Pulse',
+      description: t('settings.themeSport'),
+      icon: <Activity size={15} />,
+      preview: {
+        shell: 'radial-gradient(circle at top right, rgba(105,246,184,0.24), transparent 30%), radial-gradient(circle at bottom left, rgba(0,220,253,0.1), transparent 34%), linear-gradient(180deg, #f4fff8 0%, #e8fff3 54%, #f9fffb 100%)',
+        sidebar: 'rgba(229, 249, 239, 0.98)',
+        sidebarSelection: 'rgba(0, 105, 71, 0.18)',
+        search: 'rgba(36, 76, 64, 0.14)',
+        panel: 'rgba(255, 255, 255, 0.99)',
+        accent: '#006947',
+        accentGlow: 'rgba(0, 105, 71, 0.2)',
+        text: '#10392d',
+        textMuted: '#47695e',
+        divider: 'rgba(0, 105, 71, 0.14)',
       },
     },
   ]

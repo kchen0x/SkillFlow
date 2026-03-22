@@ -74,7 +74,7 @@ function contrastRatio(firstColor, secondColor) {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-for (const themeName of ['dark', 'young', 'light']) {
+for (const themeName of ['dark', 'young', 'light', 'sport']) {
   test(`${themeName} theme keeps text, button, and surface contrast above the accessibility floor`, () => {
     const vars = getThemeVars(themeName)
     const bgBase = parseColor(vars['bg-base'])

@@ -45,7 +45,7 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 - Inactive routes: gray text with hover highlight.
 - Top-left of sidebar: the `SkillFlow` wordmark shows the app icon immediately to the left; the icon is slightly taller than the text for clarity and preserves its aspect ratio.
 - Top-right of sidebar: **Languages** shortcut button; toggles immediately between **Chinese** and **English**, and persists the preference to `localStorage`.
-- Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light**.
+- Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light → Sport**.
 - Primary sidebar section now contains only the four core work surfaces: **My Skills**, **My Prompts**, **My Memory**, and **My Agents**.
 - The lower utility section keeps **Starred Repos**, **Cloud Backup**, **Settings**, and **Feedback**.
 - Legacy routes remain valid for compatibility:
@@ -474,7 +474,7 @@ For each built-in or custom agent:
 | Control | Description |
 |---------|-------------|
 | **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
-| **Appearance theme** | Three visual presets shown as preview cards: **Young** (default, a softened paper-blue evolution of the previous sky-blue Light palette), **Dark** (refined graphite with muted mist-blue accents), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
+| **Appearance theme** | Four visual presets shown as preview cards: **Young** (default, a softened paper-blue evolution of the previous sky-blue Light palette), **Dark** (refined graphite with muted mist-blue accents), **Light** (a low-saturation gray-white palette inspired by Messor), and **Sport** (mint shell layers with field-green accents for a sharper athletic feel); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
 | **App data directory** | Fixed root for installed skills, prompts, metadata, and backup working state on the current device; shown read-only with a one-click open action |
 | **Repository cache directory** | Local-only root path for cloned starred repositories; manual text entry + folder-picker button that opens at the current path or nearest existing parent; defaults to `<AppDataDir>/cache/repos` |
 | **Skill recursive scan depth** | Maximum recursion depth used when scanning local agent directories and starred repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
