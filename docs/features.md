@@ -23,6 +23,7 @@
 12. [App Update Dialog](#12-app-update-dialog)
 13. [My Agents](#13-my-agents)
 14. [My Prompts](#14-my-prompts)
+15. [My Memory](#15-my-memory)
 
 ---
 
@@ -855,4 +856,61 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-21*
+## 15. My Memory
+
+SkillFlow provides a unified memory management interface. Users can author and manage personal AI coding assistant memories in one place and push them to multiple AI tools.
+
+### Memory Types
+
+- **Main Memory**: A single `main.md` file containing global instructions shared across all configured agents.
+- **Module Memories**: Individual topic-focused markdown files (e.g., `coding-style`, `testing-rules`) stored under `rules/`.
+
+### Page Layout
+
+The My Memory page shows:
+- A prominent **Main Memory card** with per-agent push status chips.
+- A **two-column module grid** with search, agent filter, and sort controls.
+- A right-side **Edit Drawer** (~55 % width) with Edit / Preview tabs, push target selection, push mode, auto-push toggle, and a **Push Now** button.
+
+### Push Modes (per agent)
+
+| Mode | Behaviour |
+|------|-----------|
+| **Merge** | SkillFlow writes a managed marker block inside the agent's memory file. Content outside the block is preserved. |
+| **Takeover** | SkillFlow owns the entire memory file and rules directory. |
+
+### Push Status
+
+Each agent shows one of three statuses:
+
+| Status | Meaning |
+|--------|---------|
+| ✓ Synced | Last push matches current local memory. |
+| ⚠ Pending | Local memory has changed since the last push. |
+| Never Pushed | Push targets configured but never pushed. |
+
+A red dot appears on the sidebar entry and on individual cards when any target agent has a pending push.
+
+### Module File Naming
+
+Module memories are written with an `sf-` prefix to the agent rules directory (e.g., `coding-style` → `sf-coding-style.md`).
+
+### Open in External Editor
+
+Each memory card provides an **Open in Editor** button that opens the file in the system default text editor. SkillFlow detects file changes and refreshes the content automatically.
+
+### Agent Settings
+
+In **Settings → Agents**, each agent now exposes:
+- **Memory File** – path to the agent's main memory file (default shown; user-overridable).
+- **Rules Directory** – path to the agent's rules directory.
+- **Memory Push Mode** – Merge or Takeover.
+- **Auto Push Memory** – push automatically whenever memory content changes.
+
+### Cloud Backup
+
+Memory content files (`memory/main.md` and `memory/rules/*.md`) are included in cloud backup. The local configuration file (`memory/memory_local.json`) is excluded from backup.
+
+---
+
+*Last updated: 2026-03-22*

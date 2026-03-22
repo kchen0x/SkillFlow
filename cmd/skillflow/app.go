@@ -17,6 +17,7 @@ import (
 	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
+	memorycatalogapp "github.com/shinerio/skillflow/core/memorycatalog/app"
 	"github.com/shinerio/skillflow/core/orchestration"
 	"github.com/shinerio/skillflow/core/platform/appdata"
 	"github.com/shinerio/skillflow/core/platform/eventbus"
@@ -47,6 +48,8 @@ type App struct {
 	startupOnce        sync.Once
 	initialWindowState config.WindowState
 	autostartFactory   func() (launchAtLoginController, error)
+	memoryService      *memorycatalogapp.MemoryService
+	memoryPushService  *memorycatalogapp.PushService
 
 	// Git sync state
 	gitConflictMu      sync.Mutex
@@ -157,6 +160,7 @@ func (a *App) startup(ctx context.Context) {
 		a.logErrorf("application startup launch-at-login reconcile failed: %v", err)
 	}
 	a.rebuildPathBoundServices(cfg.RepoCacheDir)
+	a.memoryService, a.memoryPushService = newMemoryServices(a)
 	a.cacheDir = filepath.Join(dataDir, "cache")
 	a.viewCache = viewstate.NewManager(filepath.Join(a.cacheDir, "viewstate"))
 	registerAdapters()

@@ -21,7 +21,39 @@ func DefaultProfile(agentName string) AgentProfile {
 	if len(profile.ScanDirs) > 0 {
 		profile.PushDir = profile.ScanDirs[0]
 	}
+	profile.MemoryPath, profile.RulesDir = defaultMemoryPaths(agentName)
 	return profile
+}
+
+func defaultMemoryPaths(agentName string) (memoryPath, rulesDir string) {
+	home, _ := os.UserHomeDir()
+
+	paths := map[string][2]string{
+		"claude-code": {
+			filepath.Join(home, ".claude", "CLAUDE.md"),
+			filepath.Join(home, ".claude", "rules"),
+		},
+		"codex": {
+			filepath.Join(home, ".codex", "AGENTS.md"),
+			filepath.Join(home, ".codex", "rules"),
+		},
+		"gemini-cli": {
+			filepath.Join(home, ".gemini", "GEMINI.md"),
+			filepath.Join(home, ".gemini", "rules"),
+		},
+		"opencode": {
+			filepath.Join(home, ".config", "opencode", "AGENTS.md"),
+			filepath.Join(home, ".config", "opencode", "rules"),
+		},
+		"openclaw": {
+			filepath.Join(home, ".openclaw", "workspace", "MEMORY.md"),
+			filepath.Join(home, ".openclaw", "workspace", "rules"),
+		},
+	}
+	if p, ok := paths[agentName]; ok {
+		return p[0], p[1]
+	}
+	return "", ""
 }
 
 func defaultScanDirs(agentName string) []string {

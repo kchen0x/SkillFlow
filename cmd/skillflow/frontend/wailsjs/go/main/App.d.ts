@@ -30,6 +30,8 @@ export function CompleteImportPrompts(arg1:string,arg2:Array<string>):Promise<nu
 
 export function CreateCategory(arg1:string):Promise<void>;
 
+export function CreateModuleMemory(arg1:string,arg2:string):Promise<main.ModuleMemoryDTO>;
+
 export function CreatePrompt(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Array<string>,arg6:string):Promise<domain.Prompt>;
 
 export function CreatePromptCategory(arg1:string):Promise<void>;
@@ -37,6 +39,8 @@ export function CreatePromptCategory(arg1:string):Promise<void>;
 export function DeleteAgentSkill(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteCategory(arg1:string):Promise<void>;
+
+export function DeleteModuleMemory(arg1:string):Promise<void>;
 
 export function DeletePrompt(arg1:string):Promise<void>;
 
@@ -51,6 +55,12 @@ export function DownloadAppUpdate(arg1:string):Promise<void>;
 export function ExportPrompts():Promise<string>;
 
 export function ExportPromptsByNames(arg1:Array<string>):Promise<string>;
+
+export function GetAllMemoryPushConfigs():Promise<Array<main.MemoryPushConfigDTO>>;
+
+export function GetAllMemoryPushStatuses():Promise<Array<main.PushStatusDTO>>;
+
+export function GetAllModulePushTargets():Promise<Array<main.ModulePushTargetsDTO>>;
 
 export function GetAppDataDir():Promise<string>;
 
@@ -67,6 +77,16 @@ export function GetLastBackupChanges():Promise<Array<domain.RemoteFile>>;
 export function GetLastBackupCompletedAt():Promise<string>;
 
 export function GetLogDir():Promise<string>;
+
+export function GetMainMemory():Promise<main.MainMemoryDTO>;
+
+export function GetMemoryPushConfig(arg1:string):Promise<main.MemoryPushConfigDTO>;
+
+export function GetMemoryPushStatus(arg1:string):Promise<main.PushStatusDTO>;
+
+export function GetModuleMemory(arg1:string):Promise<main.ModuleMemoryDTO>;
+
+export function GetModulePushTargets(arg1:string):Promise<main.ModulePushTargetsDTO>;
 
 export function GetSkillMeta(arg1:string):Promise<domain.SkillMeta>;
 
@@ -92,6 +112,8 @@ export function ListCloudFiles():Promise<Array<domain.RemoteFile>>;
 
 export function ListCloudProviders():Promise<Array<Record<string, any>>>;
 
+export function ListModuleMemories():Promise<Array<main.ModuleMemoryDTO>>;
+
 export function ListPromptCategories():Promise<Array<string>>;
 
 export function ListPrompts():Promise<Array<domain.Prompt>>;
@@ -114,6 +136,8 @@ export function OpenGitBackupDir():Promise<void>;
 
 export function OpenLogDir():Promise<void>;
 
+export function OpenMemoryInEditor(arg1:string,arg2:string):Promise<void>;
+
 export function OpenPath(arg1:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
@@ -125,6 +149,10 @@ export function PromptRootDir():Promise<string>;
 export function PullFromAgent(arg1:string,arg2:Array<string>,arg3:string):Promise<Array<string>>;
 
 export function PullFromAgentForce(arg1:string,arg2:Array<string>,arg3:string):Promise<void>;
+
+export function PushAllMemory():Promise<Array<main.PushResultDTO>>;
+
+export function PushMemoryToAgent(arg1:string):Promise<main.PushResultDTO>;
 
 export function PushStarSkillsToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<domain.PushConflict>>;
 
@@ -149,6 +177,14 @@ export function ResolveGitConflict(arg1:boolean):Promise<void>;
 export function RestoreFromCloud():Promise<void>;
 
 export function SaveConfig(arg1:config.AppConfig):Promise<void>;
+
+export function SaveMainMemory(arg1:string):Promise<main.MainMemoryDTO>;
+
+export function SaveMemoryPushConfig(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function SaveModuleMemory(arg1:string,arg2:string):Promise<main.ModuleMemoryDTO>;
+
+export function SaveModulePushTargets(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function ScanAgentSkills(arg1:string):Promise<Array<domain.AgentSkillCandidate>>;
 

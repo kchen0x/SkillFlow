@@ -8,6 +8,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+const (
+	EventMemoryContentChanged = "memory:content:changed"
+	EventMemoryPushCompleted  = "memory:push:completed"
+	EventMemoryStatusChanged  = "memory:status:changed"
+)
+
 func forwardEvents(ctx context.Context, hub *eventbus.Hub) {
 	ch := hub.Subscribe()
 	for {

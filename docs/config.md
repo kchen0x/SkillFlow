@@ -406,3 +406,46 @@ This file stores local-only, high-churn per-skill fields that should not be sync
 | Key | Type | Meaning |
 |-----|------|---------|
 | `lastCheckedAt` | string | Timestamp of the most recent update-check attempt on the current device. |
+
+## `memory/memory_local.json`
+
+Local-only memory configuration. Excluded from cloud backup and git sync.
+
+**Location:** `<appDataDir>/memory/memory_local.json`
+
+**Schema:**
+
+```json
+{
+  "pushConfigs": {
+    "<agentType>": {
+      "mode": "merge" | "takeover",
+      "autoPush": true | false
+    }
+  },
+  "modules": {
+    "<moduleName>": {
+      "pushTargets": ["claude-code", "codex"]
+    }
+  },
+  "pushState": {
+    "<agentType>": {
+      "lastPushedAt": "2026-03-21T10:00:00Z",
+      "lastPushedHash": "<sha256-hex>"
+    }
+  }
+}
+```
+
+**Fields:**
+
+| Section | Key | Type | Description |
+|---------|-----|------|-------------|
+| `pushConfigs` | `<agentType>` | object | Per-agent push configuration |
+| `pushConfigs.<agent>.mode` | — | string | `"merge"` or `"takeover"` |
+| `pushConfigs.<agent>.autoPush` | — | bool | Auto-push when memory changes |
+| `modules` | `<moduleName>` | object | Per-module push target list |
+| `modules.<name>.pushTargets` | — | string[] | Agent types to push this module to |
+| `pushState` | `<agentType>` | object | Per-agent last push tracking |
+| `pushState.<agent>.lastPushedAt` | — | RFC3339 string | Timestamp of last successful push |
+| `pushState.<agent>.lastPushedHash` | — | string | SHA-256 of content pushed to this agent |

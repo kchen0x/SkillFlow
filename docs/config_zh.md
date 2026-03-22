@@ -404,3 +404,46 @@
 | 键 | 类型 | 说明 |
 |----|------|------|
 | `lastCheckedAt` | string | 当前设备最近一次执行更新检查的时间。 |
+
+## `memory/memory_local.json`
+
+本地专用记忆配置，不参与云备份和 git 同步。
+
+**路径：** `<appDataDir>/memory/memory_local.json`
+
+**Schema：**
+
+```json
+{
+  "pushConfigs": {
+    "<agentType>": {
+      "mode": "merge" | "takeover",
+      "autoPush": true | false
+    }
+  },
+  "modules": {
+    "<moduleName>": {
+      "pushTargets": ["claude-code", "codex"]
+    }
+  },
+  "pushState": {
+    "<agentType>": {
+      "lastPushedAt": "2026-03-21T10:00:00Z",
+      "lastPushedHash": "<sha256-hex>"
+    }
+  }
+}
+```
+
+**字段说明：**
+
+| 分区 | 键 | 类型 | 说明 |
+|------|----|------|------|
+| `pushConfigs` | `<agentType>` | object | 各智能体推送配置 |
+| `pushConfigs.<agent>.mode` | — | string | `"merge"`（合并）或 `"takeover"`（覆盖） |
+| `pushConfigs.<agent>.autoPush` | — | bool | 记忆变更时是否自动推送 |
+| `modules` | `<moduleName>` | object | 各模块的推送目标列表 |
+| `modules.<name>.pushTargets` | — | string[] | 该模块需要推送到的智能体类型列表 |
+| `pushState` | `<agentType>` | object | 各智能体最近推送记录 |
+| `pushState.<agent>.lastPushedAt` | — | RFC3339 字符串 | 最近一次成功推送的时间戳 |
+| `pushState.<agent>.lastPushedHash` | — | string | 最近一次推送到该智能体的内容 SHA-256 哈希 |
