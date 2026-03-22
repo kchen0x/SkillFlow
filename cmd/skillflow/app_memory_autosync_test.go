@@ -46,3 +46,32 @@ func TestSyncMemoryToAutoPushAgentsPushesAllModulesToEnabledAgents(t *testing.T)
 	assert.FileExists(t, filepath.Join(dataDir, "codex", "rules", "sf-style.md"))
 	assert.FileExists(t, filepath.Join(dataDir, "codex", "rules", "sf-testing.md"))
 }
+
+func TestSaveMemoryPushConfigAutoPushesExistingMemoryImmediately(t *testing.T) {
+	dataDir := t.TempDir()
+	svc := config.NewService(dataDir)
+	cfg := config.DefaultConfig(dataDir)
+	cfg.Agents = []config.AgentConfig{
+		{
+			Name:       "codex",
+			MemoryPath: filepath.Join(dataDir, "codex", "AGENTS.md"),
+			RulesDir:   filepath.Join(dataDir, "codex", "rules"),
+			Enabled:    true,
+		},
+	}
+	require.NoError(t, svc.Save(cfg))
+
+	app := NewApp()
+	app.config = svc
+	app.memoryService, app.memoryPushService = newMemoryServices(app)
+
+	_, err := app.memoryService.SaveMainMemory("Main memory")
+	require.NoError(t, err)
+	_, err = app.memoryService.CreateModule("style", "Style rules")
+	require.NoError(t, err)
+
+	require.NoError(t, app.SaveMemoryPushConfig("codex", string(memorydomain.PushModeMerge), true))
+
+	assert.FileExists(t, filepath.Join(dataDir, "codex", "AGENTS.md"))
+	assert.FileExists(t, filepath.Join(dataDir, "codex", "rules", "sf-style.md"))
+}

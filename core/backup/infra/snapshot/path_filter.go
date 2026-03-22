@@ -15,8 +15,6 @@ var excludedDirs = []string{
 
 var excludedFiles = []string{
 	".DS_Store",
-	"config_local.json",
-	"star_repos_local.json",
 }
 
 func ExcludedDirectories() []string {
@@ -42,6 +40,9 @@ func ShouldSkipBackupPath(rel string) bool {
 		if base == file {
 			return true
 		}
+	}
+	if strings.HasSuffix(base, "local.json") {
+		return true
 	}
 	return false
 }
