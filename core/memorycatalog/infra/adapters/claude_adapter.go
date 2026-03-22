@@ -15,6 +15,6 @@ func NewClaudeCodeAdapter() *ClaudeCodeAdapter {
 }
 
 // BuildRulesIndex returns an empty RulesIndex because Claude Code auto-scans its rules directory.
-func (a *ClaudeCodeAdapter) BuildRulesIndex(_ []*domain.ModuleMemory, _ string, _ string) gateway.RulesIndex {
+func (a *ClaudeCodeAdapter) BuildRulesIndex(_ []*domain.ModuleMemory, _ string) gateway.RulesIndex {
 	return gateway.RulesIndex{}
 }

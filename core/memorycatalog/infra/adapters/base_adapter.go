@@ -173,19 +173,14 @@ func findManagedRange(fileContent string) (int, int) {
 
 // buildExplicitRulesIndex returns a RulesIndex with explicit file listings for agents
 // that do not auto-discover rules files.
-func buildExplicitRulesIndex(modules []*domain.ModuleMemory, agentMemoryPath string, agentRulesDir string) gatewayport.RulesIndex {
+func buildExplicitRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gatewayport.RulesIndex {
 	if len(modules) == 0 {
 		return gatewayport.RulesIndex{}
 	}
 	entries := make([]string, 0, len(modules))
-	memoryDir := filepath.Dir(agentMemoryPath)
 	for _, m := range modules {
 		targetPath := filepath.Join(agentRulesDir, sfPrefix+m.Name+".md")
-		relativePath, err := filepath.Rel(memoryDir, targetPath)
-		if err != nil {
-			relativePath = targetPath
-		}
-		entries = append(entries, "["+m.Name+"]("+filepath.ToSlash(relativePath)+")")
+		entries = append(entries, "["+m.Name+"]("+filepath.ToSlash(targetPath)+")")
 	}
 	return gatewayport.RulesIndex{
 		Entries: entries,

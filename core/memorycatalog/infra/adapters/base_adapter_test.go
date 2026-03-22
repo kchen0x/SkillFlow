@@ -10,19 +10,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildExplicitRulesIndexUsesMarkdownRelativePaths(t *testing.T) {
+func TestBuildExplicitRulesIndexUsesAbsolutePaths(t *testing.T) {
 	modules := []*domain.ModuleMemory{
 		{Name: "testing"},
 		{Name: "style"},
 	}
-	memoryPath := filepath.Join("workspace", "agent", "AGENTS.md")
 	rulesDir := filepath.Join("workspace", "agent", "rules")
 
-	index := buildExplicitRulesIndex(modules, memoryPath, rulesDir)
+	index := buildExplicitRulesIndex(modules, rulesDir)
 
 	require.Equal(t, []string{
-		"[testing](rules/sf-testing.md)",
-		"[style](rules/sf-style.md)",
+		"[testing](" + filepath.ToSlash(filepath.Join(rulesDir, "sf-testing.md")) + ")",
+		"[style](" + filepath.ToSlash(filepath.Join(rulesDir, "sf-style.md")) + ")",
 	}, index.Entries)
 }
 

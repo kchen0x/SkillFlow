@@ -14,6 +14,6 @@ func NewCodexAdapter() *CodexAdapter {
 }
 
 // BuildRulesIndex returns explicit markdown refs for managed rule files.
-func (a *CodexAdapter) BuildRulesIndex(modules []*domain.ModuleMemory, agentMemoryPath string, agentRulesDir string) gateway.RulesIndex {
-	return buildExplicitRulesIndex(modules, agentMemoryPath, agentRulesDir)
+func (a *CodexAdapter) BuildRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gateway.RulesIndex {
+	return buildExplicitRulesIndex(modules, agentRulesDir)
 }

@@ -45,7 +45,6 @@ Main memory body
 </skillflow-managed>
 
 <skillflow-module>
-Module memories are only located in the same directory as this memory file. Do not search in other locations.
 Please be sure to load all module memories below.
 [testing](rules/sf-testing.md)
 </skillflow-module>`), pusher.mainContent)
@@ -205,7 +204,7 @@ func (p *recordingPusher) RemoveModuleMemory(moduleName string, agentRulesDir st
 	return nil
 }
 
-func (p *recordingPusher) BuildRulesIndex(modules []*domain.ModuleMemory, agentMemoryPath string, agentRulesDir string) gatewayport.RulesIndex {
+func (p *recordingPusher) BuildRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gatewayport.RulesIndex {
 	entries := make([]string, 0, len(modules))
 	for _, module := range modules {
 		entries = append(entries, "["+module.Name+"](rules/sf-"+module.Name+".md)")
@@ -230,7 +229,6 @@ Main memory body
 </skillflow-managed>
 
 <skillflow-module>
-Module memories are only located in the same directory as this memory file. Do not search in other locations.
 Please be sure to load all module memories below.
 [testing](rules/sf-testing.md)
 </skillflow-module>`), content)

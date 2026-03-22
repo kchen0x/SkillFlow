@@ -119,7 +119,7 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 		}
 	}
 
-	rulesIndex := pusher.BuildRulesIndex(selectedModules, agentCfg.MemoryPath, agentCfg.RulesDir)
+	rulesIndex := pusher.BuildRulesIndex(selectedModules, agentCfg.RulesDir)
 	composedContent := composeManagedMemory(mainMemory.Content, rulesIndex)
 
 	if err := pusher.PushMainMemory(composedContent, mode, agentCfg.MemoryPath); err != nil {
@@ -152,7 +152,6 @@ func composeManagedMemory(mainContent string, rulesIndex gatewayport.RulesIndex)
 	}
 
 	sb.WriteString("\n\n<skillflow-module>\n")
-	sb.WriteString("Module memories are only located in the same directory as this memory file. Do not search in other locations.\n")
 	sb.WriteString("Please be sure to load all module memories below.\n")
 	for i, entry := range rulesIndex.Entries {
 		if i > 0 {

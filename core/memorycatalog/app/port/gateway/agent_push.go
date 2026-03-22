@@ -5,7 +5,7 @@ import "github.com/shinerio/skillflow/core/memorycatalog/domain"
 // RulesIndex is a structured representation of the rules index block.
 // Claude Code returns empty (auto-scan), others return listing.
 type RulesIndex struct {
-	Entries []string // markdown refs like [module-name](relative/path/to/sf-module-name.md)
+	Entries []string // markdown refs like [module-name](/absolute/path/to/sf-module-name.md)
 }
 
 // AgentMemoryPusher handles the filesystem details of writing to agent directories.
@@ -20,7 +20,7 @@ type AgentMemoryPusher interface {
 	// RemoveModuleMemory removes a pushed module memory from agent's rules directory.
 	RemoveModuleMemory(moduleName string, agentRulesDir string) error
 	// BuildRulesIndex builds explicit markdown refs for managed module files.
-	BuildRulesIndex(modules []*domain.ModuleMemory, agentMemoryPath string, agentRulesDir string) RulesIndex
+	BuildRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) RulesIndex
 	// RepairManagedBlock detects and repairs corrupted marker blocks in merge mode.
 	RepairManagedBlock(agentMemoryPath string) error
 }
