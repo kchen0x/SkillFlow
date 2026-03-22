@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { subscribeToEvents } from '../.tmp-tests/wailsEvents.js'
+import { subscribeToEvents } from '../.tmp-tests/src/lib/wailsEvents.js'
 
 test('subscribeToEvents unsubscribes every registered Wails event on cleanup', () => {
   const calls = []

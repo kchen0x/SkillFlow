@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { copyTextWithDocumentCommand, copyTextWithFallbacks } from '../.tmp-tests/clipboardCore.js'
+import { copyTextWithDocumentCommand, copyTextWithFallbacks } from '../.tmp-tests/src/lib/clipboardCore.js'
 
 test('copyTextWithFallbacks prefers runtime clipboard when available', async () => {
   let runtimeText = null

@@ -4,7 +4,7 @@ import {
   DEFAULT_PROXY_TEST_URL,
   normalizeProxyTestTargetURL,
   buildProxyConnectionPayload,
-} from '../.tmp-tests/proxyConnection.js'
+} from '../.tmp-tests/src/lib/proxyConnection.js'
 
 test('normalizeProxyTestTargetURL defaults github url', () => {
   assert.equal(normalizeProxyTestTargetURL(''), DEFAULT_PROXY_TEST_URL)

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildAgentMemoryEntries, filterAgentMemoryEntries } from '../.tmp-tests/agentMemoryPreview.js'
+import { buildAgentMemoryEntries, filterAgentMemoryEntries } from '../.tmp-tests/src/lib/agentMemoryPreview.js'
 
 test('buildAgentMemoryEntries keeps main memory first and sorts rules', () => {
   const entries = buildAgentMemoryEntries({

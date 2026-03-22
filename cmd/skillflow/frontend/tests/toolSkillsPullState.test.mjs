@@ -8,7 +8,7 @@ import {
   syncToolSkillsPullVisibleSelection,
   getToolSkillsVisibleNotImportedPaths,
   isToolSkillsPullReady,
-} from '../.tmp-tests/toolSkillsPullState.js'
+} from '../.tmp-tests/src/lib/toolSkillsPullState.js'
 
 test('createToolSkillsPullState starts with default category and empty selection', () => {
   assert.deepEqual(createToolSkillsPullState('Default'), {

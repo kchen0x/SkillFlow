@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getListLoadState } from '../.tmp-tests/listLoadState.js'
+import { getListLoadState } from '../.tmp-tests/src/lib/listLoadState.js'
 
 test('getListLoadState stays loading while the first fetch is still in flight', () => {
   assert.equal(

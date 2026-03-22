@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -68,8 +69,13 @@ func TestSaveAndLoadPreservesAgentMemoryPaths(t *testing.T) {
 
 	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(localData), `"memoryPath": "`+filepath.ToSlash(filepath.Join(dir, "custom-agent-memory.md"))+`"`)
-	assert.Contains(t, string(localData), `"rulesDir": "`+filepath.ToSlash(filepath.Join(dir, "custom-agent-rules"))+`"`)
+	var local struct {
+		Agents []config.AgentConfig `json:"agents"`
+	}
+	require.NoError(t, json.Unmarshal(localData, &local))
+	require.NotEmpty(t, local.Agents)
+	assert.Equal(t, filepath.Join(dir, "custom-agent-memory.md"), local.Agents[0].MemoryPath)
+	assert.Equal(t, filepath.Join(dir, "custom-agent-rules"), local.Agents[0].RulesDir)
 }
 
 func TestAutoUpdateSkillsStoredOnlyInLocalConfig(t *testing.T) {

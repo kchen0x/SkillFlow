@@ -4,7 +4,7 @@ import {
   buildCustomAgentProfile,
   createEmptyCustomAgentDraft,
   validateCustomAgentDraft,
-} from '../.tmp-tests/agentSettings.js'
+} from '../.tmp-tests/src/lib/agentSettings.js'
 
 test('createEmptyCustomAgentDraft returns blank required fields', () => {
   assert.deepEqual(createEmptyCustomAgentDraft(), {

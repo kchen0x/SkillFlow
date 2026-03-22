@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getStarredRepoListState } from '../.tmp-tests/starredRepoListState.js'
+import { getStarredRepoListState } from '../.tmp-tests/src/lib/starredRepoListState.js'
 
 test('getStarredRepoListState keeps repo detail in loading state while fetch is in flight', () => {
   assert.equal(

@@ -9,12 +9,17 @@ import (
 	"testing"
 )
 
+func newGitTestCommand(args ...string) *exec.Cmd {
+	return exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
+}
+
 func runGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := newGitTestCommand(args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v failed: %v, output: %s", args, err, string(out))
@@ -23,10 +28,11 @@ func runGit(t *testing.T, dir string, args ...string) string {
 }
 
 func runGitWithError(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := newGitTestCommand(args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

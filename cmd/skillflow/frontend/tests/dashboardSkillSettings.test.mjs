@@ -7,7 +7,7 @@ import {
   createToolSkillsEventSubscriptions,
   getDashboardAutoUpdateActionState,
   listDashboardToolbarActionKeys,
-} from '../.tmp-tests/dashboardSkillSettings.js'
+} from '../.tmp-tests/src/lib/dashboardSkillSettings.js'
 
 test('readDashboardSkillSettings defaults auto update to false', () => {
   assert.deepEqual(readDashboardSkillSettings(undefined), {

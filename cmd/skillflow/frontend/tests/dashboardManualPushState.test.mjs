@@ -7,7 +7,7 @@ import {
   toggleDashboardManualPushAllVisible,
   syncDashboardManualPushVisibleSelection,
   isDashboardManualPushReady,
-} from '../.tmp-tests/dashboardManualPushState.js'
+} from '../.tmp-tests/src/lib/dashboardManualPushState.js'
 
 test('createDashboardManualPushState starts empty', () => {
   assert.deepEqual(createDashboardManualPushState(), {

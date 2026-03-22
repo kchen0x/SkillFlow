@@ -77,8 +77,14 @@ func TestTestProxyConnectionTreatsHTTPResponseAsSuccess(t *testing.T) {
 }
 
 func TestTestProxyConnectionTimesOut(t *testing.T) {
+	prevTimeout := proxyConnectionTestTimeout
+	proxyConnectionTestTimeout = 100 * time.Millisecond
+	t.Cleanup(func() {
+		proxyConnectionTestTimeout = prevTimeout
+	})
+
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(6 * time.Second)
+		time.Sleep(150 * time.Millisecond)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer target.Close()
@@ -90,8 +96,8 @@ func TestTestProxyConnectionTimesOut(t *testing.T) {
 
 	assert.False(t, proxyTestBoolField(t, result, "Success"))
 	assert.Contains(t, strings.ToLower(proxyTestStringField(t, result, "Message")), "deadline")
-	assert.GreaterOrEqual(t, proxyTestIntField(t, result, "ElapsedMs"), int64(4500))
-	assert.Less(t, time.Since(startedAt), 7*time.Second)
+	assert.GreaterOrEqual(t, proxyTestIntField(t, result, "ElapsedMs"), int64(80))
+	assert.Less(t, time.Since(startedAt), time.Second)
 }
 
 func newProxyTestApp(t *testing.T, savedProxy config.ProxyConfig) *App {

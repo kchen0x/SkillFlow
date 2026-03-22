@@ -4,7 +4,7 @@ import {
   buildPromptExportActions,
   resolvePromptExportNames,
   canExportPromptSelection,
-} from '../.tmp-tests/promptExport.js'
+} from '../.tmp-tests/src/lib/promptExport.js'
 
 const prompts = [
   { name: 'Prompt A', category: 'Default' },
