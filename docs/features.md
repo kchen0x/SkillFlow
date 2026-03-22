@@ -864,10 +864,11 @@ SkillFlow provides a unified memory management interface. Users can author and m
 
 The My Memory page shows:
 - A prominent **Main Memory card** with per-agent push status chips.
+- Each **Module Memory card** shows the same per-agent push status row as the main-memory card, so users can see sync state without opening the drawer.
 - A top **Auto Sync** panel where each enabled agent can be set to `Off`, `Auto Merge`, or `Auto Takeover`.
 - A **Batch Push** mode that turns the card list into an inline multi-select flow, keeps main memory required, and lets users choose target agents and one shared push mode for the current push.
 - A **two-column module grid** with search and inline selection checkboxes during batch push.
-- A right-side **Edit Drawer** (~55 % width) with Edit / Preview tabs, save, delete, and open-in-editor actions only.
+- A right-side **Edit Drawer** anchored as a fixed overlay, widened to roughly 72% of the viewport up to a 960 px cap, with Edit / Preview tabs, save, delete, and open-in-editor actions only.
 
 ### Batch Push Flow
 

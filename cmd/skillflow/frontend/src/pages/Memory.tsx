@@ -25,10 +25,16 @@ import {
   toggleMemoryBatchAgent,
   toggleMemoryBatchModule,
 } from '../lib/memoryPageState'
+import {
+  buildMemoryPushStatusEntries,
+  getMemoryAgentLabel,
+  getMemoryDrawerMetrics,
+  type MemoryPushStatus,
+} from '../lib/memoryUi'
 
 type MainMemoryItem = { content: string; updatedAt: string }
 type ModuleItem = { name: string; content: string; updatedAt: string }
-type PushStatus = 'synced' | 'pendingPush' | 'neverPushed'
+type PushStatus = MemoryPushStatus
 type PushStatusMap = Record<string, PushStatus>
 type PushConfigMap = Record<string, { mode: string; autoPush: boolean }>
 type DrawerState =
@@ -36,14 +42,6 @@ type DrawerState =
   | { type: 'main' }
   | { type: 'module'; name: string }
 type NewModuleState = { open: boolean; name: string; content: string; nameError: string }
-
-const agentDisplayName: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  codex: 'Codex',
-  'gemini-cli': 'Gemini CLI',
-  opencode: 'OpenCode',
-  openclaw: 'OpenClaw',
-}
 
 function statusColor(status: PushStatus): string {
   if (status === 'synced') return 'var(--color-success, #22c55e)'
@@ -58,10 +56,6 @@ function getPreviewLines(content: string, maxLines: number): string {
     .filter(line => line.trim())
     .slice(0, maxLines)
     .join('\n')
-}
-
-function getAgentLabel(agentName: string): string {
-  return agentDisplayName[agentName] ?? agentName
 }
 
 export default function Memory() {
@@ -92,6 +86,8 @@ export default function Memory() {
   const previewHtml = drawerContent ? renderMemoryMarkdown(drawerContent) : ''
   const batchPushReady = isMemoryBatchPushReady(batchPushState)
   const selectedMemoryCount = 1 + batchPushState.selectedModules.length
+  const memoryStatusEntries = buildMemoryPushStatusEntries(availableAgents, pushStatuses)
+  const drawerMetrics = getMemoryDrawerMetrics(window.innerWidth)
 
   const loadAll = async () => {
     try {
@@ -429,8 +425,8 @@ export default function Memory() {
                             <button
                               key={mode}
                               onClick={() => void handleAutoSyncModeChange(agent.name, mode)}
-                              className="text-xs px-2.5 py-1 rounded-lg"
-                              style={{
+                            className="text-xs px-2.5 py-1 rounded-lg"
+                            style={{
                                 background: currentMode === mode ? 'var(--active-surface)' : 'var(--bg-surface)',
                                 color: currentMode === mode ? 'var(--active-text)' : 'var(--text-muted)',
                                 border: currentMode === mode ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
@@ -501,7 +497,7 @@ export default function Memory() {
                           border: selected ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
                         }}
                       >
-                        {getAgentLabel(agent.name)}
+                        {getMemoryAgentLabel(agent.name)}
                       </button>
                     )
                   })}
@@ -559,16 +555,16 @@ export default function Memory() {
               )}
             </div>
             <div className="flex flex-col gap-1 items-end shrink-0">
-              {availableAgents.map(agent => {
-                const status = pushStatuses[agent.name] ?? 'neverPushed'
+              {memoryStatusEntries.map(entry => {
+                const status = entry.status
                 return (
-                  <div key={agent.name} className="flex items-center gap-1" title={getAgentLabel(agent.name)}>
+                  <div key={entry.agentType} className="flex items-center gap-1" title={entry.label}>
                     <span
                       className="inline-block rounded-full"
                       style={{ width: 6, height: 6, background: statusColor(status) }}
                     />
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {getAgentLabel(agent.name)}
+                      {entry.label}
                     </span>
                   </div>
                 )
@@ -642,6 +638,22 @@ export default function Memory() {
                       {getPreviewLines(module.content, 2)}
                     </pre>
                   )}
+                  <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
+                    {memoryStatusEntries.map(entry => {
+                      const status = entry.status
+                      return (
+                        <div key={entry.agentType} className="flex items-center gap-1" title={entry.label}>
+                          <span
+                            className="inline-block rounded-full"
+                            style={{ width: 6, height: 6, background: statusColor(status) }}
+                          />
+                          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                            {entry.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
                   <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                     {t('memory.moduleRefHint')}
                   </p>
@@ -653,13 +665,34 @@ export default function Memory() {
       </div>
 
       {drawerState.type !== 'none' && (
+        <button
+          type="button"
+          aria-label={t('common.close')}
+          onClick={() => requestCloseDrawer(false)}
+          className="fixed inset-0"
+          style={{
+            background: 'rgba(15, 23, 42, 0.18)',
+            border: 'none',
+            zIndex: 30,
+          }}
+        />
+      )}
+
+      {drawerState.type !== 'none' && (
         <aside
           className="flex flex-col"
           style={{
-            width: '55%',
-            minWidth: 380,
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: drawerMetrics.width,
+            maxWidth: drawerMetrics.maxWidth,
+            minWidth: drawerMetrics.minWidth,
             borderLeft: '1px solid var(--border-base)',
             background: 'var(--bg-surface)',
+            boxShadow: '-16px 0 36px rgba(15, 23, 42, 0.14)',
+            zIndex: 40,
           }}
         >
           <div
