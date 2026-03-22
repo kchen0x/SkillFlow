@@ -43,16 +43,6 @@ func NewPushService(
 
 // PushToAgent pushes memory content to a single agent.
 func (s *PushService) PushToAgent(agentType string) error {
-	// 1. Get agent config.
-	agentCfg, ok, err := s.agentConfig.GetAgent(agentType)
-	if err != nil {
-		return fmt.Errorf("get agent config for %q: %w", agentType, err)
-	}
-	if !ok {
-		return fmt.Errorf("agent %q not found or not enabled", agentType)
-	}
-
-	// 2. Get push config for agent.
 	pushCfg, err := s.storage.GetPushConfig(agentType)
 	if err != nil {
 		return fmt.Errorf("get push config for %q: %w", agentType, err)
@@ -65,76 +55,66 @@ func (s *PushService) PushToAgent(agentType string) error {
 			AutoPush:  false,
 		}
 	}
+	return s.pushModulesToAgent(agentType, nil, pushCfg.Mode)
+}
 
-	// 3. Get main memory content.
+// PushSelectionToAgent pushes main memory plus only the selected modules to a single agent.
+func (s *PushService) PushSelectionToAgent(agentType string, moduleNames []string, mode domain.PushMode) error {
+	if len(moduleNames) == 0 {
+		return fmt.Errorf("no module memories selected for agent %q", agentType)
+	}
+	return s.pushModulesToAgent(agentType, moduleNames, mode)
+}
+
+func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string, mode domain.PushMode) error {
+	agentCfg, ok, err := s.agentConfig.GetAgent(agentType)
+	if err != nil {
+		return fmt.Errorf("get agent config for %q: %w", agentType, err)
+	}
+	if !ok {
+		return fmt.Errorf("agent %q not found or not enabled", agentType)
+	}
+
 	mainMemory, err := s.storage.GetMainMemory()
 	if err != nil {
 		return fmt.Errorf("get main memory: %w", err)
 	}
 
-	// 4. Get all modules and filter to those targeting this agent.
 	allModules, err := s.storage.ListModules()
 	if err != nil {
 		return fmt.Errorf("list modules: %w", err)
 	}
-	allTargets, err := s.storage.GetAllModulePushTargets()
+
+	selectedModules, removedNames, err := selectModulesForPush(allModules, moduleNames)
 	if err != nil {
-		return fmt.Errorf("get all module push targets: %w", err)
+		return err
 	}
 
-	// Build a set of module names targeting this agent.
-	targetedNames := make(map[string]bool)
-	for _, t := range allTargets {
-		for _, at := range t.PushTargets {
-			if at == agentType {
-				targetedNames[t.ModuleName] = true
-				break
-			}
-		}
-	}
-
-	// Separate modules into targeted and not-targeted.
-	var targetedModules []*domain.ModuleMemory
-	var untargetedNames []string
-	for _, m := range allModules {
-		if targetedNames[m.Name] {
-			targetedModules = append(targetedModules, m)
-		} else {
-			untargetedNames = append(untargetedNames, m.Name)
-		}
-	}
-
-	// 5. Get pusher from resolver.
 	pusher, ok := s.resolvePusher(agentType)
 	if !ok {
 		return fmt.Errorf("no pusher registered for agent type %q", agentType)
 	}
 
-	// 6. Repair managed block first (merge mode only).
-	if pushCfg.Mode == domain.PushModeMerge {
+	if mode == domain.PushModeMerge {
 		if err := pusher.RepairManagedBlock(agentCfg.MemoryPath); err != nil {
 			return fmt.Errorf("repair managed block for %q: %w", agentType, err)
 		}
 	}
 
-	// 7. Push each targeted module.
-	for _, m := range targetedModules {
+	for _, m := range selectedModules {
 		if err := pusher.PushModuleMemory(m, agentCfg.RulesDir); err != nil {
 			return fmt.Errorf("push module %q to agent %q: %w", m.Name, agentType, err)
 		}
 	}
 
-	// 8. Remove modules no longer targeting this agent.
-	for _, name := range untargetedNames {
+	for _, name := range removedNames {
 		if err := pusher.RemoveModuleMemory(name, agentCfg.RulesDir); err != nil {
 			return fmt.Errorf("remove module %q from agent %q: %w", name, agentType, err)
 		}
 	}
 
-	// 9. Build rules index.
-	rulesIndex := pusher.BuildRulesIndex(targetedModules, agentCfg.RulesDir)
+	rulesIndex := pusher.BuildRulesIndex(selectedModules, agentCfg.RulesDir)
 
-	// 10. Compose main memory push content.
 	composedContent := mainMemory.Content
 	if len(rulesIndex.Entries) > 0 {
 		var sb strings.Builder
@@ -149,15 +129,13 @@ func (s *PushService) PushToAgent(agentType string) error {
 		composedContent = sb.String()
 	}
 
-	// 11. Push main memory.
-	if err := pusher.PushMainMemory(composedContent, pushCfg.Mode, agentCfg.MemoryPath); err != nil {
+	if err := pusher.PushMainMemory(composedContent, mode, agentCfg.MemoryPath); err != nil {
 		return fmt.Errorf("push main memory to agent %q: %w", agentType, err)
 	}
 
-	// 12. Compute per-agent content hash and save push state.
-	hash, err := s.ComputeAgentHash(agentType)
+	hash, err := computeMemoryHash(mainMemory.Content, selectedModules)
 	if err != nil {
-		return fmt.Errorf("compute hash for agent %q: %w", agentType, err)
+		return fmt.Errorf("compute pushed hash for agent %q: %w", agentType, err)
 	}
 	state := domain.MemoryPushState{
 		LastPushedAt:   time.Now(),
@@ -168,6 +146,46 @@ func (s *PushService) PushToAgent(agentType string) error {
 	}
 
 	return nil
+}
+
+func selectModulesForPush(allModules []*domain.ModuleMemory, selectedNames []string) ([]*domain.ModuleMemory, []string, error) {
+	if len(selectedNames) == 0 {
+		sort.Slice(allModules, func(i, j int) bool {
+			return allModules[i].Name < allModules[j].Name
+		})
+		return allModules, nil, nil
+	}
+
+	selectedSet := make(map[string]struct{}, len(selectedNames))
+	for _, name := range selectedNames {
+		selectedSet[name] = struct{}{}
+	}
+
+	var selected []*domain.ModuleMemory
+	var removed []string
+	for _, module := range allModules {
+		if _, ok := selectedSet[module.Name]; ok {
+			selected = append(selected, module)
+			delete(selectedSet, module.Name)
+			continue
+		}
+		removed = append(removed, module.Name)
+	}
+
+	if len(selectedSet) > 0 {
+		missing := make([]string, 0, len(selectedSet))
+		for name := range selectedSet {
+			missing = append(missing, name)
+		}
+		sort.Strings(missing)
+		return nil, nil, fmt.Errorf("selected module memories not found: %s", strings.Join(missing, ", "))
+	}
+
+	sort.Slice(selected, func(i, j int) bool {
+		return selected[i].Name < selected[j].Name
+	})
+	sort.Strings(removed)
+	return selected, removed, nil
 }
 
 // PushAll pushes memory content to all enabled agents and collects results.
@@ -189,8 +207,22 @@ func (s *PushService) PushAll() ([]PushResult, error) {
 	return results, nil
 }
 
+// PushSelection pushes main memory plus the selected modules to multiple agents using one mode.
+func (s *PushService) PushSelection(agentTypes []string, moduleNames []string, mode domain.PushMode) ([]PushResult, error) {
+	results := make([]PushResult, 0, len(agentTypes))
+	for _, agentType := range agentTypes {
+		pushErr := s.PushSelectionToAgent(agentType, moduleNames, mode)
+		results = append(results, PushResult{
+			AgentType: agentType,
+			Success:   pushErr == nil,
+			Error:     pushErr,
+		})
+	}
+	return results, nil
+}
+
 // ComputeAgentHash computes a SHA256 hash of the main memory content plus
-// all module contents targeted at agentType, sorted by module name.
+// all module contents, sorted by module name.
 func (s *PushService) ComputeAgentHash(agentType string) (string, error) {
 	mainMemory, err := s.storage.GetMainMemory()
 	if err != nil {
@@ -201,36 +233,26 @@ func (s *PushService) ComputeAgentHash(agentType string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("list modules: %w", err)
 	}
-	allTargets, err := s.storage.GetAllModulePushTargets()
-	if err != nil {
-		return "", fmt.Errorf("get all module push targets: %w", err)
-	}
+	return computeMemoryHash(mainMemory.Content, allModules)
+}
 
-	targetedNames := make(map[string]bool)
-	for _, t := range allTargets {
-		for _, at := range t.PushTargets {
-			if at == agentType {
-				targetedNames[t.ModuleName] = true
-				break
-			}
-		}
-	}
-
-	var targetedModules []*domain.ModuleMemory
-	for _, m := range allModules {
-		if targetedNames[m.Name] {
-			targetedModules = append(targetedModules, m)
-		}
-	}
-	sort.Slice(targetedModules, func(i, j int) bool {
-		return targetedModules[i].Name < targetedModules[j].Name
+func computeMemoryHash(mainContent string, modules []*domain.ModuleMemory) (string, error) {
+	sortedModules := append([]*domain.ModuleMemory(nil), modules...)
+	sort.Slice(sortedModules, func(i, j int) bool {
+		return sortedModules[i].Name < sortedModules[j].Name
 	})
 
 	h := sha256.New()
-	h.Write([]byte(mainMemory.Content))
-	for _, m := range targetedModules {
-		h.Write([]byte("\n"))
-		h.Write([]byte(m.Content))
+	if _, err := h.Write([]byte(mainContent)); err != nil {
+		return "", err
+	}
+	for _, module := range sortedModules {
+		if _, err := h.Write([]byte("\n")); err != nil {
+			return "", err
+		}
+		if _, err := h.Write([]byte(module.Content)); err != nil {
+			return "", err
+		}
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

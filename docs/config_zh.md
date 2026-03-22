@@ -427,11 +427,6 @@
       "autoPush": true | false
     }
   },
-  "modules": {
-    "<moduleName>": {
-      "pushTargets": ["claude-code", "codex"]
-    }
-  },
   "pushState": {
     "<agentType>": {
       "lastPushedAt": "2026-03-21T10:00:00Z",
@@ -447,9 +442,12 @@
 |------|----|------|------|
 | `pushConfigs` | `<agentType>` | object | 各智能体推送配置 |
 | `pushConfigs.<agent>.mode` | — | string | `"merge"`（合并）或 `"takeover"`（覆盖） |
-| `pushConfigs.<agent>.autoPush` | — | bool | 记忆变更时是否自动推送 |
-| `modules` | `<moduleName>` | object | 各模块的推送目标列表 |
-| `modules.<name>.pushTargets` | — | string[] | 该模块需要推送到的智能体类型列表 |
+| `pushConfigs.<agent>.autoPush` | — | bool | 该智能体在本地编辑后是否自动同步全部记忆 |
 | `pushState` | `<agentType>` | object | 各智能体最近推送记录 |
 | `pushState.<agent>.lastPushedAt` | — | RFC3339 字符串 | 最近一次成功推送的时间戳 |
-| `pushState.<agent>.lastPushedHash` | — | string | 最近一次推送到该智能体的内容 SHA-256 哈希 |
+| `pushState.<agent>.lastPushedHash` | — | string | 最近一次实际推送到该智能体内容的 SHA-256 哈希 |
+
+**说明：**
+
+- 已不再持久化“按模块配置推送目标”的列表；手动批量推送里的选择仅存在于当前页面状态。
+- 如果一次批量推送只推送了部分模块，`lastPushedHash` 会记录这次实际推送的快照，因此当本地记忆库比该快照包含更多模块时，该智能体仍会显示 `pendingPush`。

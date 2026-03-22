@@ -70,9 +70,12 @@ func (a *App) SaveMainMemory(content string) (*MainMemoryDTO, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtime.EventsEmit(a.ctx, EventMemoryContentChanged, map[string]interface{}{
+	a.emitMemoryEvent(EventMemoryContentChanged, map[string]interface{}{
 		"type": "main",
 	})
+	if err := a.syncMemoryToAutoPushAgents(); err != nil {
+		a.logErrorf("memory auto sync failed after save main memory: %v", err)
+	}
 	return &MainMemoryDTO{
 		Content:   m.Content,
 		UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
@@ -117,6 +120,13 @@ func (a *App) CreateModuleMemory(name, content string) (*ModuleMemoryDTO, error)
 	if err != nil {
 		return nil, err
 	}
+	a.emitMemoryEvent(EventMemoryContentChanged, map[string]interface{}{
+		"type": "module",
+		"name": name,
+	})
+	if err := a.syncMemoryToAutoPushAgents(); err != nil {
+		a.logErrorf("memory auto sync failed after create module: module=%s err=%v", name, err)
+	}
 	return &ModuleMemoryDTO{
 		Name:      m.Name,
 		Content:   m.Content,
@@ -130,10 +140,13 @@ func (a *App) SaveModuleMemory(name, content string) (*ModuleMemoryDTO, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtime.EventsEmit(a.ctx, EventMemoryContentChanged, map[string]interface{}{
+	a.emitMemoryEvent(EventMemoryContentChanged, map[string]interface{}{
 		"type": "module",
 		"name": name,
 	})
+	if err := a.syncMemoryToAutoPushAgents(); err != nil {
+		a.logErrorf("memory auto sync failed after save module: module=%s err=%v", name, err)
+	}
 	return &ModuleMemoryDTO{
 		Name:      m.Name,
 		Content:   m.Content,
@@ -141,9 +154,19 @@ func (a *App) SaveModuleMemory(name, content string) (*ModuleMemoryDTO, error) {
 	}, nil
 }
 
-// DeleteModuleMemory deletes a module memory and its push target entries.
+// DeleteModuleMemory deletes a module memory and auto-syncs enabled agents.
 func (a *App) DeleteModuleMemory(name string) error {
-	return a.memoryService.DeleteModule(name)
+	if err := a.memoryService.DeleteModule(name); err != nil {
+		return err
+	}
+	a.emitMemoryEvent(EventMemoryContentChanged, map[string]interface{}{
+		"type": "module",
+		"name": name,
+	})
+	if err := a.syncMemoryToAutoPushAgents(); err != nil {
+		a.logErrorf("memory auto sync failed after delete module: module=%s err=%v", name, err)
+	}
+	return nil
 }
 
 // ── Push configuration ────────────────────────────────────────────────────────
@@ -236,15 +259,12 @@ func (a *App) PushMemoryToAgent(agentType string) (*PushResultDTO, error) {
 	if err != nil {
 		errStr = err.Error()
 	}
-	runtime.EventsEmit(a.ctx, EventMemoryPushCompleted, map[string]interface{}{
+	a.emitMemoryEvent(EventMemoryPushCompleted, map[string]interface{}{
 		"agent":   agentType,
 		"success": success,
 	})
-	status := "pendingPush"
-	if success {
-		status = "synced"
-	}
-	runtime.EventsEmit(a.ctx, EventMemoryStatusChanged, map[string]interface{}{
+	status := a.memoryStatusForAgent(agentType)
+	a.emitMemoryEvent(EventMemoryStatusChanged, map[string]interface{}{
 		"agent":  agentType,
 		"status": status,
 	})
@@ -267,17 +287,44 @@ func (a *App) PushAllMemory() ([]*PushResultDTO, error) {
 		if r.Error != nil {
 			errStr = r.Error.Error()
 		}
-		runtime.EventsEmit(a.ctx, EventMemoryPushCompleted, map[string]interface{}{
+		a.emitMemoryEvent(EventMemoryPushCompleted, map[string]interface{}{
 			"agent":   r.AgentType,
 			"success": r.Success,
 		})
-		status := "pendingPush"
-		if r.Success {
-			status = "synced"
-		}
-		runtime.EventsEmit(a.ctx, EventMemoryStatusChanged, map[string]interface{}{
+		status := a.memoryStatusForAgent(r.AgentType)
+		a.emitMemoryEvent(EventMemoryStatusChanged, map[string]interface{}{
 			"agent":  r.AgentType,
 			"status": status,
+		})
+		dtos = append(dtos, &PushResultDTO{
+			AgentType: r.AgentType,
+			Success:   r.Success,
+			Error:     errStr,
+		})
+	}
+	return dtos, nil
+}
+
+// PushSelectedMemory pushes main memory plus the selected modules to target agents.
+func (a *App) PushSelectedMemory(agentTypes []string, moduleNames []string, mode string) ([]*PushResultDTO, error) {
+	results, err := a.memoryPushService.PushSelection(agentTypes, moduleNames, memorydomain.PushMode(mode))
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]*PushResultDTO, 0, len(results))
+	for _, r := range results {
+		errStr := ""
+		if r.Error != nil {
+			errStr = r.Error.Error()
+		}
+		a.emitMemoryEvent(EventMemoryPushCompleted, map[string]interface{}{
+			"agent":   r.AgentType,
+			"success": r.Success,
+		})
+		a.emitMemoryEvent(EventMemoryStatusChanged, map[string]interface{}{
+			"agent":  r.AgentType,
+			"status": a.memoryStatusForAgent(r.AgentType),
 		})
 		dtos = append(dtos, &PushResultDTO{
 			AgentType: r.AgentType,
@@ -336,4 +383,66 @@ func (a *App) OpenMemoryInEditor(memoryType string, moduleName string) error {
 		return fmt.Errorf("unknown memoryType %q", memoryType)
 	}
 	return memoryeditor.OpenFile(path)
+}
+
+func (a *App) syncMemoryToAutoPushAgents() error {
+	agents, err := a.GetEnabledAgents()
+	if err != nil {
+		return err
+	}
+
+	autoPushAgents := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		cfg, cfgErr := a.memoryService.GetPushConfig(agent.Name)
+		if cfgErr != nil {
+			return cfgErr
+		}
+		if cfg.AutoPush {
+			autoPushAgents = append(autoPushAgents, agent.Name)
+		}
+	}
+	if len(autoPushAgents) == 0 {
+		return nil
+	}
+
+	a.logInfof("memory auto sync started: agentCount=%d", len(autoPushAgents))
+	var firstErr error
+	for _, agentType := range autoPushAgents {
+		pushErr := a.memoryPushService.PushToAgent(agentType)
+		success := pushErr == nil
+		if pushErr != nil {
+			a.logErrorf("memory auto sync failed: agent=%s err=%v", agentType, pushErr)
+			if firstErr == nil {
+				firstErr = pushErr
+			}
+		}
+		a.emitMemoryEvent(EventMemoryPushCompleted, map[string]interface{}{
+			"agent":   agentType,
+			"success": success,
+		})
+		a.emitMemoryEvent(EventMemoryStatusChanged, map[string]interface{}{
+			"agent":  agentType,
+			"status": a.memoryStatusForAgent(agentType),
+		})
+	}
+	if firstErr == nil {
+		a.logInfof("memory auto sync completed: agentCount=%d", len(autoPushAgents))
+	}
+	return firstErr
+}
+
+func (a *App) memoryStatusForAgent(agentType string) string {
+	status, err := a.memoryPushService.GetPushStatus(agentType)
+	if err != nil {
+		a.logErrorf("memory status load failed: agent=%s err=%v", agentType, err)
+		return "pendingPush"
+	}
+	return status
+}
+
+func (a *App) emitMemoryEvent(eventName string, payload map[string]interface{}) {
+	if a == nil || a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, eventName, payload)
 }

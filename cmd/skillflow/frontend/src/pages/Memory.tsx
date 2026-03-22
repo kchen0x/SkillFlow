@@ -1,46 +1,48 @@
 import { useEffect, useState } from 'react'
-import { Brain, ExternalLink, Plus, RefreshCw, X, ChevronDown } from 'lucide-react'
+import { Brain, CheckSquare, ExternalLink, Plus, RefreshCw, Upload, X } from 'lucide-react'
 import {
-  GetMainMemory,
-  SaveMainMemory,
-  ListModuleMemories,
   CreateModuleMemory,
-  SaveModuleMemory,
   DeleteModuleMemory,
-  GetAllMemoryPushStatuses,
   GetAllMemoryPushConfigs,
-  GetAllModulePushTargets,
-  SaveMemoryPushConfig,
-  SaveModulePushTargets,
-  PushMemoryToAgent,
-  PushAllMemory,
+  GetAllMemoryPushStatuses,
+  GetEnabledAgents,
+  GetMainMemory,
+  ListModuleMemories,
   OpenMemoryInEditor,
+  PushSelectedMemory,
+  SaveMainMemory,
+  SaveMemoryPushConfig,
+  SaveModuleMemory,
 } from '../../wailsjs/go/main/App'
-import { main } from '../../wailsjs/go/models'
+import { domain, main } from '../../wailsjs/go/models'
 import { useLanguage } from '../contexts/LanguageContext'
+import { renderMemoryMarkdown } from '../lib/memoryMarkdown'
+import {
+  createMemoryBatchPushState,
+  getMemoryAutoSyncMode,
+  getMemoryPushConfigForAutoSyncMode,
+  isMemoryBatchPushReady,
+  toggleMemoryBatchAgent,
+  toggleMemoryBatchModule,
+} from '../lib/memoryPageState'
 
 type MainMemoryItem = { content: string; updatedAt: string }
 type ModuleItem = { name: string; content: string; updatedAt: string }
 type PushStatus = 'synced' | 'pendingPush' | 'neverPushed'
-// keyed by agentType
 type PushStatusMap = Record<string, PushStatus>
-// keyed by agentType
 type PushConfigMap = Record<string, { mode: string; autoPush: boolean }>
-// keyed by moduleName
-type ModuleTargetsMap = Record<string, string[]>
 type DrawerState =
   | { type: 'none' }
   | { type: 'main' }
   | { type: 'module'; name: string }
 type NewModuleState = { open: boolean; name: string; content: string; nameError: string }
 
-const ALL_AGENTS = ['claude-code', 'codex', 'gemini-cli', 'opencode', 'openclaw']
 const agentDisplayName: Record<string, string> = {
   'claude-code': 'Claude Code',
-  'codex': 'Codex',
+  codex: 'Codex',
   'gemini-cli': 'Gemini CLI',
-  'opencode': 'OpenCode',
-  'openclaw': 'OpenClaw',
+  opencode: 'OpenCode',
+  openclaw: 'OpenClaw',
 }
 
 function statusColor(status: PushStatus): string {
@@ -53,103 +55,136 @@ function getPreviewLines(content: string, maxLines: number): string {
   if (!content) return ''
   return content
     .split('\n')
-    .filter(l => l.trim())
+    .filter(line => line.trim())
     .slice(0, maxLines)
     .join('\n')
+}
+
+function getAgentLabel(agentName: string): string {
+  return agentDisplayName[agentName] ?? agentName
 }
 
 export default function Memory() {
   const { t } = useLanguage()
   const [mainMemory, setMainMemory] = useState<MainMemoryItem | null>(null)
   const [modules, setModules] = useState<ModuleItem[]>([])
+  const [agents, setAgents] = useState<domain.AgentProfile[]>([])
   const [pushStatuses, setPushStatuses] = useState<PushStatusMap>({})
   const [pushConfigs, setPushConfigs] = useState<PushConfigMap>({})
-  const [moduleTargets, setModuleTargets] = useState<ModuleTargetsMap>({})
   const [drawerState, setDrawerState] = useState<DrawerState>({ type: 'none' })
   const [drawerContent, setDrawerContent] = useState('')
+  const [drawerInitialContent, setDrawerInitialContent] = useState('')
   const [drawerTab, setDrawerTab] = useState<'edit' | 'preview'>('edit')
-  const [drawerPushMode, setDrawerPushMode] = useState('merge')
-  const [drawerAutoPush, setDrawerAutoPush] = useState(false)
-  // agent type used for PushMemoryToAgent when push now is clicked
-  const [drawerPushAgent, setDrawerPushAgent] = useState(ALL_AGENTS[0])
-  const [filterAgent, setFilterAgent] = useState('all')
+  const [batchPushMode, setBatchPushMode] = useState(false)
+  const [batchPushState, setBatchPushState] = useState(createMemoryBatchPushState())
   const [searchQuery, setSearchQuery] = useState('')
   const [newModule, setNewModule] = useState<NewModuleState>({ open: false, name: '', content: '', nameError: '' })
   const [saving, setSaving] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushMessage, setPushMessage] = useState('')
   const [deletingModule, setDeletingModule] = useState<string | null>(null)
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
+  const [enterBatchPushAfterClose, setEnterBatchPushAfterClose] = useState(false)
+
+  const availableAgents = agents ?? []
+  const drawerModuleName = drawerState.type === 'module' ? drawerState.name : ''
+  const drawerDirty = drawerState.type !== 'none' && drawerContent !== drawerInitialContent
+  const previewHtml = drawerContent ? renderMemoryMarkdown(drawerContent) : ''
+  const batchPushReady = isMemoryBatchPushReady(batchPushState)
+  const selectedMemoryCount = 1 + batchPushState.selectedModules.length
 
   const loadAll = async () => {
     try {
-      const [mm, mods, statuses, configs, targets] = await Promise.all([
+      const [mm, mods, statuses, configs, enabledAgents] = await Promise.all([
         GetMainMemory(),
         ListModuleMemories(),
         GetAllMemoryPushStatuses(),
         GetAllMemoryPushConfigs(),
-        GetAllModulePushTargets(),
+        GetEnabledAgents(),
       ])
+
       setMainMemory(mm as MainMemoryItem)
       setModules((mods ?? []) as ModuleItem[])
+      setAgents((enabledAgents ?? []) as domain.AgentProfile[])
 
-      // PushStatusDTO: { agentType: string, status: string }
       const statusMap: PushStatusMap = {}
-      for (const s of (statuses ?? []) as main.PushStatusDTO[]) {
-        statusMap[s.agentType] = s.status as PushStatus
+      for (const status of (statuses ?? []) as main.PushStatusDTO[]) {
+        statusMap[status.agentType] = status.status as PushStatus
       }
       setPushStatuses(statusMap)
 
-      // MemoryPushConfigDTO: { agentType: string, mode: string, autoPush: boolean }
       const configMap: PushConfigMap = {}
-      for (const c of (configs ?? []) as main.MemoryPushConfigDTO[]) {
-        configMap[c.agentType] = { mode: c.mode, autoPush: c.autoPush }
+      for (const config of (configs ?? []) as main.MemoryPushConfigDTO[]) {
+        configMap[config.agentType] = { mode: config.mode, autoPush: config.autoPush }
       }
       setPushConfigs(configMap)
-
-      // ModulePushTargetsDTO: { moduleName: string, pushTargets: string[] }
-      const targetsMap: ModuleTargetsMap = {}
-      for (const tgt of (targets ?? []) as main.ModulePushTargetsDTO[]) {
-        targetsMap[tgt.moduleName] = tgt.pushTargets ?? []
-      }
-      setModuleTargets(targetsMap)
-    } catch (e) {
-      console.error('Failed to load memory data', e)
+    } catch (error) {
+      console.error('Failed to load memory data', error)
     }
   }
 
   useEffect(() => {
-    loadAll()
+    void loadAll()
   }, [])
 
-  const openDrawer = (state: DrawerState) => {
-    setDrawerState(state)
-    setDrawerTab('edit')
-    if (state.type === 'main') {
-      setDrawerContent(mainMemory?.content ?? '')
-      // Push configs are per-agent; use first configured agent or defaults
-      const firstAgent = ALL_AGENTS[0]
-      const cfg = pushConfigs[firstAgent] ?? { mode: 'merge', autoPush: false }
-      setDrawerPushMode(cfg.mode)
-      setDrawerAutoPush(cfg.autoPush)
-      setDrawerPushAgent(firstAgent)
-    } else if (state.type === 'module') {
-      const mod = modules.find(m => m.name === state.name)
-      setDrawerContent(mod?.content ?? '')
-      // For module drawer, agent config — use first enabled target agent or first agent
-      const targets = moduleTargets[state.name] ?? []
-      const agent = targets[0] ?? ALL_AGENTS[0]
-      const cfg = pushConfigs[agent] ?? { mode: 'merge', autoPush: false }
-      setDrawerPushMode(cfg.mode)
-      setDrawerAutoPush(cfg.autoPush)
-      setDrawerPushAgent(agent)
+  const filteredModules = modules.filter(module => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) {
+      return true
     }
-  }
+    return module.name.toLowerCase().includes(query) || module.content.toLowerCase().includes(query)
+  })
 
-  const closeDrawer = () => {
+  const closeDrawerImmediate = () => {
     setDrawerState({ type: 'none' })
+    setDrawerContent('')
+    setDrawerInitialContent('')
+    setDrawerTab('edit')
+    setCloseConfirmOpen(false)
+    setEnterBatchPushAfterClose(false)
   }
 
-  const handleSaveDrawer = async () => {
+  const enterBatchPushSelection = () => {
+    closeDrawerImmediate()
+    setBatchPushMode(true)
+    setBatchPushState(createMemoryBatchPushState())
+    setPushMessage('')
+  }
+
+  const requestCloseDrawer = (startBatchPushAfterClose = false) => {
+    if (!drawerDirty) {
+      closeDrawerImmediate()
+      if (startBatchPushAfterClose) {
+        enterBatchPushSelection()
+      }
+      return
+    }
+    setEnterBatchPushAfterClose(startBatchPushAfterClose)
+    setCloseConfirmOpen(true)
+  }
+
+  const openDrawer = (state: DrawerState) => {
+    if (batchPushMode) {
+      return
+    }
+
+    let nextContent = ''
+    if (state.type === 'main') {
+      nextContent = mainMemory?.content ?? ''
+    }
+    if (state.type === 'module') {
+      nextContent = modules.find(module => module.name === state.name)?.content ?? ''
+    }
+
+    setDrawerState(state)
+    setDrawerContent(nextContent)
+    setDrawerInitialContent(nextContent)
+    setDrawerTab('edit')
+    setCloseConfirmOpen(false)
+    setEnterBatchPushAfterClose(false)
+  }
+
+  const handleSaveDrawer = async (closeAfterSave = false): Promise<boolean> => {
     setSaving(true)
     try {
       if (drawerState.type === 'main') {
@@ -158,62 +193,75 @@ export default function Memory() {
       } else if (drawerState.type === 'module') {
         const name = drawerState.name
         const result = await SaveModuleMemory(name, drawerContent)
-        setModules(prev => prev.map(m => m.name === name ? result as ModuleItem : m))
+        setModules(prev => prev.map(module => (module.name === name ? result as ModuleItem : module)))
+      } else {
+        return true
       }
+
+      setDrawerInitialContent(drawerContent)
       await loadAll()
-    } catch (e) {
-      console.error('Save failed', e)
+      if (closeAfterSave) {
+        closeDrawerImmediate()
+      }
+      return true
+    } catch (error) {
+      console.error('Save failed', error)
+      return false
     } finally {
       setSaving(false)
     }
   }
 
-  const handleSavePushConfig = async (agentType: string, mode: string, autoPush: boolean) => {
-    try {
-      await SaveMemoryPushConfig(agentType, mode, autoPush)
-      setPushConfigs(prev => ({ ...prev, [agentType]: { mode, autoPush } }))
-    } catch (e) {
-      console.error('SaveMemoryPushConfig failed', e)
+  const handleConfirmSaveAndClose = async () => {
+    const shouldEnterBatchPush = enterBatchPushAfterClose
+    setCloseConfirmOpen(false)
+    setEnterBatchPushAfterClose(false)
+    const saved = await handleSaveDrawer(true)
+    if (saved && shouldEnterBatchPush) {
+      enterBatchPushSelection()
     }
   }
 
-  const handleToggleTarget = async (moduleName: string, agent: string) => {
-    const current = moduleTargets[moduleName] ?? []
-    const next = current.includes(agent) ? current.filter(a => a !== agent) : [...current, agent]
-    setModuleTargets(prev => ({ ...prev, [moduleName]: next }))
-    try {
-      await SaveModulePushTargets(moduleName, next)
-    } catch (e) {
-      console.error('SaveModulePushTargets failed', e)
+  const handleDiscardAndClose = () => {
+    const shouldEnterBatchPush = enterBatchPushAfterClose
+    closeDrawerImmediate()
+    if (shouldEnterBatchPush) {
+      enterBatchPushSelection()
     }
   }
 
-  const handlePushNow = async () => {
-    if (drawerState.type === 'none') return
-    setPushing(true)
-    setPushMessage('')
+  const handleAutoSyncModeChange = async (agentType: string, nextMode: 'off' | 'merge' | 'takeover') => {
+    const nextConfig = getMemoryPushConfigForAutoSyncMode(nextMode)
     try {
-      await PushMemoryToAgent(drawerPushAgent)
-      setPushMessage(t('memory.pushSuccess'))
+      await SaveMemoryPushConfig(agentType, nextConfig.mode, nextConfig.autoPush)
+      setPushConfigs(prev => ({ ...prev, [agentType]: nextConfig }))
       await loadAll()
-    } catch (e) {
-      setPushMessage(t('memory.pushFailed'))
-      console.error('PushMemoryToAgent failed', e)
-    } finally {
-      setPushing(false)
+    } catch (error) {
+      console.error('SaveMemoryPushConfig failed', error)
     }
   }
 
-  const handlePushAll = async () => {
+  const handleStartBatchPush = async () => {
+    if (!batchPushReady) {
+      return
+    }
+
     setPushing(true)
-    setPushMessage(t('memory.pushingAll'))
+    setPushMessage(t('memory.pushingBatch'))
     try {
-      await PushAllMemory()
-      setPushMessage(t('memory.pushSuccess'))
+      const results = await PushSelectedMemory(batchPushState.selectedAgents, batchPushState.selectedModules, batchPushState.mode)
+      const hasFailures = ((results ?? []) as main.PushResultDTO[]).some(result => !result.success)
       await loadAll()
-    } catch (e) {
+      if (hasFailures) {
+        setPushMessage(t('memory.pushPartialFailed'))
+        return
+      }
+      setPushMessage(t('memory.pushSuccess'))
+      setBatchPushMode(false)
+      setBatchPushState(createMemoryBatchPushState())
+    } catch (error) {
       setPushMessage(t('memory.pushFailed'))
-      console.error('PushAllMemory failed', e)
+      console.error('PushSelectedMemory failed', error)
     } finally {
       setPushing(false)
     }
@@ -221,12 +269,12 @@ export default function Memory() {
 
   const handleOpenInEditor = async () => {
     if (drawerState.type === 'none') return
-    const memType = drawerState.type === 'main' ? 'main' : 'module'
-    const memName = drawerState.type === 'module' ? drawerState.name : ''
+    const memoryType = drawerState.type === 'main' ? 'main' : 'module'
+    const memoryName = drawerState.type === 'module' ? drawerState.name : ''
     try {
-      await OpenMemoryInEditor(memType, memName)
-    } catch (e) {
-      console.error('OpenMemoryInEditor failed', e)
+      await OpenMemoryInEditor(memoryType, memoryName)
+    } catch (error) {
+      console.error('OpenMemoryInEditor failed', error)
     }
   }
 
@@ -240,8 +288,8 @@ export default function Memory() {
       await CreateModuleMemory(name, newModule.content)
       setNewModule({ open: false, name: '', content: '', nameError: '' })
       await loadAll()
-    } catch (e: unknown) {
-      setNewModule(prev => ({ ...prev, nameError: String((e as Error)?.message ?? e) }))
+    } catch (error: unknown) {
+      setNewModule(prev => ({ ...prev, nameError: String((error as Error)?.message ?? error) }))
     }
   }
 
@@ -251,248 +299,359 @@ export default function Memory() {
     try {
       await DeleteModuleMemory(name)
       if (drawerState.type === 'module' && drawerState.name === name) {
-        closeDrawer()
+        closeDrawerImmediate()
       }
       await loadAll()
-    } catch (e) {
-      console.error('DeleteModuleMemory failed', e)
+    } catch (error) {
+      console.error('DeleteModuleMemory failed', error)
     } finally {
       setDeletingModule(null)
     }
   }
 
-  const filteredModules = modules.filter(m => {
-    const targets = moduleTargets[m.name] ?? []
-    const matchAgent = filterAgent === 'all' || targets.includes(filterAgent)
-    const matchSearch = !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchAgent && matchSearch
-  })
-
-  const drawerModuleName = drawerState.type === 'module' ? drawerState.name : ''
-  const drawerModuleTargets = drawerState.type === 'module' ? (moduleTargets[drawerModuleName] ?? []) : []
-
   return (
-    <div className="flex h-full" style={{ background: 'var(--bg-base)' }}>
-      {/* Left filter panel */}
-      <aside
-        className="flex flex-col gap-1 p-3"
-        style={{
-          width: 160,
-          minWidth: 160,
-          borderRight: '1px solid var(--border-base)',
-          background: 'var(--bg-surface)',
-          overflowY: 'auto',
-        }}
+    <div className="flex h-full flex-col" style={{ background: 'var(--bg-base)' }}>
+      <div
+        className="flex items-center gap-3 px-6 py-3"
+        style={{ borderBottom: '1px solid var(--border-base)' }}
       >
-        <p className="text-xs px-2 mb-1 font-medium" style={{ color: 'var(--text-muted)' }}>
-          Agent
-        </p>
-        <button
-          onClick={() => setFilterAgent('all')}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-left"
+        <input
+          type="text"
+          placeholder={t('memory.searchPlaceholder')}
+          value={searchQuery}
+          onChange={event => setSearchQuery(event.target.value)}
+          className="px-3 py-1.5 rounded-lg text-sm outline-none"
           style={{
-            background: filterAgent === 'all' ? 'var(--active-surface)' : 'transparent',
-            color: filterAgent === 'all' ? 'var(--active-text)' : 'var(--text-muted)',
-            border: filterAgent === 'all' ? '1px solid var(--active-border)' : '1px solid transparent',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-base)',
+            color: 'var(--text-primary)',
+            width: 280,
+          }}
+        />
+        <div className="flex-1" />
+        {pushMessage && (
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{pushMessage}</span>
+        )}
+        {!batchPushMode && (
+          <>
+            <button
+              onClick={() => setNewModule(prev => ({ ...prev, open: true }))}
+              className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
+            >
+              <Plus size={14} />
+              {t('memory.newModule')}
+            </button>
+            <button
+              onClick={() => {
+                if (drawerState.type !== 'none') {
+                  requestCloseDrawer(true)
+                  return
+                }
+                enterBatchPushSelection()
+              }}
+              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
+            >
+              <Upload size={14} />
+              {t('memory.batchPush')}
+            </button>
+          </>
+        )}
+        {batchPushMode && (
+          <>
+            <button
+              onClick={() => {
+                setBatchPushMode(false)
+                setBatchPushState(createMemoryBatchPushState())
+              }}
+              className="btn-secondary px-3 py-1.5 rounded-lg text-sm"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              onClick={handleStartBatchPush}
+              disabled={!batchPushReady || pushing}
+              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
+            >
+              {pushing && <RefreshCw size={14} className="animate-spin" />}
+              {t('memory.startBatchPush')}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="px-6 pt-4">
+        <div
+          className="rounded-2xl p-4"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-base)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
-          <Brain size={14} />
-          {t('memory.filterAll')}
-        </button>
-        {ALL_AGENTS.map(agent => (
-          <button
-            key={agent}
-            onClick={() => setFilterAgent(agent)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-left truncate"
-            style={{
-              background: filterAgent === agent ? 'var(--active-surface)' : 'transparent',
-              color: filterAgent === agent ? 'var(--active-text)' : 'var(--text-muted)',
-              border: filterAgent === agent ? '1px solid var(--active-border)' : '1px solid transparent',
-            }}
-          >
-            <span className="truncate">{agentDisplayName[agent] ?? agent}</span>
-          </button>
-        ))}
-      </aside>
-
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar */}
-        <div
-          className="flex items-center gap-3 px-6 py-3"
-          style={{ borderBottom: '1px solid var(--border-base)' }}
-        >
-          <input
-            type="text"
-            placeholder={t('memory.searchPlaceholder')}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-sm outline-none"
-            style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-base)',
-              color: 'var(--text-primary)',
-              width: 240,
-            }}
-          />
-          <div className="flex-1" />
-          {pushMessage && (
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{pushMessage}</span>
-          )}
-          <button
-            onClick={() => setNewModule(prev => ({ ...prev, open: true }))}
-            className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
-          >
-            <Plus size={14} />
-            {t('memory.newModule')}
-          </button>
-          <button
-            onClick={handlePushAll}
-            disabled={pushing}
-            className="btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
-          >
-            {pushing ? <RefreshCw size={14} className="animate-spin" /> : <ChevronDown size={14} />}
-            {t('memory.pushAll')}
-          </button>
-        </div>
-
-        {/* Card grid */}
-        <div className="flex-1 overflow-auto p-6">
-          {/* Main memory card */}
-          <div
-            className="mb-6 rounded-xl p-4 cursor-pointer"
-            onClick={() => openDrawer({ type: 'main' })}
-            style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-base)',
-              borderLeft: '4px solid var(--accent-primary)',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)' }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = '' }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <Brain size={16} style={{ color: 'var(--accent-primary)' }} />
-                  <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-                    {t('memory.mainMemory')}
-                  </span>
+          {!batchPushMode ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {t('memory.autoSyncPanelTitle')}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    {t('memory.autoSyncPanelHint')}
+                  </p>
                 </div>
-                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
-                  {t('memory.mainMemoryDesc')}
+              </div>
+              {availableAgents.length === 0 ? (
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  {t('memory.noAgentsConfigured')}
                 </p>
-                {mainMemory?.content && (
-                  <pre
-                    className="text-xs whitespace-pre-wrap break-all"
-                    style={{
-                      color: 'var(--text-secondary)',
-                      fontFamily: 'inherit',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    } as React.CSSProperties}
-                  >
-                    {getPreviewLines(mainMemory.content, 3)}
-                  </pre>
-                )}
-              </div>
-              <div className="flex flex-col gap-1 items-end shrink-0">
-                {ALL_AGENTS.map(agent => {
-                  const status: PushStatus = pushStatuses[agent] ?? 'neverPushed'
-                  return (
-                    <div key={agent} className="flex items-center gap-1" title={agentDisplayName[agent]}>
-                      <span
-                        className="inline-block rounded-full"
-                        style={{ width: 6, height: 6, background: statusColor(status) }}
-                      />
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {agentDisplayName[agent] ?? agent}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Module cards */}
-          {filteredModules.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-2">
-              <Brain size={32} style={{ color: 'var(--text-muted)' }} />
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                {searchQuery || filterAgent !== 'all'
-                  ? 'No matching modules'
-                  : t('memory.noModules')}
-              </p>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {availableAgents.map(agent => {
+                    const currentMode = getMemoryAutoSyncMode(pushConfigs[agent.name])
+                    const status = pushStatuses[agent.name] ?? 'neverPushed'
+                    return (
+                      <div
+                        key={agent.name}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2"
+                        style={{ background: 'var(--bg-hover)' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="inline-block rounded-full"
+                            style={{ width: 8, height: 8, background: statusColor(status) }}
+                          />
+                          <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {getAgentLabel(agent.name)}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(['off', 'merge', 'takeover'] as const).map(mode => (
+                            <button
+                              key={mode}
+                              onClick={() => void handleAutoSyncModeChange(agent.name, mode)}
+                              className="text-xs px-2.5 py-1 rounded-lg"
+                              style={{
+                                background: currentMode === mode ? 'var(--active-surface)' : 'var(--bg-surface)',
+                                color: currentMode === mode ? 'var(--active-text)' : 'var(--text-muted)',
+                                border: currentMode === mode ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
+                              }}
+                            >
+                              {mode === 'off'
+                                ? t('memory.autoSyncOff')
+                                : mode === 'merge'
+                                  ? t('memory.autoSyncMerge')
+                                  : t('memory.autoSyncTakeover')}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {filteredModules.map(mod => {
-                const targets = moduleTargets[mod.name] ?? []
-                const hasPending = targets.some(a => pushStatuses[a] === 'pendingPush')
-                return (
-                  <div
-                    key={mod.name}
-                    className="rounded-xl p-4 cursor-pointer relative"
-                    onClick={() => openDrawer({ type: 'module', name: mod.name })}
-                    style={{
-                      background: 'var(--bg-surface)',
-                      border: '1px solid var(--border-base)',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)' }}
-                    onMouseLeave={e => { e.currentTarget.style.boxShadow = '' }}
-                  >
-                    {hasPending && (
-                      <span
-                        className="absolute top-3 right-3 inline-block rounded-full"
-                        style={{ width: 8, height: 8, background: 'var(--color-warning, #f97316)' }}
-                      />
-                    )}
-                    <p className="font-medium text-sm mb-1 truncate pr-4" style={{ color: 'var(--text-primary)' }}>
-                      {mod.name}
-                    </p>
-                    {mod.content && (
-                      <pre
-                        className="text-xs whitespace-pre-wrap break-all mb-2"
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {t('memory.batchPushTargets')}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    {t('memory.batchPushHint', { count: selectedMemoryCount })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('memory.pushMode')}:</span>
+                  {(['merge', 'takeover'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setBatchPushState(prev => ({ ...prev, mode }))}
+                      className="text-xs px-2.5 py-1 rounded-lg"
+                      style={{
+                        background: batchPushState.mode === mode ? 'var(--active-surface)' : 'var(--bg-surface)',
+                        color: batchPushState.mode === mode ? 'var(--active-text)' : 'var(--text-muted)',
+                        border: batchPushState.mode === mode ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
+                      }}
+                    >
+                      {mode === 'merge' ? t('memory.mergeModeLabel') : t('memory.takeoverModeLabel')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {availableAgents.length === 0 ? (
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  {t('memory.noAgentsConfigured')}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {availableAgents.map(agent => {
+                    const selected = batchPushState.selectedAgents.includes(agent.name)
+                    return (
+                      <button
+                        key={agent.name}
+                        onClick={() => setBatchPushState(prev => ({
+                          ...prev,
+                          selectedAgents: toggleMemoryBatchAgent(prev.selectedAgents, agent.name),
+                        }))}
+                        className="text-xs px-2.5 py-1.5 rounded-lg"
                         style={{
-                          color: 'var(--text-secondary)',
-                          fontFamily: 'inherit',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        } as React.CSSProperties}
+                          background: selected ? 'var(--active-surface)' : 'var(--bg-hover)',
+                          color: selected ? 'var(--active-text)' : 'var(--text-muted)',
+                          border: selected ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
+                        }}
                       >
-                        {getPreviewLines(mod.content, 2)}
-                      </pre>
-                    )}
-                    {targets.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {targets.map(a => (
-                          <span
-                            key={a}
-                            className="text-[10px] px-1.5 py-0.5 rounded"
-                            style={{
-                              background: 'var(--bg-hover)',
-                              color: 'var(--text-muted)',
-                              border: '1px solid var(--border-base)',
-                            }}
-                          >
-                            {agentDisplayName[a] ?? a}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                        {getAgentLabel(agent.name)}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Right drawer */}
+      <div className="flex-1 overflow-auto p-6">
+        <div
+          className="mb-6 rounded-xl p-4 relative"
+          onClick={() => openDrawer({ type: 'main' })}
+          style={{
+            background: batchPushMode ? 'var(--active-surface)' : 'var(--bg-surface)',
+            border: batchPushMode ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
+            borderLeft: '4px solid var(--accent-primary)',
+            cursor: batchPushMode ? 'default' : 'pointer',
+          }}
+        >
+          {batchPushMode && (
+            <div className="absolute top-3 right-3 flex items-center gap-1.5">
+              <CheckSquare size={16} style={{ color: 'var(--accent-primary)' }} />
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {t('memory.required')}
+              </span>
+            </div>
+          )}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <Brain size={16} style={{ color: 'var(--accent-primary)' }} />
+                <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                  {t('memory.mainMemory')}
+                </span>
+              </div>
+              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+                {t('memory.mainMemoryDesc')}
+              </p>
+              {mainMemory?.content && (
+                <pre
+                  className="text-xs whitespace-pre-wrap break-all"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'inherit',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  } as React.CSSProperties}
+                >
+                  {getPreviewLines(mainMemory.content, 3)}
+                </pre>
+              )}
+            </div>
+            <div className="flex flex-col gap-1 items-end shrink-0">
+              {availableAgents.map(agent => {
+                const status = pushStatuses[agent.name] ?? 'neverPushed'
+                return (
+                  <div key={agent.name} className="flex items-center gap-1" title={getAgentLabel(agent.name)}>
+                    <span
+                      className="inline-block rounded-full"
+                      style={{ width: 6, height: 6, background: statusColor(status) }}
+                    />
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {getAgentLabel(agent.name)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {filteredModules.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-2">
+            <Brain size={32} style={{ color: 'var(--text-muted)' }} />
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              {searchQuery ? t('memory.noSearchResults') : t('memory.noModules')}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {filteredModules.map(module => {
+              const selected = batchPushState.selectedModules.includes(module.name)
+              return (
+                <div
+                  key={module.name}
+                  className="rounded-xl p-4 relative"
+                  onClick={() => {
+                    if (batchPushMode) {
+                      setBatchPushState(prev => ({
+                        ...prev,
+                        selectedModules: toggleMemoryBatchModule(prev.selectedModules, module.name),
+                      }))
+                      return
+                    }
+                    openDrawer({ type: 'module', name: module.name })
+                  }}
+                  style={{
+                    background: selected ? 'var(--active-surface)' : 'var(--bg-surface)',
+                    border: selected ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
+                    cursor: batchPushMode ? 'pointer' : 'pointer',
+                  }}
+                  onMouseEnter={event => { event.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)' }}
+                  onMouseLeave={event => { event.currentTarget.style.boxShadow = '' }}
+                >
+                  {batchPushMode && (
+                    <label
+                      className="absolute top-3 right-3"
+                      onClick={event => {
+                        event.stopPropagation()
+                        setBatchPushState(prev => ({
+                          ...prev,
+                          selectedModules: toggleMemoryBatchModule(prev.selectedModules, module.name),
+                        }))
+                      }}
+                    >
+                      <input type="checkbox" checked={selected} readOnly />
+                    </label>
+                  )}
+                  <p className="font-medium text-sm mb-1 truncate pr-8" style={{ color: 'var(--text-primary)' }}>
+                    {module.name}
+                  </p>
+                  {module.content && (
+                    <pre
+                      className="text-xs whitespace-pre-wrap break-all mb-2"
+                      style={{
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'inherit',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      } as React.CSSProperties}
+                    >
+                      {getPreviewLines(module.content, 2)}
+                    </pre>
+                  )}
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    {t('memory.moduleRefHint')}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {drawerState.type !== 'none' && (
         <aside
           className="flex flex-col"
@@ -503,7 +662,6 @@ export default function Memory() {
             background: 'var(--bg-surface)',
           }}
         >
-          {/* Drawer header */}
           <div
             className="flex items-center justify-between px-4 py-3"
             style={{ borderBottom: '1px solid var(--border-base)' }}
@@ -522,7 +680,7 @@ export default function Memory() {
               </button>
               {drawerState.type === 'module' && (
                 <button
-                  onClick={() => handleDeleteModule(drawerModuleName)}
+                  onClick={() => void handleDeleteModule(drawerModuleName)}
                   disabled={deletingModule === drawerModuleName}
                   className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
                   style={{ color: 'var(--color-error, #ef4444)', border: '1px solid var(--border-base)' }}
@@ -530,13 +688,12 @@ export default function Memory() {
                   {t('memory.deleteModule')}
                 </button>
               )}
-              <button onClick={closeDrawer} style={{ color: 'var(--text-muted)' }}>
+              <button onClick={() => requestCloseDrawer(false)} style={{ color: 'var(--text-muted)' }}>
                 <X size={16} />
               </button>
             </div>
           </div>
 
-          {/* Tab bar */}
           <div className="flex" style={{ borderBottom: '1px solid var(--border-base)' }}>
             {(['edit', 'preview'] as const).map(tab => (
               <button
@@ -553,12 +710,11 @@ export default function Memory() {
             ))}
           </div>
 
-          {/* Content */}
           <div className="flex-1 overflow-auto">
             {drawerTab === 'edit' ? (
               <textarea
                 value={drawerContent}
-                onChange={e => setDrawerContent(e.target.value)}
+                onChange={event => setDrawerContent(event.target.value)}
                 placeholder={t('memory.contentPlaceholder')}
                 className="w-full h-full resize-none outline-none p-4 text-sm"
                 style={{
@@ -569,145 +725,98 @@ export default function Memory() {
                 }}
               />
             ) : (
-              <pre
-                className="p-4 text-sm whitespace-pre-wrap break-words"
-                style={{ color: 'var(--text-primary)', fontFamily: 'inherit' }}
-              >
-                {drawerContent || (
-                  <span style={{ color: 'var(--text-muted)' }}>{t('memory.contentPlaceholder')}</span>
+              <div className="p-4">
+                {previewHtml ? (
+                  <div
+                    className="memory-markdown-preview"
+                    dangerouslySetInnerHTML={{ __html: previewHtml }}
+                  />
+                ) : (
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {t('memory.contentPlaceholder')}
+                  </span>
                 )}
-              </pre>
+              </div>
             )}
           </div>
 
-          {/* Footer */}
           <div
-            className="p-4 flex flex-col gap-3"
+            className="p-4"
             style={{ borderTop: '1px solid var(--border-base)' }}
           >
-            {/* Module push targets */}
-            {drawerState.type === 'module' && (
-              <div>
-                <p className="text-xs mb-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>
-                  {t('memory.pushTargets')}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {ALL_AGENTS.map(agent => {
-                    const selected = drawerModuleTargets.includes(agent)
-                    return (
-                      <button
-                        key={agent}
-                        onClick={() => handleToggleTarget(drawerModuleName, agent)}
-                        className="text-xs px-2 py-1 rounded-lg"
-                        style={{
-                          background: selected ? 'var(--active-surface)' : 'var(--bg-hover)',
-                          color: selected ? 'var(--active-text)' : 'var(--text-muted)',
-                          border: selected ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
-                        }}
-                      >
-                        {agentDisplayName[agent] ?? agent}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Agent selector for push (main memory drawer) */}
-            {drawerState.type === 'main' && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Push to:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {ALL_AGENTS.map(agent => (
-                    <button
-                      key={agent}
-                      onClick={() => {
-                        setDrawerPushAgent(agent)
-                        const cfg = pushConfigs[agent] ?? { mode: 'merge', autoPush: false }
-                        setDrawerPushMode(cfg.mode)
-                        setDrawerAutoPush(cfg.autoPush)
-                      }}
-                      className="text-xs px-2 py-1 rounded-lg"
-                      style={{
-                        background: drawerPushAgent === agent ? 'var(--active-surface)' : 'var(--bg-hover)',
-                        color: drawerPushAgent === agent ? 'var(--active-text)' : 'var(--text-muted)',
-                        border: drawerPushAgent === agent ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
-                      }}
-                    >
-                      {agentDisplayName[agent] ?? agent}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Push mode + auto push */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('memory.pushMode')}:</span>
-              {['merge', 'takeover'].map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => {
-                    setDrawerPushMode(mode)
-                    handleSavePushConfig(drawerPushAgent, mode, drawerAutoPush)
-                  }}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{
-                    background: drawerPushMode === mode ? 'var(--active-surface)' : 'var(--bg-hover)',
-                    color: drawerPushMode === mode ? 'var(--active-text)' : 'var(--text-muted)',
-                    border: drawerPushMode === mode ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
-                  }}
-                >
-                  {mode === 'merge' ? t('memory.mergeModeLabel') : t('memory.takeoverModeLabel')}
-                </button>
-              ))}
-              <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>{t('memory.autoPush')}:</span>
-              <button
-                onClick={() => {
-                  const next = !drawerAutoPush
-                  setDrawerAutoPush(next)
-                  handleSavePushConfig(drawerPushAgent, drawerPushMode, next)
-                }}
-                className="text-xs px-2 py-1 rounded"
-                style={{
-                  background: drawerAutoPush ? 'var(--active-surface)' : 'var(--bg-hover)',
-                  color: drawerAutoPush ? 'var(--active-text)' : 'var(--text-muted)',
-                  border: drawerAutoPush ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
-                }}
-              >
-                {drawerAutoPush ? 'ON' : 'OFF'}
-              </button>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={handleSaveDrawer}
-                disabled={saving}
-                className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm flex-1 justify-center"
-              >
-                {saving && <RefreshCw size={13} className="animate-spin" />}
-                {saving ? t('common.saving') : t('common.save')}
-              </button>
-              <button
-                onClick={handlePushNow}
-                disabled={pushing}
-                className="btn-primary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm flex-1 justify-center"
-              >
-                {pushing && <RefreshCw size={13} className="animate-spin" />}
-                {pushing ? t('memory.pushingAll') : t('memory.pushNow')}
-              </button>
-            </div>
+            <button
+              onClick={() => void handleSaveDrawer(false)}
+              disabled={saving}
+              className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm w-full justify-center"
+            >
+              {saving && <RefreshCw size={13} className="animate-spin" />}
+              {saving ? t('common.saving') : t('common.save')}
+            </button>
           </div>
         </aside>
       )}
 
-      {/* New module dialog */}
+      {closeConfirmOpen && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+          onClick={event => {
+            if (event.target === event.currentTarget) {
+              setCloseConfirmOpen(false)
+              setEnterBatchPushAfterClose(false)
+            }
+          }}
+        >
+          <div
+            className="rounded-2xl p-6 flex flex-col gap-4"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-base)',
+              width: 440,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div>
+              <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>
+                {t('memory.unsavedChangesTitle')}
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                {t('memory.unsavedChangesHint')}
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setCloseConfirmOpen(false)
+                  setEnterBatchPushAfterClose(false)
+                }}
+                className="btn-secondary px-4 py-2 rounded-lg text-sm"
+              >
+                {t('memory.keepEditing')}
+              </button>
+              <button
+                onClick={handleDiscardAndClose}
+                className="btn-secondary px-4 py-2 rounded-lg text-sm"
+                style={{ color: 'var(--color-error)' }}
+              >
+                {t('memory.discardChanges')}
+              </button>
+              <button
+                onClick={() => void handleConfirmSaveAndClose()}
+                className="btn-primary px-4 py-2 rounded-lg text-sm"
+              >
+                {t('memory.saveAndClose')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {newModule.open && (
         <div
           className="fixed inset-0 flex items-center justify-center z-50"
           style={{ background: 'rgba(0,0,0,0.4)' }}
-          onClick={e => { if (e.target === e.currentTarget) setNewModule(prev => ({ ...prev, open: false })) }}
+          onClick={event => { if (event.target === event.currentTarget) setNewModule(prev => ({ ...prev, open: false })) }}
         >
           <div
             className="rounded-2xl p-6 flex flex-col gap-4"
@@ -731,7 +840,7 @@ export default function Memory() {
               <input
                 type="text"
                 value={newModule.name}
-                onChange={e => setNewModule(prev => ({ ...prev, name: e.target.value, nameError: '' }))}
+                onChange={event => setNewModule(prev => ({ ...prev, name: event.target.value, nameError: '' }))}
                 placeholder={t('memory.moduleNamePlaceholder')}
                 className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                 style={{
@@ -748,7 +857,7 @@ export default function Memory() {
               <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>Content</label>
               <textarea
                 value={newModule.content}
-                onChange={e => setNewModule(prev => ({ ...prev, content: e.target.value }))}
+                onChange={event => setNewModule(prev => ({ ...prev, content: event.target.value }))}
                 placeholder={t('memory.contentPlaceholder')}
                 rows={5}
                 className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"

@@ -156,6 +156,8 @@ export function PushAllMemory():Promise<Array<main.PushResultDTO>>;
 
 export function PushMemoryToAgent(arg1:string):Promise<main.PushResultDTO>;
 
+export function PushSelectedMemory(arg1:Array<string>,arg2:Array<string>,arg3:string):Promise<Array<main.PushResultDTO>>;
+
 export function PushStarSkillsToAgents(arg1:Array<string>,arg2:Array<string>):Promise<Array<domain.PushConflict>>;
 
 export function PushStarSkillsToAgentsForce(arg1:Array<string>,arg2:Array<string>):Promise<void>;

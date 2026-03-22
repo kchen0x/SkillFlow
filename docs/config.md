@@ -429,11 +429,6 @@ Local-only memory configuration. Excluded from cloud backup and git sync.
       "autoPush": true | false
     }
   },
-  "modules": {
-    "<moduleName>": {
-      "pushTargets": ["claude-code", "codex"]
-    }
-  },
   "pushState": {
     "<agentType>": {
       "lastPushedAt": "2026-03-21T10:00:00Z",
@@ -449,9 +444,12 @@ Local-only memory configuration. Excluded from cloud backup and git sync.
 |---------|-----|------|-------------|
 | `pushConfigs` | `<agentType>` | object | Per-agent push configuration |
 | `pushConfigs.<agent>.mode` | — | string | `"merge"` or `"takeover"` |
-| `pushConfigs.<agent>.autoPush` | — | bool | Auto-push when memory changes |
-| `modules` | `<moduleName>` | object | Per-module push target list |
-| `modules.<name>.pushTargets` | — | string[] | Agent types to push this module to |
+| `pushConfigs.<agent>.autoPush` | — | bool | Whether this agent auto-syncs all memories after local edits |
 | `pushState` | `<agentType>` | object | Per-agent last push tracking |
 | `pushState.<agent>.lastPushedAt` | — | RFC3339 string | Timestamp of last successful push |
-| `pushState.<agent>.lastPushedHash` | — | string | SHA-256 of content pushed to this agent |
+| `pushState.<agent>.lastPushedHash` | — | string | SHA-256 of the actual content most recently pushed to this agent |
+
+**Notes:**
+
+- There is no persisted per-module push-target list anymore. Manual batch push selections are temporary UI state only.
+- A partial batch push stores the pushed snapshot hash, so the same agent can still show `pendingPush` when the current local library contains more modules than the last pushed selection.

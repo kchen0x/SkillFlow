@@ -890,8 +890,26 @@ SkillFlow provides a unified memory management interface. Users can author and m
 
 The My Memory page shows:
 - A prominent **Main Memory card** with per-agent push status chips.
-- A **two-column module grid** with search, agent filter, and sort controls.
-- A right-side **Edit Drawer** (~55 % width) with Edit / Preview tabs, push target selection, push mode, auto-push toggle, and a **Push Now** button.
+- A top **Auto Sync** panel where each enabled agent can be set to `Off`, `Auto Merge`, or `Auto Takeover`.
+- A **Batch Push** mode that turns the card list into an inline multi-select flow, keeps main memory required, and lets users choose target agents and one shared push mode for the current push.
+- A **two-column module grid** with search and inline selection checkboxes during batch push.
+- A right-side **Edit Drawer** (~55 % width) with Edit / Preview tabs, save, delete, and open-in-editor actions only.
+
+### Batch Push Flow
+
+- Clicking **Batch Push** does not open a modal.
+- The page enters an inline selection state:
+  - the main-memory card is selected and required
+  - each module card shows a checkbox in the top-right corner
+  - the top panel switches from **Auto Sync** to **Push Target Agents**
+  - users multi-select target agents
+  - users choose one push mode for the whole operation: **Merge** or **Takeover**
+- The push writes the selected module set to the selected agents and rebuilds main-memory module references from that same selection.
+
+### Editing Behaviour
+
+- Closing the drawer with unsaved changes shows a confirmation with **Discard**, **Save and Close**, and **Keep Editing**.
+- The preview tab renders Markdown instead of raw text.
 
 ### Push Modes (per agent)
 
@@ -908,9 +926,7 @@ Each agent shows one of three statuses:
 |--------|---------|
 | ✓ Synced | Last push matches current local memory. |
 | ⚠ Pending | Local memory has changed since the last push. |
-| Never Pushed | Push targets configured but never pushed. |
-
-A red dot appears on the sidebar entry and on individual cards when any target agent has a pending push.
+| Never Pushed | The agent has never received a memory push from SkillFlow. |
 
 ### Module File Naming
 
@@ -925,8 +941,6 @@ Each memory card provides an **Open in Editor** button that opens the file in th
 In **Settings → Agents**, each agent now exposes:
 - **Memory File** – path to the agent's main memory file (default shown; user-overridable).
 - **Rules Directory** – path to the agent's rules directory.
-- **Memory Push Mode** – Merge or Takeover.
-- **Auto Push Memory** – push automatically whenever memory content changes.
 
 ### Cloud Backup
 

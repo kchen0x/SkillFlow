@@ -302,6 +302,10 @@ export function PushMemoryToAgent(arg1) {
   return window['go']['main']['App']['PushMemoryToAgent'](arg1);
 }
 
+export function PushSelectedMemory(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PushSelectedMemory'](arg1, arg2, arg3);
+}
+
 export function PushStarSkillsToAgents(arg1, arg2) {
   return window['go']['main']['App']['PushStarSkillsToAgents'](arg1, arg2);
 }
