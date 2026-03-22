@@ -113,21 +113,8 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 		}
 	}
 
-	rulesIndex := pusher.BuildRulesIndex(selectedModules, agentCfg.RulesDir)
-
-	composedContent := mainMemory.Content
-	if len(rulesIndex.Entries) > 0 {
-		var sb strings.Builder
-		sb.WriteString(composedContent)
-		sb.WriteString("\n\n")
-		sb.WriteString(rulesIndex.Header)
-		sb.WriteString("\n")
-		for _, entry := range rulesIndex.Entries {
-			sb.WriteString(entry)
-			sb.WriteString("\n")
-		}
-		composedContent = sb.String()
-	}
+	rulesIndex := pusher.BuildRulesIndex(selectedModules, agentCfg.MemoryPath, agentCfg.RulesDir)
+	composedContent := composeManagedMemory(mainMemory.Content, rulesIndex)
 
 	if err := pusher.PushMainMemory(composedContent, mode, agentCfg.MemoryPath); err != nil {
 		return fmt.Errorf("push main memory to agent %q: %w", agentType, err)
@@ -146,6 +133,27 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 	}
 
 	return nil
+}
+
+func composeManagedMemory(mainContent string, rulesIndex gatewayport.RulesIndex) string {
+	var sb strings.Builder
+	sb.WriteString("<skillflow-managed>\n")
+	sb.WriteString(mainContent)
+	sb.WriteString("\n</skillflow-managed>")
+
+	if len(rulesIndex.Entries) == 0 {
+		return sb.String()
+	}
+
+	sb.WriteString("\n\n<skillflow-module>\n")
+	for i, entry := range rulesIndex.Entries {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(entry)
+	}
+	sb.WriteString("\n</skillflow-module>")
+	return sb.String()
 }
 
 func selectModulesForPush(allModules []*domain.ModuleMemory, selectedNames []string) ([]*domain.ModuleMemory, []string, error) {

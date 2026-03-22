@@ -880,6 +880,8 @@ The My Memory page shows:
   - users multi-select target agents
   - users choose one push mode for the whole operation: **Merge** or **Takeover**
 - The push writes the selected module set to the selected agents and rebuilds main-memory module references from that same selection.
+- Explicit module references are rendered as one markdown link per line inside a dedicated `<skillflow-module>...</skillflow-module>` block, for example `[testing](rules/sf-testing.md)`.
+- Those module links always use forward-slash relative paths from the agent main-memory file so synced configs stay portable across different machines.
 
 ### Editing Behaviour
 
@@ -890,7 +892,7 @@ The My Memory page shows:
 
 | Mode | Behaviour |
 |------|-----------|
-| **Merge** | SkillFlow writes a managed marker block inside the agent's memory file. Content outside the block is preserved. |
+| **Merge** | SkillFlow writes the main memory inside `<skillflow-managed>...</skillflow-managed>` and writes explicit module refs in a separate `<skillflow-module>...</skillflow-module>` block. Content outside those SkillFlow-managed sections is preserved. |
 | **Takeover** | SkillFlow owns the entire memory file and rules directory. |
 
 ### Push Status

@@ -5,20 +5,22 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/shinerio/skillflow/core/memorycatalog/domain"
 	gatewayport "github.com/shinerio/skillflow/core/memorycatalog/app/port/gateway"
+	"github.com/shinerio/skillflow/core/memorycatalog/domain"
 )
 
 const (
-	markerStart = "<!-- SkillFlow Managed Start - DO NOT EDIT THIS BLOCK -->"
-	markerEnd   = "<!-- SkillFlow Managed End -->"
-	sfPrefix    = "sf-"
+	managedTagStart = "<skillflow-managed>"
+	managedTagEnd   = "</skillflow-managed>"
+	moduleTagStart  = "<skillflow-module>"
+	moduleTagEnd    = "</skillflow-module>"
+	sfPrefix        = "sf-"
 )
 
 type baseAdapter struct{}
 
 // PushMainMemory writes content to agentMemoryPath.
-// merge mode: manages the marker block inside the file
+// merge mode: manages the SkillFlow tag block inside the file
 // takeover mode: overwrites the entire file
 func (b *baseAdapter) PushMainMemory(content string, mode domain.PushMode, agentMemoryPath string) error {
 	if err := os.MkdirAll(filepath.Dir(agentMemoryPath), 0o755); err != nil {
@@ -39,25 +41,20 @@ func (b *baseAdapter) PushMainMemory(content string, mode domain.PushMode, agent
 	// Strip BOM if present
 	fileContent = strings.TrimPrefix(fileContent, "\xef\xbb\xbf")
 
-	newBlock := markerStart + "\n" + content + "\n" + markerEnd
-
-	startIdx := strings.Index(fileContent, markerStart)
-	endIdx := strings.Index(fileContent, markerEnd)
+	newBlock := content
+	startIdx, endIdx := findManagedRange(fileContent)
 
 	var result string
-	if startIdx >= 0 && endIdx >= 0 && endIdx > startIdx {
-		// Both markers found: replace block
-		result = fileContent[:startIdx] + newBlock + fileContent[endIdx+len(markerEnd):]
-	} else if startIdx < 0 && endIdx < 0 {
-		// Neither found: append
+	if startIdx >= 0 && endIdx >= startIdx {
+		// Existing SkillFlow block found: replace it.
+		result = fileContent[:startIdx] + newBlock + fileContent[endIdx:]
+	} else {
+		// No SkillFlow block found: append.
 		if fileContent == "" {
 			result = newBlock
 		} else {
 			result = fileContent + "\n\n" + newBlock
 		}
-	} else {
-		// Only one marker found: repair should have fixed this, just append
-		result = fileContent + "\n\n" + newBlock
 	}
 
 	return os.WriteFile(agentMemoryPath, []byte(result), 0o644)
@@ -83,10 +80,9 @@ func (b *baseAdapter) RemoveModuleMemory(moduleName string, agentRulesDir string
 	return nil
 }
 
-// RepairManagedBlock ensures the marker block is intact in agentMemoryPath.
-// If both markers found: OK (return nil).
-// If only one found: remove that line and write file back.
-// If neither found: OK (return nil).
+// RepairManagedBlock ensures the SkillFlow tag block is intact in agentMemoryPath.
+// If a managed block and optional module block are both complete: OK.
+// If tags are incomplete: remove tag lines and let the next push rebuild them.
 func (b *baseAdapter) RepairManagedBlock(agentMemoryPath string) error {
 	data, err := os.ReadFile(agentMemoryPath)
 	if err != nil {
@@ -97,23 +93,15 @@ func (b *baseAdapter) RepairManagedBlock(agentMemoryPath string) error {
 	}
 
 	fileContent := string(data)
-	startIdx := strings.Index(fileContent, markerStart)
-	endIdx := strings.Index(fileContent, markerEnd)
-
-	if startIdx >= 0 && endIdx >= 0 {
-		// Both present: healthy
-		return nil
-	}
-	if startIdx < 0 && endIdx < 0 {
-		// Neither present: nothing to repair
+	startIdx, endIdx := findManagedRange(fileContent)
+	if startIdx >= 0 && endIdx >= startIdx {
 		return nil
 	}
 
-	// Only one present: remove that line
 	lines := strings.Split(fileContent, "\n")
 	filtered := make([]string, 0, len(lines))
 	for _, line := range lines {
-		if strings.Contains(line, markerStart) || strings.Contains(line, markerEnd) {
+		if isSkillFlowTagLine(line) {
 			continue
 		}
 		filtered = append(filtered, line)
@@ -122,18 +110,58 @@ func (b *baseAdapter) RepairManagedBlock(agentMemoryPath string) error {
 	return os.WriteFile(agentMemoryPath, []byte(result), 0o644)
 }
 
+func isSkillFlowTagLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return trimmed == managedTagStart ||
+		trimmed == managedTagEnd ||
+		trimmed == moduleTagStart ||
+		trimmed == moduleTagEnd
+}
+
+func findManagedRange(fileContent string) (int, int) {
+	startIdx := strings.Index(fileContent, managedTagStart)
+	if startIdx < 0 {
+		return -1, -1
+	}
+
+	managedEndIdx := strings.Index(fileContent[startIdx:], managedTagEnd)
+	if managedEndIdx < 0 {
+		return -1, -1
+	}
+	managedEnd := startIdx + managedEndIdx + len(managedTagEnd)
+
+	moduleStartIdx := strings.Index(fileContent[managedEnd:], moduleTagStart)
+	if moduleStartIdx < 0 {
+		return startIdx, managedEnd
+	}
+	moduleStart := managedEnd + moduleStartIdx
+
+	moduleEndIdx := strings.Index(fileContent[moduleStart:], moduleTagEnd)
+	if moduleEndIdx < 0 {
+		return -1, -1
+	}
+	endIdx := moduleStart + moduleEndIdx + len(moduleTagEnd)
+	return startIdx, endIdx
+
+}
+
 // buildExplicitRulesIndex returns a RulesIndex with explicit file listings for agents
 // that do not auto-discover rules files.
-func buildExplicitRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gatewayport.RulesIndex {
+func buildExplicitRulesIndex(modules []*domain.ModuleMemory, agentMemoryPath string, agentRulesDir string) gatewayport.RulesIndex {
 	if len(modules) == 0 {
 		return gatewayport.RulesIndex{}
 	}
 	entries := make([]string, 0, len(modules))
+	memoryDir := filepath.Dir(agentMemoryPath)
 	for _, m := range modules {
-		entries = append(entries, filepath.Join(agentRulesDir, sfPrefix+m.Name+".md"))
+		targetPath := filepath.Join(agentRulesDir, sfPrefix+m.Name+".md")
+		relativePath, err := filepath.Rel(memoryDir, targetPath)
+		if err != nil {
+			relativePath = targetPath
+		}
+		entries = append(entries, "["+m.Name+"]("+filepath.ToSlash(relativePath)+")")
 	}
 	return gatewayport.RulesIndex{
-		Header:  "The following rule files are managed by SkillFlow:",
 		Entries: entries,
 	}
 }
