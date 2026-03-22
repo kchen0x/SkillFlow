@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Brain, CheckSquare, ExternalLink, Plus, RefreshCw, Upload, X } from 'lucide-react'
 import {
   CreateModuleMemory,
@@ -15,7 +15,9 @@ import {
   SaveModuleMemory,
 } from '../../wailsjs/go/main/App'
 import { domain, main } from '../../wailsjs/go/models'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useLanguage } from '../contexts/LanguageContext'
+import { createMemoryEventSubscriptions } from '../lib/memoryEventSubscriptions'
 import { renderMemoryMarkdown } from '../lib/memoryMarkdown'
 import {
   createMemoryBatchPushState,
@@ -25,6 +27,7 @@ import {
   toggleMemoryBatchAgent,
   toggleMemoryBatchModule,
 } from '../lib/memoryPageState'
+import { subscribeToEvents } from '../lib/wailsEvents'
 
 type MainMemoryItem = { content: string; updatedAt: string }
 type ModuleItem = { name: string; content: string; updatedAt: string }
@@ -92,6 +95,7 @@ export default function Memory() {
   const previewHtml = drawerContent ? renderMemoryMarkdown(drawerContent) : ''
   const batchPushReady = isMemoryBatchPushReady(batchPushState)
   const selectedMemoryCount = 1 + batchPushState.selectedModules.length
+  const loadAllRef = useRef<() => Promise<void>>(async () => {})
 
   const loadAll = async () => {
     try {
@@ -103,9 +107,13 @@ export default function Memory() {
         GetEnabledAgents(),
       ])
 
-      setMainMemory(mm as MainMemoryItem)
-      setModules((mods ?? []) as ModuleItem[])
-      setAgents((enabledAgents ?? []) as domain.AgentProfile[])
+      const nextMainMemory = mm as MainMemoryItem
+      const nextModules = (mods ?? []) as ModuleItem[]
+      const nextAgents = (enabledAgents ?? []) as domain.AgentProfile[]
+
+      setMainMemory(nextMainMemory)
+      setModules(nextModules)
+      setAgents(nextAgents)
 
       const statusMap: PushStatusMap = {}
       for (const status of (statuses ?? []) as main.PushStatusDTO[]) {
@@ -118,13 +126,29 @@ export default function Memory() {
         configMap[config.agentType] = { mode: config.mode, autoPush: config.autoPush }
       }
       setPushConfigs(configMap)
+
+      if (!drawerDirty && drawerState.type !== 'none') {
+        const nextDrawerContent = drawerState.type === 'main'
+          ? nextMainMemory?.content ?? ''
+          : nextModules.find(module => module.name === drawerState.name)?.content ?? ''
+        setDrawerContent(nextDrawerContent)
+        setDrawerInitialContent(nextDrawerContent)
+      }
     } catch (error) {
       console.error('Failed to load memory data', error)
     }
   }
 
+  loadAllRef.current = loadAll
+
   useEffect(() => {
     void loadAll()
+  }, [])
+
+  useEffect(() => {
+    return subscribeToEvents(EventsOn, createMemoryEventSubscriptions(() => {
+      void loadAllRef.current()
+    }))
   }, [])
 
   const filteredModules = modules.filter(module => {
@@ -889,3 +913,4 @@ export default function Memory() {
     </div>
   )
 }
+

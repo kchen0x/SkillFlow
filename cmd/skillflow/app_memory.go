@@ -382,7 +382,11 @@ func (a *App) OpenMemoryInEditor(memoryType string, moduleName string) error {
 	default:
 		return fmt.Errorf("unknown memoryType %q", memoryType)
 	}
-	return memoryeditor.OpenFile(path)
+	if err := memoryeditor.OpenFile(path); err != nil {
+		return err
+	}
+	a.watchExternalMemoryChanges(memoryType, moduleName, path)
+	return nil
 }
 
 func (a *App) syncMemoryToAutoPushAgents() error {
