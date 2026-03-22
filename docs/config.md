@@ -61,7 +61,7 @@ Path: `<AppDataDir>/config.json`
 
 `config.json` stores settings that are safe to move across devices. It must not contain machine-specific absolute paths or sensitive credentials.
 
-Before config is loaded, SkillFlow runs the one-time terminology cutover in `core/platform/upgrade`. Legacy `tools`-based keys are rewritten in place to the new `agents`-based schema, and runtime code only reads the new schema.
+Before config is loaded, SkillFlow runs the one-time terminology cutover in `core/platform/upgrade`. Legacy `tools`-based keys are rewritten in place to the new `agents`-based schema, and the removed legacy `skillStatusVisibility` field is deleted in place. Runtime code only reads the latest schema.
 
 ### Example
 
@@ -70,13 +70,6 @@ Before config is loaded, SkillFlow runs the one-time terminology cutover in `cor
   "defaultCategory": "Default",
   "logLevel": "info",
   "repoScanMaxDepth": 5,
-  "skillStatusVisibility": {
-    "mySkills": ["updatable", "pushedAgents"],
-    "myAgents": ["imported", "updatable", "pushedAgents"],
-    "pushToAgent": ["pushedAgents"],
-    "pullFromAgent": ["imported"],
-    "starredRepos": ["imported", "pushedAgents"]
-  },
   "agents": [
     { "name": "claude-code", "enabled": true },
     { "name": "codex", "enabled": true },
@@ -116,12 +109,6 @@ Before config is loaded, SkillFlow runs the one-time terminology cutover in `cor
 | `defaultCategory` | string | Default category used when importing or creating skills. |
 | `logLevel` | string | Backend log level. Valid values are `debug`, `info`, and `error`. Invalid values are normalized to `error`. |
 | `repoScanMaxDepth` | number | Maximum recursive depth used when scanning agent directories and repos. Values are normalized to the `1-20` range, with `5` as the default. |
-| `skillStatusVisibility` | object | Per-page visibility policy for skill status badges. |
-| `skillStatusVisibility.mySkills` | string[] | Status badges shown on the "My Skills" page. Allowed values there are `updatable` and `pushedAgents`. |
-| `skillStatusVisibility.myAgents` | string[] | Status badges shown on the "My Agents" page. Allowed values there are `imported`, `updatable`, and `pushedAgents`. |
-| `skillStatusVisibility.pushToAgent` | string[] | Status badges shown on the "Push to Agent" page. Allowed value there is `pushedAgents`. |
-| `skillStatusVisibility.pullFromAgent` | string[] | Status badges shown on the "Pull from Agent" page. Allowed value there is `imported`. |
-| `skillStatusVisibility.starredRepos` | string[] | Status badges shown on the starred-repos page. Allowed values there are `imported` and `pushedAgents`. |
 | `agents` | object[] | Built-in agent enable/disable state only. Path-related agent settings are stored in `config_local.json`. |
 | `agents[].name` | string | Built-in agent name such as `claude-code`, `codex`, `gemini-cli`, `opencode`, or `openclaw`. |
 | `agents[].enabled` | boolean | Whether this built-in agent is enabled in the UI and scanning/push flows. |

@@ -56,18 +56,7 @@ func TestRunMigratesToolTerminologyInConfigFiles(t *testing.T) {
 	assert.Equal(t, "codex", sharedAgents[0]["name"])
 	assert.Equal(t, true, sharedAgents[0]["enabled"])
 
-	visibility := requireJSONMap(t, shared["skillStatusVisibility"])
-	require.Contains(t, visibility, "myAgents")
-	require.Contains(t, visibility, "pushToAgent")
-	require.Contains(t, visibility, "pullFromAgent")
-	require.NotContains(t, visibility, "githubInstall")
-	require.NotContains(t, visibility, "myTools")
-	require.NotContains(t, visibility, "pushToTool")
-	require.NotContains(t, visibility, "pullFromTool")
-	assert.Equal(t, []any{"updatable", "pushedAgents"}, requireJSONArray(t, visibility["mySkills"]))
-	assert.Equal(t, []any{"imported", "updatable", "pushedAgents"}, requireJSONArray(t, visibility["myAgents"]))
-	assert.Equal(t, []any{"pushedAgents"}, requireJSONArray(t, visibility["pushToAgent"]))
-	assert.Equal(t, []any{"imported"}, requireJSONArray(t, visibility["pullFromAgent"]))
+	require.NotContains(t, shared, "skillStatusVisibility")
 
 	local := readJSONMap(t, filepath.Join(dir, "config_local.json"))
 	require.Contains(t, local, "agents")
@@ -88,13 +77,6 @@ func TestRunIsNoOpForAlreadyUpgradedConfigFiles(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{
   "defaultCategory": "Default",
-  "skillStatusVisibility": {
-    "mySkills": ["updatable", "pushedAgents"],
-    "myAgents": ["imported", "updatable", "pushedAgents"],
-    "pushToAgent": ["pushedAgents"],
-    "pullFromAgent": ["imported"],
-    "starredRepos": ["imported", "pushedAgents"]
-  },
   "agents": [
     { "name": "codex", "enabled": true }
   ]
@@ -131,7 +113,7 @@ func TestRunIsNoOpForAlreadyUpgradedConfigFiles(t *testing.T) {
 	assert.Equal(t, string(beforeLocal), string(afterLocal))
 }
 
-func TestRunRemovesGitHubInstallVisibilityFromExistingSharedConfig(t *testing.T) {
+func TestRunRemovesSkillStatusVisibilityFromExistingSharedConfig(t *testing.T) {
 	dir := t.TempDir()
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{
@@ -149,8 +131,7 @@ func TestRunRemovesGitHubInstallVisibilityFromExistingSharedConfig(t *testing.T)
 	require.NoError(t, upgrade.Run(dir))
 
 	shared := readJSONMap(t, filepath.Join(dir, "config.json"))
-	visibility := requireJSONMap(t, shared["skillStatusVisibility"])
-	require.NotContains(t, visibility, "githubInstall")
+	require.NotContains(t, shared, "skillStatusVisibility")
 }
 
 func TestRunMigratesLegacyToolsWhenAgentsArrayAlreadyExistsButIsEmpty(t *testing.T) {
