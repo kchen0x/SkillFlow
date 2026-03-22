@@ -21,6 +21,9 @@ func Run(dataDir string) error {
 	if err := migrateStarReposFile(filepath.Join(dataDir, "star_repos.json")); err != nil {
 		return err
 	}
+	if err := migrateJSONFile(filepath.Join(dataDir, "memory", "memory_local.json"), migrateMemoryLocalConfig); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -85,6 +88,14 @@ func migrateLocalConfig(payload map[string]any, dataDir string) (bool, error) {
 		changed = true
 	}
 	return changed, nil
+}
+
+func migrateMemoryLocalConfig(payload map[string]any) (bool, error) {
+	if _, ok := payload["modules"]; !ok {
+		return false, nil
+	}
+	delete(payload, "modules")
+	return true, nil
 }
 
 func migrateStarReposFile(path string) error {

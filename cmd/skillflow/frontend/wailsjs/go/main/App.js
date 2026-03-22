@@ -50,6 +50,10 @@ export function CreateCategory(arg1) {
   return window['go']['main']['App']['CreateCategory'](arg1);
 }
 
+export function CreateModuleMemory(arg1, arg2) {
+  return window['go']['main']['App']['CreateModuleMemory'](arg1, arg2);
+}
+
 export function CreatePrompt(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['CreatePrompt'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -64,6 +68,10 @@ export function DeleteAgentSkill(arg1, arg2) {
 
 export function DeleteCategory(arg1) {
   return window['go']['main']['App']['DeleteCategory'](arg1);
+}
+
+export function DeleteModuleMemory(arg1) {
+  return window['go']['main']['App']['DeleteModuleMemory'](arg1);
 }
 
 export function DeletePrompt(arg1) {
@@ -92,6 +100,22 @@ export function ExportPrompts() {
 
 export function ExportPromptsByNames(arg1) {
   return window['go']['main']['App']['ExportPromptsByNames'](arg1);
+}
+
+export function GetAgentMemoryPreview(arg1) {
+  return window['go']['main']['App']['GetAgentMemoryPreview'](arg1);
+}
+
+export function GetAllMemoryPushConfigs() {
+  return window['go']['main']['App']['GetAllMemoryPushConfigs']();
+}
+
+export function GetAllMemoryPushStatuses() {
+  return window['go']['main']['App']['GetAllMemoryPushStatuses']();
+}
+
+export function GetAllModulePushTargets() {
+  return window['go']['main']['App']['GetAllModulePushTargets']();
 }
 
 export function GetAppDataDir() {
@@ -124,6 +148,26 @@ export function GetLastBackupCompletedAt() {
 
 export function GetLogDir() {
   return window['go']['main']['App']['GetLogDir']();
+}
+
+export function GetMainMemory() {
+  return window['go']['main']['App']['GetMainMemory']();
+}
+
+export function GetMemoryPushConfig(arg1) {
+  return window['go']['main']['App']['GetMemoryPushConfig'](arg1);
+}
+
+export function GetMemoryPushStatus(arg1) {
+  return window['go']['main']['App']['GetMemoryPushStatus'](arg1);
+}
+
+export function GetModuleMemory(arg1) {
+  return window['go']['main']['App']['GetModuleMemory'](arg1);
+}
+
+export function GetModulePushTargets(arg1) {
+  return window['go']['main']['App']['GetModulePushTargets'](arg1);
 }
 
 export function GetSkillMeta(arg1) {
@@ -174,6 +218,10 @@ export function ListCloudProviders() {
   return window['go']['main']['App']['ListCloudProviders']();
 }
 
+export function ListModuleMemories() {
+  return window['go']['main']['App']['ListModuleMemories']();
+}
+
 export function ListPromptCategories() {
   return window['go']['main']['App']['ListPromptCategories']();
 }
@@ -218,6 +266,10 @@ export function OpenLogDir() {
   return window['go']['main']['App']['OpenLogDir']();
 }
 
+export function OpenMemoryInEditor(arg1, arg2) {
+  return window['go']['main']['App']['OpenMemoryInEditor'](arg1, arg2);
+}
+
 export function OpenPath(arg1) {
   return window['go']['main']['App']['OpenPath'](arg1);
 }
@@ -240,6 +292,18 @@ export function PullFromAgent(arg1, arg2, arg3) {
 
 export function PullFromAgentForce(arg1, arg2, arg3) {
   return window['go']['main']['App']['PullFromAgentForce'](arg1, arg2, arg3);
+}
+
+export function PushAllMemory() {
+  return window['go']['main']['App']['PushAllMemory']();
+}
+
+export function PushMemoryToAgent(arg1) {
+  return window['go']['main']['App']['PushMemoryToAgent'](arg1);
+}
+
+export function PushSelectedMemory(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PushSelectedMemory'](arg1, arg2, arg3);
 }
 
 export function PushStarSkillsToAgents(arg1, arg2) {
@@ -288,6 +352,22 @@ export function RestoreFromCloud() {
 
 export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
+}
+
+export function SaveMainMemory(arg1) {
+  return window['go']['main']['App']['SaveMainMemory'](arg1);
+}
+
+export function SaveMemoryPushConfig(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveMemoryPushConfig'](arg1, arg2, arg3);
+}
+
+export function SaveModuleMemory(arg1, arg2) {
+  return window['go']['main']['App']['SaveModuleMemory'](arg1, arg2);
+}
+
+export function SaveModulePushTargets(arg1, arg2) {
+  return window['go']['main']['App']['SaveModulePushTargets'](arg1, arg2);
 }
 
 export function ScanAgentSkills(arg1) {

@@ -262,3 +262,65 @@ body {
   }
 
 }
+
+.memory-markdown-preview {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+.memory-markdown-preview h1,
+.memory-markdown-preview h2,
+.memory-markdown-preview h3,
+.memory-markdown-preview h4,
+.memory-markdown-preview h5,
+.memory-markdown-preview h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+
+.memory-markdown-preview p,
+.memory-markdown-preview ul,
+.memory-markdown-preview ol,
+.memory-markdown-preview blockquote,
+.memory-markdown-preview pre {
+  margin: 0 0 1rem;
+}
+
+.memory-markdown-preview ul,
+.memory-markdown-preview ol {
+  padding-left: 1.25rem;
+}
+
+.memory-markdown-preview blockquote {
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--border-accent);
+  color: var(--text-secondary);
+}
+
+.memory-markdown-preview pre {
+  padding: 0.9rem 1rem;
+  border-radius: 0.85rem;
+  background: var(--bg-base);
+  border: 1px solid var(--border-base);
+  overflow-x: auto;
+}
+
+.memory-markdown-preview code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.memory-markdown-preview p code,
+.memory-markdown-preview li code,
+.memory-markdown-preview blockquote code {
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.4rem;
+  background: var(--bg-hover);
+}
+
+.memory-markdown-preview a {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}

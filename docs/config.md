@@ -173,6 +173,8 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
         "/Users/demo/.claude/plugins/marketplaces"
       ],
       "pushDir": "/Users/demo/.claude/skills",
+      "memoryPath": "/Users/demo/.claude/CLAUDE.md",
+      "rulesDir": "/Users/demo/.claude/rules",
       "custom": false,
       "enabled": true
     },
@@ -180,6 +182,8 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
       "name": "my-custom-agent",
       "scanDirs": ["/Users/demo/work/my-agent/skills"],
       "pushDir": "/Users/demo/work/my-agent/skills",
+      "memoryPath": "/Users/demo/work/my-agent/AGENTS.md",
+      "rulesDir": "/Users/demo/work/my-agent/rules",
       "custom": true,
       "enabled": true
     }
@@ -219,6 +223,8 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
 | `agents[].name` | string | Agent identifier. |
 | `agents[].scanDirs` | string[] | Local directories scanned for external skills from this agent. |
 | `agents[].pushDir` | string | Local target directory used when pushing skills to this agent. |
+| `agents[].memoryPath` | string | Local path to the agent's main memory file used by **My Memory** push and **My Agents** memory preview. |
+| `agents[].rulesDir` | string | Local path to the agent's rules directory used by memory module push and preview. |
 | `agents[].custom` | boolean | `true` for user-created custom agents, `false` for built-in agents. |
 | `agents[].enabled` | boolean | Stored for every agent, but only meaningful for custom agents in `config_local.json`; built-in enable state comes from `config.json`. |
 | `cloudCredentialsByProvider` | object | Sensitive provider credentials keyed by provider name. |
@@ -406,3 +412,44 @@ This file stores local-only, high-churn per-skill fields that should not be sync
 | Key | Type | Meaning |
 |-----|------|---------|
 | `lastCheckedAt` | string | Timestamp of the most recent update-check attempt on the current device. |
+
+## `memory/memory_local.json`
+
+Local-only memory configuration. Excluded from cloud backup and git sync.
+
+**Location:** `<appDataDir>/memory/memory_local.json`
+
+**Schema:**
+
+```json
+{
+  "pushConfigs": {
+    "<agentType>": {
+      "mode": "merge" | "takeover",
+      "autoPush": true | false
+    }
+  },
+  "pushState": {
+    "<agentType>": {
+      "lastPushedAt": "2026-03-21T10:00:00Z",
+      "lastPushedHash": "<sha256-hex>"
+    }
+  }
+}
+```
+
+**Fields:**
+
+| Section | Key | Type | Description |
+|---------|-----|------|-------------|
+| `pushConfigs` | `<agentType>` | object | Per-agent push configuration |
+| `pushConfigs.<agent>.mode` | — | string | `"merge"` or `"takeover"` |
+| `pushConfigs.<agent>.autoPush` | — | bool | Whether this agent auto-syncs all memories after local edits |
+| `pushState` | `<agentType>` | object | Per-agent last push tracking |
+| `pushState.<agent>.lastPushedAt` | — | RFC3339 string | Timestamp of last successful push |
+| `pushState.<agent>.lastPushedHash` | — | string | SHA-256 of the actual content most recently pushed to this agent |
+
+**Notes:**
+
+- There is no persisted per-module push-target list anymore. Manual batch push selections are temporary UI state only.
+- A partial batch push stores the pushed snapshot hash, so the same agent can still show `pendingPush` when the current local library contains more modules than the last pushed selection.

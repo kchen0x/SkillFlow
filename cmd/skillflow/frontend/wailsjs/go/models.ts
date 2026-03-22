@@ -146,6 +146,8 @@ export namespace domain {
 	    name: string;
 	    scanDirs: string[];
 	    pushDir: string;
+	    memoryPath: string;
+	    rulesDir: string;
 	    enabled: boolean;
 	    custom: boolean;
 	
@@ -158,6 +160,8 @@ export namespace domain {
 	        this.name = source["name"];
 	        this.scanDirs = source["scanDirs"];
 	        this.pushDir = source["pushDir"];
+	        this.memoryPath = source["memoryPath"];
+	        this.rulesDir = source["rulesDir"];
 	        this.enabled = source["enabled"];
 	        this.custom = source["custom"];
 	    }
@@ -460,6 +464,67 @@ export namespace domain {
 
 export namespace main {
 	
+	export class AgentMemoryRuleDTO {
+	    name: string;
+	    path: string;
+	    content: string;
+	    managed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentMemoryRuleDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.content = source["content"];
+	        this.managed = source["managed"];
+	    }
+	}
+	export class AgentMemoryPreviewDTO {
+	    agentName: string;
+	    memoryPath: string;
+	    rulesDir: string;
+	    mainExists: boolean;
+	    mainContent: string;
+	    rulesDirExists: boolean;
+	    rules: AgentMemoryRuleDTO[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentMemoryPreviewDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agentName = source["agentName"];
+	        this.memoryPath = source["memoryPath"];
+	        this.rulesDir = source["rulesDir"];
+	        this.mainExists = source["mainExists"];
+	        this.mainContent = source["mainContent"];
+	        this.rulesDirExists = source["rulesDirExists"];
+	        this.rules = this.convertValues(source["rules"], AgentMemoryRuleDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class AppUpdateInfo {
 	    hasUpdate: boolean;
 	    currentVersion: string;
@@ -482,6 +547,66 @@ export namespace main {
 	        this.downloadUrl = source["downloadUrl"];
 	        this.releaseNotes = source["releaseNotes"];
 	        this.canAutoUpdate = source["canAutoUpdate"];
+	    }
+	}
+	export class MainMemoryDTO {
+	    content: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MainMemoryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.content = source["content"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class MemoryPushConfigDTO {
+	    agentType: string;
+	    mode: string;
+	    autoPush: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MemoryPushConfigDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agentType = source["agentType"];
+	        this.mode = source["mode"];
+	        this.autoPush = source["autoPush"];
+	    }
+	}
+	export class ModuleMemoryDTO {
+	    name: string;
+	    content: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModuleMemoryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.content = source["content"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class ModulePushTargetsDTO {
+	    moduleName: string;
+	    pushTargets: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ModulePushTargetsDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.moduleName = source["moduleName"];
+	        this.pushTargets = source["pushTargets"];
 	    }
 	}
 	export class PromptImportPrepareResult {
@@ -536,6 +661,36 @@ export namespace main {
 	        this.statusCode = source["statusCode"];
 	        this.elapsedMs = source["elapsedMs"];
 	        this.message = source["message"];
+	    }
+	}
+	export class PushResultDTO {
+	    agentType: string;
+	    success: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PushResultDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agentType = source["agentType"];
+	        this.success = source["success"];
+	        this.error = source["error"];
+	    }
+	}
+	export class PushStatusDTO {
+	    agentType: string;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PushStatusDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agentType = source["agentType"];
+	        this.status = source["status"];
 	    }
 	}
 

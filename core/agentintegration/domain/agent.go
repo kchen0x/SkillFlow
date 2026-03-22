@@ -6,11 +6,13 @@ import (
 )
 
 type AgentProfile struct {
-	Name     string   `json:"name"`
-	ScanDirs []string `json:"scanDirs"`
-	PushDir  string   `json:"pushDir"`
-	Enabled  bool     `json:"enabled"`
-	Custom   bool     `json:"custom"`
+	Name       string   `json:"name"`
+	ScanDirs   []string `json:"scanDirs"`
+	PushDir    string   `json:"pushDir"`
+	MemoryPath string   `json:"memoryPath"` // path to agent's main memory file
+	RulesDir   string   `json:"rulesDir"`   // path to agent's rules directory
+	Enabled    bool     `json:"enabled"`
+	Custom     bool     `json:"custom"`
 }
 
 type MissingPushDir struct {

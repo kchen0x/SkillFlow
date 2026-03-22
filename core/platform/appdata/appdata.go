@@ -23,3 +23,7 @@ func SkillsDir(dataDir string) string {
 func RepoCacheDir(dataDir string) string {
 	return filepath.Join(dataDir, "cache", "repos")
 }
+
+func MemoryDir(dataDir string) string {
+	return filepath.Join(dataDir, "memory")
+}

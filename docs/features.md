@@ -23,6 +23,7 @@
 12. [App Update Dialog](#12-app-update-dialog)
 13. [My Agents](#13-my-agents)
 14. [My Prompts](#14-my-prompts)
+15. [My Memory](#15-my-memory)
 
 ---
 
@@ -426,7 +427,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json`) are stored as forward-slash relative paths under `AppDataDir`, so restores continue to work across macOS and Windows.
 - **Local-only volatile skill metadata** — high-churn per-skill check timestamps (`LastCheckedAt`) are stored in local-only `meta_local/*.local.json` overlays, so they do not create cross-device git/cloud merge churn.
 - **Local-only starred-repo sync runtime state** — per-repo `lastSync` and `syncError` are stored in local-only `star_repos_local.json`, so background sync attempts on one device do not churn synced repo metadata on other devices.
-- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as `repoCacheDir`, agent `ScanDirs` / `PushDir`, and proxy settings; it is excluded from backup and git sync.
+- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as `repoCacheDir`, agent `ScanDirs` / `PushDir` / `MemoryPath` / `RulesDir`, and proxy settings; it is excluded from backup and git sync.
 - **Other local-only device state** — per-device choices and runtime shell state such as auto-push targets, launch-at-login registration, and the last saved window size remain in `config_local.json`, so restoring on one machine does not overwrite another machine's local behavior.
 - **Local-only cloud secrets** — sensitive cloud credentials (for example access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as provider, bucket name, remote path, endpoint, repo URL, or branch.
 - **Git backup compatibility** — when Git backup uses a parent directory as the working tree, SkillFlow automatically moves any legacy nested `skills/.git` metadata aside so actual skill files remain trackable.
@@ -772,15 +773,36 @@ Browse the skills currently present inside each enabled agent.
 ### Layout
 
 - Left sidebar lists enabled agents.
-- Main area shows one toolbar plus two skill-card sections: **Push Path** and **Scan Path**.
+- Main area shows one shared toolbar plus a top segmented control: **Skills | Memory**.
+- The segmented control defaults to **Skills** when the page first loads.
+- Switching to another agent keeps the current panel selection instead of forcing the page back to **Skills**.
 
 ### Toolbar
 
 | Control | Description |
 |---------|-------------|
-| **Search input** | Filters both Push Path and Scan Path skill cards by name in real time |
-| **Sort toggle** | Switches both sections between **A-Z** and **Z-A** ordering by skill name |
-| **Batch Delete** | Available when the visible Push Path list is non-empty; enters select mode |
+| **Skills \| Memory** | Switches the right-side content surface between skill management and memory preview |
+| **Search input** | Filters only the currently active panel in real time |
+| **Sort toggle** | Stays shared in the toolbar; in **Skills** it sorts Push Path and Scan Path cards, and in **Memory** it reorders the visible memory entries within that panel |
+| **Batch Delete** | Available only in the **Skills** panel when the visible Push Path list is non-empty; enters select mode |
+
+The result counter in the toolbar is panel-scoped:
+- **Skills** counts visible Push Path plus Scan Path cards only.
+- **Memory** counts visible memory preview entries only.
+
+### Memory Panel
+
+- Shown only when the top segmented control is switched to **Memory**.
+- Shows the selected agent's currently configured main memory file and rules directory content directly from that agent's filesystem paths.
+- Header includes a **Refresh** action so users can re-read the agent's current on-disk memory state without leaving **My Agents**.
+- **Memory File** card shows the configured file path, an **Open File** action, and the current file content preview. If the path is missing or the file does not exist yet, the card keeps the configured path area visible and shows the corresponding empty state instead of failing the whole page.
+- **Rules Directory** area shows the configured directory path, an **Open Directory** action, and one preview card per flat `.md` file found inside that directory.
+- Rule cards mark `sf-*.md` files as **Managed** so users can distinguish SkillFlow-managed module memories from other agent-local rule files.
+- The shared search input filters memory preview items only while **Memory** is active, and when nothing matches the panel shows a dedicated empty-search message instead of falling back to the skill empty states.
+
+### Skills Panel
+
+- Shown only when the top segmented control is switched to **Skills**.
 
 ### Push Path Section
 
@@ -794,7 +816,7 @@ Browse the skills currently present inside each enabled agent.
 
 - Shows read-only skills discovered only from scan directories.
 - Scan-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
-- Shares the same search and sort controls as Push Path.
+- Shares the same panel-scoped search and sort controls as Push Path.
 - Scan-path cards use the same compact strip for source / imported / update-available / pushed-to-other-agents states whenever the scanned item can be correlated to an installed My Skills entry; the fact that they were found via scan paths is conveyed by the section itself instead of repeating a detected badge on every card.
 
 ---
@@ -855,4 +877,75 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ---
 
-*Last updated: 2026-03-21*
+## 15. My Memory
+
+SkillFlow provides a unified memory management interface. Users can author and manage personal AI coding assistant memories in one place and push them to multiple AI tools.
+
+### Memory Types
+
+- **Main Memory**: A single `main.md` file containing global instructions shared across all configured agents.
+- **Module Memories**: Individual topic-focused markdown files (e.g., `coding-style`, `testing-rules`) stored under `rules/`.
+
+### Page Layout
+
+The My Memory page shows:
+- A prominent **Main Memory card** with per-agent push status chips.
+- A top **Auto Sync** panel where each enabled agent can be set to `Off`, `Auto Merge`, or `Auto Takeover`.
+- A **Batch Push** mode that turns the card list into an inline multi-select flow, keeps main memory required, and lets users choose target agents and one shared push mode for the current push.
+- A **two-column module grid** with search and inline selection checkboxes during batch push.
+- A right-side **Edit Drawer** (~55 % width) with Edit / Preview tabs, save, delete, and open-in-editor actions only.
+
+### Batch Push Flow
+
+- Clicking **Batch Push** does not open a modal.
+- The page enters an inline selection state:
+  - the main-memory card is selected and required
+  - each module card shows a checkbox in the top-right corner
+  - the top panel switches from **Auto Sync** to **Push Target Agents**
+  - users multi-select target agents
+  - users choose one push mode for the whole operation: **Merge** or **Takeover**
+- The push writes the selected module set to the selected agents and rebuilds main-memory module references from that same selection.
+
+### Editing Behaviour
+
+- Closing the drawer with unsaved changes shows a confirmation with **Discard**, **Save and Close**, and **Keep Editing**.
+- The preview tab renders Markdown instead of raw text.
+
+### Push Modes (per agent)
+
+| Mode | Behaviour |
+|------|-----------|
+| **Merge** | SkillFlow writes a managed marker block inside the agent's memory file. Content outside the block is preserved. |
+| **Takeover** | SkillFlow owns the entire memory file and rules directory. |
+
+### Push Status
+
+Each agent shows one of three statuses:
+
+| Status | Meaning |
+|--------|---------|
+| ✓ Synced | Last push matches current local memory. |
+| ⚠ Pending | Local memory has changed since the last push. |
+| Never Pushed | The agent has never received a memory push from SkillFlow. |
+
+### Module File Naming
+
+Module memories are written with an `sf-` prefix to the agent rules directory (e.g., `coding-style` → `sf-coding-style.md`).
+
+### Open in External Editor
+
+Each memory card provides an **Open in Editor** button that opens the file in the system default text editor. SkillFlow detects file changes and refreshes the content automatically.
+
+### Agent Settings
+
+In **Settings → Agents**, each agent now exposes:
+- **Memory File** – path to the agent's main memory file (default shown; user-overridable).
+- **Rules Directory** – path to the agent's rules directory.
+
+### Cloud Backup
+
+Memory content files (`memory/main.md` and `memory/rules/*.md`) are included in cloud backup. The local configuration file (`memory/memory_local.json`) is excluded from backup.
+
+---
+
+*Last updated: 2026-03-22*

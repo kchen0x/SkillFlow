@@ -10,6 +10,11 @@ import (
 	backupapp "github.com/shinerio/skillflow/core/backup/app"
 	backupdomain "github.com/shinerio/skillflow/core/backup/domain"
 	"github.com/shinerio/skillflow/core/config"
+	memorycatalogapp "github.com/shinerio/skillflow/core/memorycatalog/app"
+	memorypushgw "github.com/shinerio/skillflow/core/memorycatalog/app/port/gateway"
+	memorygw "github.com/shinerio/skillflow/core/memorycatalog/infra/gateway"
+	memoryadapters "github.com/shinerio/skillflow/core/memorycatalog/infra/adapters"
+	memoryrepo "github.com/shinerio/skillflow/core/memorycatalog/infra/repository"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	skillsourceapp "github.com/shinerio/skillflow/core/skillsource/app"
 	sourcediscovery "github.com/shinerio/skillflow/core/skillsource/infra/discovery"
@@ -102,4 +107,35 @@ func (a *App) backupProfile(cfg config.AppConfig) backupdomain.BackupProfile {
 		Credentials: cfg.Cloud.Credentials,
 		AppDataDir:  a.dataDir(),
 	}
+}
+
+func newMemoryServices(a *App) (*memorycatalogapp.MemoryService, *memorycatalogapp.PushService) {
+	storage := memoryrepo.NewFsStorage(a.dataDir())
+
+	profilesProvider := func() []agentdomain.AgentProfile {
+		cfg, _ := a.config.Load()
+		return cfg.Agents
+	}
+	agentGw := memorygw.NewAgentConfigGateway(profilesProvider)
+
+	pusherResolver := func(agentType string) (memorypushgw.AgentMemoryPusher, bool) {
+		switch agentType {
+		case "claude-code":
+			return memoryadapters.NewClaudeCodeAdapter(), true
+		case "codex":
+			return memoryadapters.NewCodexAdapter(), true
+		case "gemini-cli":
+			return memoryadapters.NewGeminiAdapter(), true
+		case "opencode":
+			return memoryadapters.NewOpenCodeAdapter(), true
+		case "openclaw":
+			return memoryadapters.NewOpenClawAdapter(), true
+		default:
+			return memoryadapters.NewCustomAdapter(), true
+		}
+	}
+
+	svc := memorycatalogapp.NewMemoryService(storage)
+	pushSvc := memorycatalogapp.NewPushService(storage, agentGw, pusherResolver)
+	return svc, pushSvc
 }

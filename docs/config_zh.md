@@ -171,6 +171,8 @@
         "/Users/demo/.claude/plugins/marketplaces"
       ],
       "pushDir": "/Users/demo/.claude/skills",
+      "memoryPath": "/Users/demo/.claude/CLAUDE.md",
+      "rulesDir": "/Users/demo/.claude/rules",
       "custom": false,
       "enabled": true
     },
@@ -178,6 +180,8 @@
       "name": "my-custom-agent",
       "scanDirs": ["/Users/demo/work/my-agent/skills"],
       "pushDir": "/Users/demo/work/my-agent/skills",
+      "memoryPath": "/Users/demo/work/my-agent/AGENTS.md",
+      "rulesDir": "/Users/demo/work/my-agent/rules",
       "custom": true,
       "enabled": true
     }
@@ -217,6 +221,8 @@
 | `agents[].name` | string | 智能体标识名。 |
 | `agents[].scanDirs` | string[] | 扫描该智能体外部 Skill 的本地目录列表。 |
 | `agents[].pushDir` | string | 将 Skill 推送到该智能体时使用的目标目录。 |
+| `agents[].memoryPath` | string | 智能体主记忆文件的本地路径，供 **我的记忆** 推送和 **我的智能体** 记忆预览使用。 |
+| `agents[].rulesDir` | string | 智能体规则目录的本地路径，供记忆模块推送和预览使用。 |
 | `agents[].custom` | boolean | `true` 表示用户创建的自定义智能体，`false` 表示内置智能体。 |
 | `agents[].enabled` | boolean | 每个智能体都会带上这个字段，但在 `config_local.json` 中它只对自定义智能体有实际意义；内置智能体的启用状态以 `config.json` 为准。 |
 | `cloudCredentialsByProvider` | object | 以 provider 名称为键的敏感凭据集合。 |
@@ -404,3 +410,44 @@
 | 键 | 类型 | 说明 |
 |----|------|------|
 | `lastCheckedAt` | string | 当前设备最近一次执行更新检查的时间。 |
+
+## `memory/memory_local.json`
+
+本地专用记忆配置，不参与云备份和 git 同步。
+
+**路径：** `<appDataDir>/memory/memory_local.json`
+
+**Schema：**
+
+```json
+{
+  "pushConfigs": {
+    "<agentType>": {
+      "mode": "merge" | "takeover",
+      "autoPush": true | false
+    }
+  },
+  "pushState": {
+    "<agentType>": {
+      "lastPushedAt": "2026-03-21T10:00:00Z",
+      "lastPushedHash": "<sha256-hex>"
+    }
+  }
+}
+```
+
+**字段说明：**
+
+| 分区 | 键 | 类型 | 说明 |
+|------|----|------|------|
+| `pushConfigs` | `<agentType>` | object | 各智能体推送配置 |
+| `pushConfigs.<agent>.mode` | — | string | `"merge"`（合并）或 `"takeover"`（覆盖） |
+| `pushConfigs.<agent>.autoPush` | — | bool | 该智能体在本地编辑后是否自动同步全部记忆 |
+| `pushState` | `<agentType>` | object | 各智能体最近推送记录 |
+| `pushState.<agent>.lastPushedAt` | — | RFC3339 字符串 | 最近一次成功推送的时间戳 |
+| `pushState.<agent>.lastPushedHash` | — | string | 最近一次实际推送到该智能体内容的 SHA-256 哈希 |
+
+**说明：**
+
+- 已不再持久化“按模块配置推送目标”的列表；手动批量推送里的选择仅存在于当前页面状态。
+- 如果一次批量推送只推送了部分模块，`lastPushedHash` 会记录这次实际推送的快照，因此当本地记忆库比该快照包含更多模块时，该智能体仍会显示 `pendingPush`。

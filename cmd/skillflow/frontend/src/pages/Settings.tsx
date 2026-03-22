@@ -751,6 +751,44 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="mb-3">
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.agentMemoryPath')}</p>
+                <div className="flex gap-2">
+                  <input
+                    value={agent.memoryPath ?? ''}
+                    onChange={e => updateAgent(agent.name, 'memoryPath', e.target.value)}
+                    placeholder={t('settings.agentMemoryPathPlaceholder')}
+                    className="input-base flex-1 font-mono"
+                  />
+                  <button
+                    onClick={() => pickDir(dir => updateAgent(agent.name, 'memoryPath', dir), agent.memoryPath ?? '')}
+                    className="btn-secondary px-2.5 rounded-lg"
+                    title={t('settings.selectDir')}
+                  >
+                    <FolderOpen size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.agentRulesDir')}</p>
+                <div className="flex gap-2">
+                  <input
+                    value={agent.rulesDir ?? ''}
+                    onChange={e => updateAgent(agent.name, 'rulesDir', e.target.value)}
+                    placeholder={t('settings.agentRulesDirPlaceholder')}
+                    className="input-base flex-1 font-mono"
+                  />
+                  <button
+                    onClick={() => pickDir(dir => updateAgent(agent.name, 'rulesDir', dir), agent.rulesDir ?? '')}
+                    className="btn-secondary px-2.5 rounded-lg"
+                    title={t('settings.selectDir')}
+                  >
+                    <FolderOpen size={14} />
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.scanPaths')}</p>
                 <div className="space-y-2">
