@@ -180,7 +180,7 @@ func buildExplicitRulesIndex(modules []*domain.ModuleMemory, agentRulesDir strin
 	entries := make([]string, 0, len(modules))
 	for _, m := range modules {
 		targetPath := filepath.Join(agentRulesDir, sfPrefix+m.Name+".md")
-		entries = append(entries, "["+m.Name+"]("+filepath.ToSlash(targetPath)+")")
+		entries = append(entries, "- @"+filepath.ToSlash(targetPath))
 	}
 	return gatewayport.RulesIndex{
 		Entries: entries,
