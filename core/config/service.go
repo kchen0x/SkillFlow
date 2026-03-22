@@ -60,11 +60,13 @@ type localConfig struct {
 // localAgentConfig holds path settings for one agent.
 // Custom agents are stored only here (name + paths + enabled).
 type localAgentConfig struct {
-	Name     string   `json:"name"`
-	ScanDirs []string `json:"scanDirs"`
-	PushDir  string   `json:"pushDir"`
-	Custom   bool     `json:"custom"`
-	Enabled  bool     `json:"enabled"` // only meaningful for custom agents
+	Name       string   `json:"name"`
+	ScanDirs   []string `json:"scanDirs"`
+	PushDir    string   `json:"pushDir"`
+	MemoryPath string   `json:"memoryPath"`
+	RulesDir   string   `json:"rulesDir"`
+	Custom     bool     `json:"custom"`
+	Enabled    bool     `json:"enabled"` // only meaningful for custom agents
 }
 
 // legacyAppConfig is used to detect the old single-file format that included
@@ -307,17 +309,19 @@ func (s *Service) defaultLocal() localConfig {
 	agents := make([]localAgentConfig, 0, len(defaultAgentSettings.Agents))
 	for _, agent := range defaultAgentSettings.Agents {
 		agents = append(agents, localAgentConfig{
-			Name:     agent.Name,
-			ScanDirs: append([]string(nil), agent.ScanDirs...),
-			PushDir:  agent.PushDir,
-			Custom:   agent.Custom,
-			Enabled:  agent.Enabled,
+			Name:       agent.Name,
+			ScanDirs:   append([]string(nil), agent.ScanDirs...),
+			PushDir:    agent.PushDir,
+			MemoryPath: agent.MemoryPath,
+			RulesDir:   agent.RulesDir,
+			Custom:     agent.Custom,
+			Enabled:    agent.Enabled,
 		})
 	}
 	return localConfig{
-		RepoCacheDir:     appdata.RepoCacheDir(s.DataDir()),
-		Agents:           agents,
-		Proxy:            defaultShellSettings.Proxy,
+		RepoCacheDir: appdata.RepoCacheDir(s.DataDir()),
+		Agents:       agents,
+		Proxy:        defaultShellSettings.Proxy,
 	}
 }
 
@@ -347,6 +351,8 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		la := localMap[name]
 		scanDirs := la.ScanDirs
 		pushDir := la.PushDir
+		memoryPath := la.MemoryPath
+		rulesDir := la.RulesDir
 		defaultProfile := agentdomain.DefaultProfile(name)
 		if len(scanDirs) == 0 {
 			scanDirs = defaultProfile.ScanDirs
@@ -354,22 +360,32 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		if pushDir == "" {
 			pushDir = defaultProfile.PushDir
 		}
+		if memoryPath == "" {
+			memoryPath = defaultProfile.MemoryPath
+		}
+		if rulesDir == "" {
+			rulesDir = defaultProfile.RulesDir
+		}
 		agents = append(agents, AgentConfig{
-			Name:     name,
-			ScanDirs: scanDirs,
-			PushDir:  pushDir,
-			Enabled:  enabled,
-			Custom:   false,
+			Name:       name,
+			ScanDirs:   scanDirs,
+			PushDir:    pushDir,
+			MemoryPath: memoryPath,
+			RulesDir:   rulesDir,
+			Enabled:    enabled,
+			Custom:     false,
 		})
 	}
 	for _, la := range local.Agents {
 		if la.Custom {
 			agents = append(agents, AgentConfig{
-				Name:     la.Name,
-				ScanDirs: la.ScanDirs,
-				PushDir:  la.PushDir,
-				Enabled:  la.Enabled,
-				Custom:   true,
+				Name:       la.Name,
+				ScanDirs:   la.ScanDirs,
+				PushDir:    la.PushDir,
+				MemoryPath: la.MemoryPath,
+				RulesDir:   la.RulesDir,
+				Enabled:    la.Enabled,
+				Custom:     true,
 			})
 		}
 	}
@@ -418,11 +434,13 @@ func (s *Service) splitLocal(cfg AppConfig) localConfig {
 	agents := make([]localAgentConfig, 0, len(cfg.Agents))
 	for _, agent := range cfg.Agents {
 		agents = append(agents, localAgentConfig{
-			Name:     agent.Name,
-			ScanDirs: agent.ScanDirs,
-			PushDir:  agent.PushDir,
-			Custom:   agent.Custom,
-			Enabled:  agent.Enabled,
+			Name:       agent.Name,
+			ScanDirs:   agent.ScanDirs,
+			PushDir:    agent.PushDir,
+			MemoryPath: agent.MemoryPath,
+			RulesDir:   agent.RulesDir,
+			Custom:     agent.Custom,
+			Enabled:    agent.Enabled,
 		})
 	}
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)

@@ -56,6 +56,8 @@ export function ExportPrompts():Promise<string>;
 
 export function ExportPromptsByNames(arg1:Array<string>):Promise<string>;
 
+export function GetAgentMemoryPreview(arg1:string):Promise<main.AgentMemoryPreviewDTO>;
+
 export function GetAllMemoryPushConfigs():Promise<Array<main.MemoryPushConfigDTO>>;
 
 export function GetAllMemoryPushStatuses():Promise<Array<main.PushStatusDTO>>;

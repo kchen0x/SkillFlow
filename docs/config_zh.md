@@ -171,6 +171,8 @@
         "/Users/demo/.claude/plugins/marketplaces"
       ],
       "pushDir": "/Users/demo/.claude/skills",
+      "memoryPath": "/Users/demo/.claude/CLAUDE.md",
+      "rulesDir": "/Users/demo/.claude/rules",
       "custom": false,
       "enabled": true
     },
@@ -178,6 +180,8 @@
       "name": "my-custom-agent",
       "scanDirs": ["/Users/demo/work/my-agent/skills"],
       "pushDir": "/Users/demo/work/my-agent/skills",
+      "memoryPath": "/Users/demo/work/my-agent/AGENTS.md",
+      "rulesDir": "/Users/demo/work/my-agent/rules",
       "custom": true,
       "enabled": true
     }
@@ -217,6 +221,8 @@
 | `agents[].name` | string | 智能体标识名。 |
 | `agents[].scanDirs` | string[] | 扫描该智能体外部 Skill 的本地目录列表。 |
 | `agents[].pushDir` | string | 将 Skill 推送到该智能体时使用的目标目录。 |
+| `agents[].memoryPath` | string | 智能体主记忆文件的本地路径，供 **我的记忆** 推送和 **我的智能体** 记忆预览使用。 |
+| `agents[].rulesDir` | string | 智能体规则目录的本地路径，供记忆模块推送和预览使用。 |
 | `agents[].custom` | boolean | `true` 表示用户创建的自定义智能体，`false` 表示内置智能体。 |
 | `agents[].enabled` | boolean | 每个智能体都会带上这个字段，但在 `config_local.json` 中它只对自定义智能体有实际意义；内置智能体的启用状态以 `config.json` 为准。 |
 | `cloudCredentialsByProvider` | object | 以 provider 名称为键的敏感凭据集合。 |

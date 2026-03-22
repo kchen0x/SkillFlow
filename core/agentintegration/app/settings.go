@@ -23,11 +23,13 @@ type SharedSettings struct {
 }
 
 type LocalAgentSettings struct {
-	Name     string   `json:"name"`
-	ScanDirs []string `json:"scanDirs"`
-	PushDir  string   `json:"pushDir"`
-	Custom   bool     `json:"custom"`
-	Enabled  bool     `json:"enabled"`
+	Name       string   `json:"name"`
+	ScanDirs   []string `json:"scanDirs"`
+	PushDir    string   `json:"pushDir"`
+	MemoryPath string   `json:"memoryPath"`
+	RulesDir   string   `json:"rulesDir"`
+	Custom     bool     `json:"custom"`
+	Enabled    bool     `json:"enabled"`
 }
 
 type LocalSettings struct {
@@ -69,9 +71,11 @@ func DefaultLocalSettings() LocalSettings {
 	agents := make([]LocalAgentSettings, 0, len(profiles))
 	for _, profile := range profiles {
 		agents = append(agents, LocalAgentSettings{
-			Name:     profile.Name,
-			ScanDirs: append([]string(nil), profile.ScanDirs...),
-			PushDir:  profile.PushDir,
+			Name:       profile.Name,
+			ScanDirs:   append([]string(nil), profile.ScanDirs...),
+			PushDir:    profile.PushDir,
+			MemoryPath: profile.MemoryPath,
+			RulesDir:   profile.RulesDir,
 		})
 	}
 	return LocalSettings{

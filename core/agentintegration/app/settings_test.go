@@ -13,6 +13,16 @@ func TestDefaultSettingsIncludeBuiltinAgents(t *testing.T) {
 	assert.NotEmpty(t, settings.Local.Agents)
 }
 
+func TestDefaultSettingsIncludeBuiltinAgentMemoryPaths(t *testing.T) {
+	settings := DefaultSettings()
+	assert.NotEmpty(t, settings.Local.Agents)
+
+	for _, agent := range settings.Local.Agents {
+		assert.NotEmpty(t, agent.MemoryPath)
+		assert.NotEmpty(t, agent.RulesDir)
+	}
+}
+
 func TestNormalizeAutoPushAgentNames(t *testing.T) {
 	normalized := NormalizeAutoPushAgentNames([]string{" codex ", "gemini-cli", "codex", ""})
 	assert.Equal(t, []string{"codex", "gemini-cli"}, normalized)

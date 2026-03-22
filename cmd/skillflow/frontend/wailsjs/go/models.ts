@@ -464,6 +464,67 @@ export namespace domain {
 
 export namespace main {
 	
+	export class AgentMemoryRuleDTO {
+	    name: string;
+	    path: string;
+	    content: string;
+	    managed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentMemoryRuleDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.content = source["content"];
+	        this.managed = source["managed"];
+	    }
+	}
+	export class AgentMemoryPreviewDTO {
+	    agentName: string;
+	    memoryPath: string;
+	    rulesDir: string;
+	    mainExists: boolean;
+	    mainContent: string;
+	    rulesDirExists: boolean;
+	    rules: AgentMemoryRuleDTO[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentMemoryPreviewDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agentName = source["agentName"];
+	        this.memoryPath = source["memoryPath"];
+	        this.rulesDir = source["rulesDir"];
+	        this.mainExists = source["mainExists"];
+	        this.mainContent = source["mainContent"];
+	        this.rulesDirExists = source["rulesDirExists"];
+	        this.rules = this.convertValues(source["rules"], AgentMemoryRuleDTO);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class AppUpdateInfo {
 	    hasUpdate: boolean;
 	    currentVersion: string;

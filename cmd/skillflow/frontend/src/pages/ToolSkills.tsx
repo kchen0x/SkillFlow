@@ -1,17 +1,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GetEnabledAgents, ListAgentSkills, DeleteAgentSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
+import { GetEnabledAgents, GetAgentMemoryPreview, ListAgentSkills, DeleteAgentSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { ToolIcon } from '../config/toolIcons'
 import SkillTooltip from '../components/SkillTooltip'
 import SkillStatusStrip from '../components/SkillStatusStrip'
 import SkillListControls from '../components/SkillListControls'
+import { buildAgentMemoryEntries } from '../lib/agentMemoryPreview'
 import { copyTextToClipboard } from '../lib/clipboard'
 import { createToolSkillsEventSubscriptions } from '../lib/dashboardSkillSettings'
-import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
+import { SkillSortOrder } from '../lib/skillList'
+import { ToolSkillsPanel, filterToolSkillsPanelContent, getDefaultToolSkillsPanel, getVisibleToolSkillsResultCount } from '../lib/toolSkillsPanels'
 import { subscribeToEvents } from '../lib/wailsEvents'
-import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine } from 'lucide-react'
+import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine, Brain, RefreshCw } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
+
+type AgentMemoryRuleItem = {
+  name: string
+  path: string
+  content: string
+  managed: boolean
+}
+
+type AgentMemoryPreviewItem = {
+  agentName: string
+  memoryPath: string
+  rulesDir: string
+  mainExists: boolean
+  mainContent: string
+  rulesDirExists: boolean
+  rules: AgentMemoryRuleItem[]
+}
 
 export default function ToolSkills() {
   const { t } = useLanguage()
@@ -19,12 +38,16 @@ export default function ToolSkills() {
   const [agents, setAgents] = useState<any[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string>('')
   const [skills, setSkills] = useState<any[]>([])
+  const [memoryPreview, setMemoryPreview] = useState<AgentMemoryPreviewItem | null>(null)
+  const [memoryLoading, setMemoryLoading] = useState(false)
+  const [memoryError, setMemoryError] = useState('')
   const [loading, setLoading] = useState(true)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
+  const [activePanel, setActivePanel] = useState<ToolSkillsPanel>(getDefaultToolSkillsPanel())
 
   const loadSkills = useCallback(async (agentName: string) => {
     setLoading(true)
@@ -35,6 +58,21 @@ export default function ToolSkills() {
       setLoading(false)
     }
   }, [])
+
+  const loadMemoryPreview = useCallback(async (agentName: string) => {
+    setMemoryLoading(true)
+    setMemoryError('')
+    try {
+      const preview = await GetAgentMemoryPreview(agentName)
+      setMemoryPreview((preview ?? null) as AgentMemoryPreviewItem | null)
+    } catch (error) {
+      console.error('Failed to load agent memory preview', error)
+      setMemoryPreview(null)
+      setMemoryError(t('toolSkills.memoryLoadFailed'))
+    } finally {
+      setMemoryLoading(false)
+    }
+  }, [t])
 
   useEffect(() => {
     let active = true
@@ -50,6 +88,8 @@ export default function ToolSkills() {
 
         if (nextAgents.length === 0) {
           setSkills([])
+          setMemoryPreview(null)
+          setMemoryError('')
           return
         }
 
@@ -59,6 +99,7 @@ export default function ToolSkills() {
         const listedSkills = await ListAgentSkills(initialAgent)
         if (!active) return
         setSkills(listedSkills ?? [])
+        await loadMemoryPreview(initialAgent)
       } finally {
         if (active) setLoading(false)
       }
@@ -69,7 +110,7 @@ export default function ToolSkills() {
     return () => {
       active = false
     }
-  }, [loadSkills])
+  }, [loadMemoryPreview])
 
   useEffect(() => {
     if (!selectedAgent) return
@@ -80,7 +121,18 @@ export default function ToolSkills() {
     setSelectedAgent(agentName)
     setSelectMode(false)
     setSelectedPaths(new Set())
-    loadSkills(agentName)
+    setMemoryPreview(null)
+    setMemoryError('')
+    void loadSkills(agentName)
+    void loadMemoryPreview(agentName)
+  }
+
+  const selectPanel = (panel: ToolSkillsPanel) => {
+    setActivePanel(panel)
+    if (panel !== 'skills') {
+      setSelectMode(false)
+      setSelectedPaths(new Set())
+    }
   }
 
   const handleDelete = async (skillPath: string) => {
@@ -114,14 +166,31 @@ export default function ToolSkills() {
   const pushSkills = skills.filter(s => s.pushed)
   const scanOnlySkills = skills.filter(s => s.seenInAgentScan && !s.pushed)
 
-  const filteredPushSkills = useMemo(
-    () => filterAndSortSkills(pushSkills, search, sortOrder, skill => skill.name ?? ''),
-    [pushSkills, search, sortOrder],
+  const memoryEntries = useMemo(
+    () => buildAgentMemoryEntries(memoryPreview),
+    [memoryPreview],
   )
 
-  const filteredScanOnlySkills = useMemo(
-    () => filterAndSortSkills(scanOnlySkills, search, sortOrder, skill => skill.name ?? ''),
-    [scanOnlySkills, search, sortOrder],
+  const { filteredPushSkills, filteredScanOnlySkills, filteredMemoryEntries } = useMemo(
+    () => filterToolSkillsPanelContent({
+      activePanel,
+      search,
+      sortOrder,
+      pushSkills,
+      scanOnlySkills,
+      memoryEntries,
+    }),
+    [activePanel, search, sortOrder, pushSkills, scanOnlySkills, memoryEntries],
+  )
+
+  const mainMemoryEntry = useMemo(
+    () => filteredMemoryEntries.find(entry => entry.kind === 'main') ?? null,
+    [filteredMemoryEntries],
+  )
+
+  const ruleEntries = useMemo(
+    () => filteredMemoryEntries.filter(entry => entry.kind === 'rule'),
+    [filteredMemoryEntries],
   )
 
   const toggleSelectAll = () => {
@@ -148,6 +217,15 @@ export default function ToolSkills() {
 
   const agent = agents.find(t => t.name === selectedAgent)
   const allSelected = filteredPushSkills.length > 0 && filteredPushSkills.every((skill: any) => selectedPaths.has(skill.path))
+  const visibleResultCount = getVisibleToolSkillsResultCount({
+    activePanel,
+    filteredPushSkills,
+    filteredScanOnlySkills,
+    filteredMemoryEntries,
+  })
+  const searchPlaceholder = activePanel === 'memory'
+    ? t('toolSkills.searchMemoryPlaceholder')
+    : t('toolSkills.searchSkillsPlaceholder')
 
   const getNavStyle = (isActive: boolean) => isActive ? {
     background: 'var(--accent-glow)',
@@ -188,9 +266,44 @@ export default function ToolSkills() {
         <div className="px-6 py-4 flex flex-col gap-4" style={{ borderBottom: '1px solid var(--border-base)' }}>
           <div className="flex items-center gap-3 flex-wrap">
             {agent ? (
-              <div className="flex items-center gap-2">
-                <ToolIcon name={agent.name} size={22} />
-                <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{agent.name}</span>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <ToolIcon name={agent.name} size={22} />
+                  <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{agent.name}</span>
+                </div>
+                <div
+                  className="flex items-center gap-1 rounded-xl p-1"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-base)',
+                  }}
+                >
+                  {([
+                    ['skills', t('toolSkills.panelSkills')],
+                    ['memory', t('toolSkills.panelMemory')],
+                  ] as const).map(([panel, label]) => {
+                    const selected = activePanel === panel
+                    return (
+                      <button
+                        key={panel}
+                        type="button"
+                        onClick={() => selectPanel(panel)}
+                        className="rounded-lg px-3 py-1.5 text-sm transition-all duration-150"
+                        style={selected ? {
+                          background: 'var(--active-surface)',
+                          color: 'var(--active-text)',
+                          border: '1px solid var(--active-border)',
+                          boxShadow: 'var(--active-shadow)',
+                        } : {
+                          color: 'var(--text-muted)',
+                          border: '1px solid transparent',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             ) : (
               <h2 className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -198,7 +311,7 @@ export default function ToolSkills() {
               </h2>
             )}
             <div className="flex-1" />
-            {selectMode ? (
+            {activePanel === 'skills' && selectMode ? (
               <>
                 <button
                   onClick={toggleSelectAll}
@@ -227,7 +340,7 @@ export default function ToolSkills() {
                   {t('common.cancel')}
                 </button>
               </>
-            ) : (
+            ) : activePanel === 'skills' ? (
               filteredPushSkills.length > 0 && (
                 <button
                   onClick={() => setSelectMode(true)}
@@ -239,7 +352,8 @@ export default function ToolSkills() {
                   <CheckSquare size={14} /> {t('toolSkills.batchDelete')}
                 </button>
               )
-            )}
+            ) : null
+            }
           </div>
 
           <SkillListControls
@@ -247,8 +361,8 @@ export default function ToolSkills() {
             onSearchChange={setSearch}
             sortOrder={sortOrder}
             onSortOrderChange={setSortOrder}
-            placeholder={t('toolSkills.searchPlaceholder')}
-            resultLabel={t('common.showingNSkills', { count: filteredPushSkills.length + filteredScanOnlySkills.length })}
+            placeholder={searchPlaceholder}
+            resultLabel={t('toolSkills.showingNResults', { count: visibleResultCount })}
           />
         </div>
 
@@ -261,6 +375,142 @@ export default function ToolSkills() {
               <Wrench size={32} className="mb-2 opacity-30" />
               <p className="text-sm">{t('toolSkills.selectToolFirst')}</p>
             </div>
+          ) : activePanel === 'memory' ? (
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <Brain size={14} style={{ color: 'var(--accent-primary)' }} className="shrink-0" />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.memoryTitle')}</span>
+                <div className="flex-1" />
+                <button
+                  onClick={() => void loadMemoryPreview(selectedAgent)}
+                  disabled={memoryLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors disabled:opacity-40"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                  title={t('toolSkills.memoryRefresh')}
+                >
+                  <RefreshCw size={14} className={memoryLoading ? 'animate-spin' : ''} />
+                  {t('toolSkills.memoryRefresh')}
+                </button>
+              </div>
+
+              {memoryError ? (
+                <p className="text-sm pl-5" style={{ color: 'var(--color-error)' }}>{memoryError}</p>
+              ) : memoryLoading && !memoryPreview ? (
+                <p className="text-sm pl-5" style={{ color: 'var(--text-muted)' }}>{t('common.loading')}</p>
+              ) : memoryPreview ? (
+                <div className="space-y-4">
+                  {mainMemoryEntry && (
+                    <div className="card-base p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.memoryFile')}</span>
+                          </div>
+                          {memoryPreview.memoryPath
+                            ? <p className="text-xs break-all" style={{ color: 'var(--text-muted)' }}>{memoryPreview.memoryPath}</p>
+                            : <p className="text-xs" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.memoryNotConfigured')}</p>
+                          }
+                        </div>
+                        <button
+                          onClick={() => { if (memoryPreview.memoryPath) void OpenPath(memoryPreview.memoryPath) }}
+                          disabled={!memoryPreview.memoryPath}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors disabled:opacity-40"
+                          style={{ color: 'var(--text-muted)' }}
+                          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                          onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                          title={t('toolSkills.openFile')}
+                        >
+                          <FolderOpenDot size={14} />
+                          {t('toolSkills.openFile')}
+                        </button>
+                      </div>
+
+                      <div className="mt-4 rounded-lg border p-3 max-h-56 overflow-y-auto" style={{ borderColor: 'var(--border-base)', background: 'var(--bg-panel)' }}>
+                        {!memoryPreview.memoryPath ? (
+                          <p className="text-sm" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.memoryNotConfigured')}</p>
+                        ) : !memoryPreview.mainExists ? (
+                          <p className="text-sm" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.memoryFileMissing')}</p>
+                        ) : (
+                          <pre className="whitespace-pre-wrap break-words text-sm m-0" style={{ color: 'var(--text-primary)' }}>{mainMemoryEntry.content || t('toolSkills.emptyContent')}</pre>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.rulesDir')}</span>
+                      {memoryPreview.rulesDir
+                        ? <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }} title={memoryPreview.rulesDir}>{memoryPreview.rulesDir}</span>
+                        : <span className="text-xs" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.noPushDir')}</span>
+                      }
+                      <div className="flex-1" />
+                      <button
+                        onClick={() => { if (memoryPreview.rulesDir) void OpenPath(memoryPreview.rulesDir) }}
+                        disabled={!memoryPreview.rulesDir}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors disabled:opacity-40"
+                        style={{ color: 'var(--text-muted)' }}
+                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                        title={t('toolSkills.openDir')}
+                      >
+                        <FolderOpenDot size={14} />
+                        {t('toolSkills.openDir')}
+                      </button>
+                    </div>
+
+                    {!memoryPreview.rulesDir ? (
+                      <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.rulesNotConfigured')}</p>
+                    ) : !memoryPreview.rulesDirExists ? (
+                      <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('toolSkills.rulesDirMissing')}</p>
+                    ) : ruleEntries.length === 0 ? (
+                      <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>
+                        {search.trim() ? t('toolSkills.noMemoryMatch') : t('toolSkills.noRuleFiles')}
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                        {ruleEntries.map(entry => (
+                          <div key={entry.key} className="card-base p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{entry.title}</span>
+                                  {entry.managed && (
+                                    <span
+                                      className="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                                      style={{ background: 'var(--accent-glow)', color: 'var(--accent-primary)', border: '1px solid var(--border-accent)' }}
+                                    >
+                                      {t('toolSkills.managedRule')}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs break-all" style={{ color: 'var(--text-muted)' }}>{entry.path}</p>
+                              </div>
+                              <button
+                                onClick={() => void OpenPath(entry.path)}
+                                className="p-1 rounded transition-colors"
+                                style={{ color: 'var(--text-muted)' }}
+                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-overlay)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                                title={t('toolSkills.openFile')}
+                              >
+                                <FolderOpenDot size={13} />
+                              </button>
+                            </div>
+
+                            <div className="mt-3 rounded-lg border p-3 max-h-40 overflow-y-auto" style={{ borderColor: 'var(--border-base)', background: 'var(--bg-panel)' }}>
+                              <pre className="whitespace-pre-wrap break-words text-sm m-0" style={{ color: 'var(--text-primary)' }}>{entry.content || t('toolSkills.emptyContent')}</pre>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </section>
           ) : (
             <>
               {/* Push dir section */}

@@ -427,7 +427,7 @@ Mirror your skill library to cloud storage. Two backend types are supported: **O
 - **Portable synced paths** — local paths persisted inside synced metadata (such as `meta/*.json`) are stored as forward-slash relative paths under `AppDataDir`, so restores continue to work across macOS and Windows.
 - **Local-only volatile skill metadata** — high-churn per-skill check timestamps (`LastCheckedAt`) are stored in local-only `meta_local/*.local.json` overlays, so they do not create cross-device git/cloud merge churn.
 - **Local-only starred-repo sync runtime state** — per-repo `lastSync` and `syncError` are stored in local-only `star_repos_local.json`, so background sync attempts on one device do not churn synced repo metadata on other devices.
-- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as `repoCacheDir`, agent `ScanDirs` / `PushDir`, and proxy settings; it is excluded from backup and git sync.
+- **Local-only path config** — `config_local.json` stores machine-specific filesystem paths such as `repoCacheDir`, agent `ScanDirs` / `PushDir` / `MemoryPath` / `RulesDir`, and proxy settings; it is excluded from backup and git sync.
 - **Other local-only device state** — per-device choices and runtime shell state such as auto-push targets, launch-at-login registration, and the last saved window size remain in `config_local.json`, so restoring on one machine does not overwrite another machine's local behavior.
 - **Local-only cloud secrets** — sensitive cloud credentials (for example access key IDs, secret keys, and access tokens) are stored only in per-provider entries inside `config_local.json`; synced `config.json` keeps only non-sensitive cloud settings such as provider, bucket name, remote path, endpoint, repo URL, or branch.
 - **Git backup compatibility** — when Git backup uses a parent directory as the working tree, SkillFlow automatically moves any legacy nested `skills/.git` metadata aside so actual skill files remain trackable.
@@ -773,15 +773,36 @@ Browse the skills currently present inside each enabled agent.
 ### Layout
 
 - Left sidebar lists enabled agents.
-- Main area shows one toolbar plus two skill-card sections: **Push Path** and **Scan Path**.
+- Main area shows one shared toolbar plus a top segmented control: **Skills | Memory**.
+- The segmented control defaults to **Skills** when the page first loads.
+- Switching to another agent keeps the current panel selection instead of forcing the page back to **Skills**.
 
 ### Toolbar
 
 | Control | Description |
 |---------|-------------|
-| **Search input** | Filters both Push Path and Scan Path skill cards by name in real time |
-| **Sort toggle** | Switches both sections between **A-Z** and **Z-A** ordering by skill name |
-| **Batch Delete** | Available when the visible Push Path list is non-empty; enters select mode |
+| **Skills \| Memory** | Switches the right-side content surface between skill management and memory preview |
+| **Search input** | Filters only the currently active panel in real time |
+| **Sort toggle** | Stays shared in the toolbar; in **Skills** it sorts Push Path and Scan Path cards, and in **Memory** it reorders the visible memory entries within that panel |
+| **Batch Delete** | Available only in the **Skills** panel when the visible Push Path list is non-empty; enters select mode |
+
+The result counter in the toolbar is panel-scoped:
+- **Skills** counts visible Push Path plus Scan Path cards only.
+- **Memory** counts visible memory preview entries only.
+
+### Memory Panel
+
+- Shown only when the top segmented control is switched to **Memory**.
+- Shows the selected agent's currently configured main memory file and rules directory content directly from that agent's filesystem paths.
+- Header includes a **Refresh** action so users can re-read the agent's current on-disk memory state without leaving **My Agents**.
+- **Memory File** card shows the configured file path, an **Open File** action, and the current file content preview. If the path is missing or the file does not exist yet, the card keeps the configured path area visible and shows the corresponding empty state instead of failing the whole page.
+- **Rules Directory** area shows the configured directory path, an **Open Directory** action, and one preview card per flat `.md` file found inside that directory.
+- Rule cards mark `sf-*.md` files as **Managed** so users can distinguish SkillFlow-managed module memories from other agent-local rule files.
+- The shared search input filters memory preview items only while **Memory** is active, and when nothing matches the panel shows a dedicated empty-search message instead of falling back to the skill empty states.
+
+### Skills Panel
+
+- Shown only when the top segmented control is switched to **Skills**.
 
 ### Push Path Section
 
@@ -795,7 +816,7 @@ Browse the skills currently present inside each enabled agent.
 
 - Shows read-only skills discovered only from scan directories.
 - Scan-path discovery uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
-- Shares the same search and sort controls as Push Path.
+- Shares the same panel-scoped search and sort controls as Push Path.
 - Scan-path cards use the same compact strip for source / imported / update-available / pushed-to-other-agents states whenever the scanned item can be correlated to an installed My Skills entry; the fact that they were found via scan paths is conveyed by the section itself instead of repeating a detected badge on every card.
 
 ---

@@ -173,6 +173,8 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
         "/Users/demo/.claude/plugins/marketplaces"
       ],
       "pushDir": "/Users/demo/.claude/skills",
+      "memoryPath": "/Users/demo/.claude/CLAUDE.md",
+      "rulesDir": "/Users/demo/.claude/rules",
       "custom": false,
       "enabled": true
     },
@@ -180,6 +182,8 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
       "name": "my-custom-agent",
       "scanDirs": ["/Users/demo/work/my-agent/skills"],
       "pushDir": "/Users/demo/work/my-agent/skills",
+      "memoryPath": "/Users/demo/work/my-agent/AGENTS.md",
+      "rulesDir": "/Users/demo/work/my-agent/rules",
       "custom": true,
       "enabled": true
     }
@@ -219,6 +223,8 @@ The same startup cutover also rewrites legacy local keys such as `autoPushTools`
 | `agents[].name` | string | Agent identifier. |
 | `agents[].scanDirs` | string[] | Local directories scanned for external skills from this agent. |
 | `agents[].pushDir` | string | Local target directory used when pushing skills to this agent. |
+| `agents[].memoryPath` | string | Local path to the agent's main memory file used by **My Memory** push and **My Agents** memory preview. |
+| `agents[].rulesDir` | string | Local path to the agent's rules directory used by memory module push and preview. |
 | `agents[].custom` | boolean | `true` for user-created custom agents, `false` for built-in agents. |
 | `agents[].enabled` | boolean | Stored for every agent, but only meaningful for custom agents in `config_local.json`; built-in enable state comes from `config.json`. |
 | `cloudCredentialsByProvider` | object | Sensitive provider credentials keyed by provider name. |

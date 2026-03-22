@@ -102,6 +102,10 @@ export function ExportPromptsByNames(arg1) {
   return window['go']['main']['App']['ExportPromptsByNames'](arg1);
 }
 
+export function GetAgentMemoryPreview(arg1) {
+  return window['go']['main']['App']['GetAgentMemoryPreview'](arg1);
+}
+
 export function GetAllMemoryPushConfigs() {
   return window['go']['main']['App']['GetAllMemoryPushConfigs']();
 }

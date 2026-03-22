@@ -50,6 +50,29 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	assert.Equal(t, "v1.2.3", loaded.SkippedUpdateVersion)
 }
 
+func TestSaveAndLoadPreservesAgentMemoryPaths(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	require.NotEmpty(t, cfg.Agents)
+
+	cfg.Agents[0].MemoryPath = filepath.Join(dir, "custom-agent-memory.md")
+	cfg.Agents[0].RulesDir = filepath.Join(dir, "custom-agent-rules")
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	require.NotEmpty(t, loaded.Agents)
+	assert.Equal(t, filepath.Join(dir, "custom-agent-memory.md"), loaded.Agents[0].MemoryPath)
+	assert.Equal(t, filepath.Join(dir, "custom-agent-rules"), loaded.Agents[0].RulesDir)
+
+	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(localData), `"memoryPath": "`+filepath.ToSlash(filepath.Join(dir, "custom-agent-memory.md"))+`"`)
+	assert.Contains(t, string(localData), `"rulesDir": "`+filepath.ToSlash(filepath.Join(dir, "custom-agent-rules"))+`"`)
+}
+
 func TestAutoUpdateSkillsStoredOnlyInLocalConfig(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)
