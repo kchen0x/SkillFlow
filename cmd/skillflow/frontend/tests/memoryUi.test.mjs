@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildMemoryPushStatusEntries, getMemoryDrawerMetrics } from '../.tmp-tests/memoryUi.js'
+import { buildMemoryPushStatusEntries, getMemoryDrawerMetrics } from '../.tmp-tests/src/lib/memoryUi.js'
 
 test('getMemoryDrawerMetrics widens the drawer but keeps practical bounds', () => {
   assert.deepEqual(getMemoryDrawerMetrics(1600), {

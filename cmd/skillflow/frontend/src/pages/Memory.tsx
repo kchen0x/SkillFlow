@@ -417,7 +417,7 @@ export default function Memory() {
                             style={{ width: 8, height: 8, background: statusColor(status) }}
                           />
                           <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {getAgentLabel(agent.name)}
+                            {getMemoryAgentLabel(agent.name)}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
