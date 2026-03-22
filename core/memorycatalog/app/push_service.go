@@ -85,7 +85,7 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 		return fmt.Errorf("list modules: %w", err)
 	}
 
-	selectedModules, removedNames, err := selectModulesForPush(allModules, moduleNames)
+	selectedModules, err := selectModulesForPush(allModules, moduleNames)
 	if err != nil {
 		return err
 	}
@@ -100,6 +100,12 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 			return fmt.Errorf("repair managed block for %q: %w", agentType, err)
 		}
 	}
+
+	managedNames, err := pusher.ListManagedModuleNames(agentCfg.RulesDir)
+	if err != nil {
+		return fmt.Errorf("list managed modules for %q: %w", agentType, err)
+	}
+	removedNames := findRemovedManagedModules(managedNames, selectedModules)
 
 	for _, m := range selectedModules {
 		if err := pusher.PushModuleMemory(m, agentCfg.RulesDir); err != nil {
@@ -157,12 +163,12 @@ func composeManagedMemory(mainContent string, rulesIndex gatewayport.RulesIndex)
 	return sb.String()
 }
 
-func selectModulesForPush(allModules []*domain.ModuleMemory, selectedNames []string) ([]*domain.ModuleMemory, []string, error) {
+func selectModulesForPush(allModules []*domain.ModuleMemory, selectedNames []string) ([]*domain.ModuleMemory, error) {
 	if len(selectedNames) == 0 {
 		sort.Slice(allModules, func(i, j int) bool {
 			return allModules[i].Name < allModules[j].Name
 		})
-		return allModules, nil, nil
+		return allModules, nil
 	}
 
 	selectedSet := make(map[string]struct{}, len(selectedNames))
@@ -171,14 +177,11 @@ func selectModulesForPush(allModules []*domain.ModuleMemory, selectedNames []str
 	}
 
 	var selected []*domain.ModuleMemory
-	var removed []string
 	for _, module := range allModules {
 		if _, ok := selectedSet[module.Name]; ok {
 			selected = append(selected, module)
 			delete(selectedSet, module.Name)
-			continue
 		}
-		removed = append(removed, module.Name)
 	}
 
 	if len(selectedSet) > 0 {
@@ -187,14 +190,33 @@ func selectModulesForPush(allModules []*domain.ModuleMemory, selectedNames []str
 			missing = append(missing, name)
 		}
 		sort.Strings(missing)
-		return nil, nil, fmt.Errorf("selected module memories not found: %s", strings.Join(missing, ", "))
+		return nil, fmt.Errorf("selected module memories not found: %s", strings.Join(missing, ", "))
 	}
 
 	sort.Slice(selected, func(i, j int) bool {
 		return selected[i].Name < selected[j].Name
 	})
+	return selected, nil
+}
+
+func findRemovedManagedModules(managedNames []string, selectedModules []*domain.ModuleMemory) []string {
+	if len(managedNames) == 0 {
+		return nil
+	}
+	selectedNames := make(map[string]struct{}, len(selectedModules))
+	for _, module := range selectedModules {
+		selectedNames[module.Name] = struct{}{}
+	}
+
+	removed := make([]string, 0, len(managedNames))
+	for _, name := range managedNames {
+		if _, ok := selectedNames[name]; ok {
+			continue
+		}
+		removed = append(removed, name)
+	}
 	sort.Strings(removed)
-	return selected, removed, nil
+	return removed
 }
 
 // PushAll pushes memory content to all enabled agents and collects results.

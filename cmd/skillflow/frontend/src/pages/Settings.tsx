@@ -187,7 +187,7 @@ function ThemeOptionCard({ option, active, onSelect }: { option: ThemeOption; ac
   return (
     <button
       onClick={() => onSelect(option.id)}
-      className="group relative overflow-hidden rounded-2xl p-3 text-left transition-all duration-300"
+      className="group relative overflow-hidden rounded-2xl p-2.5 text-left transition-all duration-300"
       style={{
         background: active ? 'var(--bg-elevated)' : 'var(--bg-surface)',
         border: active ? '1px solid var(--border-accent)' : '1px solid var(--border-base)',
@@ -196,7 +196,7 @@ function ThemeOptionCard({ option, active, onSelect }: { option: ThemeOption; ac
       }}
     >
       <div
-        className="relative mb-3 h-28 overflow-hidden rounded-[18px]"
+        className="relative mb-2.5 h-24 overflow-hidden rounded-[18px]"
         style={{
           background: option.preview.shell,
           border: `1px solid ${option.preview.divider}`,
@@ -269,11 +269,11 @@ function ThemeOptionCard({ option, active, onSelect }: { option: ThemeOption; ac
         />
       </div>
 
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
               style={{
                 background: active ? 'var(--accent-glow)' : 'var(--bg-overlay)',
                 color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
@@ -287,7 +287,19 @@ function ThemeOptionCard({ option, active, onSelect }: { option: ThemeOption; ac
               <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>{option.tone}</p>
             </div>
           </div>
-          <p className="mt-3 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>{option.description}</p>
+          <p
+            className="mt-2 text-[11px] leading-4"
+            style={{
+              color: 'var(--text-secondary)',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              minHeight: '2rem',
+            }}
+          >
+            {option.description}
+          </p>
         </div>
 
         <span
@@ -334,6 +346,7 @@ export default function SettingsPage() {
   const [newScanDirs, setNewScanDirs] = useState<Record<string, string>>({})
   const [showAddCustomToolDialog, setShowAddCustomToolDialog] = useState(false)
   const [customAgentDraft, setCustomAgentDraft] = useState(createEmptyCustomAgentDraft())
+  const [customAgentScanDirInput, setCustomAgentScanDirInput] = useState('')
   const [customAgentError, setCustomAgentError] = useState('')
   const [appVersion, setAppVersion] = useState('')
   const [appDataDir, setAppDataDir] = useState('')
@@ -615,7 +628,38 @@ export default function SettingsPage() {
   const closeAddCustomToolDialog = () => {
     setShowAddCustomToolDialog(false)
     setCustomAgentError('')
+    setCustomAgentScanDirInput('')
     setCustomAgentDraft(createEmptyCustomAgentDraft())
+  }
+
+  const addCustomAgentScanDir = () => {
+    const path = customAgentScanDirInput.trim()
+    if (!path) return
+    setCustomAgentError('')
+    setCustomAgentDraft(prev => {
+      if (prev.scanDirs.includes(path)) {
+        return prev
+      }
+      return { ...prev, scanDirs: [...prev.scanDirs, path] }
+    })
+    setCustomAgentScanDirInput('')
+  }
+
+  const updateCustomAgentScanDir = (index: number, value: string) => {
+    setCustomAgentError('')
+    setCustomAgentDraft(prev => {
+      const next = [...prev.scanDirs]
+      next[index] = value
+      return { ...prev, scanDirs: next }
+    })
+  }
+
+  const removeCustomAgentScanDir = (index: number) => {
+    setCustomAgentError('')
+    setCustomAgentDraft(prev => ({
+      ...prev,
+      scanDirs: prev.scanDirs.filter((_, currentIndex) => currentIndex !== index),
+    }))
   }
 
   const saveCustomAgentDraft = () => {
@@ -873,6 +917,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => {
                   setCustomAgentError('')
+                  setCustomAgentScanDirInput('')
                   setCustomAgentDraft(createEmptyCustomAgentDraft())
                   setShowAddCustomToolDialog(true)
                 }}
@@ -934,6 +979,63 @@ export default function SettingsPage() {
                       title={t('settings.selectDir')}
                     >
                       <FolderOpen size={14} />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+                    {t('settings.customToolScanPathHint')}
+                  </p>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.scanPaths')}</p>
+                  <div className="space-y-2">
+                    {customAgentDraft.scanDirs.map((dir, index) => (
+                      <div key={`custom-agent-scan-${index}`} className="flex gap-2">
+                        <input
+                          value={dir}
+                          onChange={e => updateCustomAgentScanDir(index, e.target.value)}
+                          placeholder="/path/to/scan"
+                          className="input-base flex-1 font-mono"
+                        />
+                        <button
+                          onClick={() => pickDir(path => updateCustomAgentScanDir(index, path), dir)}
+                          className="btn-secondary px-2.5 rounded-lg"
+                          title={t('settings.selectDir')}
+                        >
+                          <FolderOpen size={14} />
+                        </button>
+                        <button
+                          onClick={() => removeCustomAgentScanDir(index)}
+                          className="btn-secondary px-2.5 rounded-lg"
+                          title={t('settings.deleteScanPath')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={customAgentScanDirInput}
+                      onChange={e => {
+                        setCustomAgentError('')
+                        setCustomAgentScanDirInput(e.target.value)
+                      }}
+                      placeholder="/path/to/scan"
+                      className="input-base flex-1 font-mono"
+                    />
+                    <button
+                      onClick={() => pickDir(setCustomAgentScanDirInput, customAgentScanDirInput)}
+                      className="btn-secondary px-2.5 rounded-lg"
+                      title={t('settings.selectDir')}
+                    >
+                      <FolderOpen size={14} />
+                    </button>
+                    <button
+                      onClick={addCustomAgentScanDir}
+                      className="btn-secondary px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"
+                    >
+                      <Plus size={14} /> {t('settings.addPath')}
                     </button>
                   </div>
                 </div>
@@ -1163,7 +1265,7 @@ export default function SettingsPage() {
           {/* Theme */}
           <div>
             <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.theme')}</p>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {themeOptions.map((option) => (
                 <ThemeOptionCard
                   key={option.id}

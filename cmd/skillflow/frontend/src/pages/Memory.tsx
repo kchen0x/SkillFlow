@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Brain, CheckSquare, ExternalLink, Plus, RefreshCw, Upload, X } from 'lucide-react'
+import { Brain, CheckSquare, ExternalLink, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react'
 import {
   CreateModuleMemory,
   DeleteModuleMemory,
@@ -17,6 +17,8 @@ import {
 import { domain, main } from '../../wailsjs/go/models'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useLanguage } from '../contexts/LanguageContext'
+import AnimatedDialog from '../components/ui/AnimatedDialog'
+import { buildModuleDeletePreview } from '../lib/memoryDeleteDialog'
 import { createMemoryEventSubscriptions } from '../lib/memoryEventSubscriptions'
 import { renderMemoryMarkdown } from '../lib/memoryMarkdown'
 import {
@@ -79,6 +81,7 @@ export default function Memory() {
   const [saving, setSaving] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushMessage, setPushMessage] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<ModuleItem | null>(null)
   const [deletingModule, setDeletingModule] = useState<string | null>(null)
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   const [enterBatchPushAfterClose, setEnterBatchPushAfterClose] = useState(false)
@@ -91,6 +94,11 @@ export default function Memory() {
   const selectedMemoryCount = 1 + batchPushState.selectedModules.length
   const memoryStatusEntries = buildMemoryPushStatusEntries(availableAgents, pushStatuses)
   const drawerMetrics = getMemoryDrawerMetrics(window.innerWidth)
+  const deletePreview = deleteTarget
+    ? buildModuleDeletePreview(
+      drawerState.type === 'module' && drawerState.name === deleteTarget.name ? drawerContent : deleteTarget.content,
+    )
+    : ''
   const loadAllRef = useRef<() => Promise<void>>(async () => {})
 
   const loadAll = async () => {
@@ -313,14 +321,16 @@ export default function Memory() {
     }
   }
 
-  const handleDeleteModule = async (name: string) => {
-    if (!window.confirm(t('memory.confirmDelete'))) return
+  const handleDeleteModule = async () => {
+    if (!deleteTarget) return
+    const name = deleteTarget.name
     setDeletingModule(name)
     try {
       await DeleteModuleMemory(name)
       if (drawerState.type === 'module' && drawerState.name === name) {
         closeDrawerImmediate()
       }
+      setDeleteTarget(null)
       await loadAll()
     } catch (error) {
       console.error('DeleteModuleMemory failed', error)
@@ -737,7 +747,10 @@ export default function Memory() {
               </button>
               {drawerState.type === 'module' && (
                 <button
-                  onClick={() => void handleDeleteModule(drawerModuleName)}
+                  onClick={() => {
+                    const target = modules.find(module => module.name === drawerModuleName)
+                    if (target) setDeleteTarget(target)
+                  }}
                   disabled={deletingModule === drawerModuleName}
                   className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
                   style={{ color: 'var(--color-error, #ef4444)', border: '1px solid var(--border-base)' }}
@@ -868,6 +881,57 @@ export default function Memory() {
           </div>
         </div>
       )}
+
+      <AnimatedDialog
+        open={deleteTarget !== null}
+        onClose={deletingModule ? undefined : () => setDeleteTarget(null)}
+        width="w-[420px]"
+        zIndex={65}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <Trash2 size={18} style={{ color: 'var(--color-error)' }} />
+          <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {t('memory.deleteConfirmTitle')}
+          </span>
+        </div>
+        <p className="text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+          {t('memory.deleteConfirmDesc')}
+        </p>
+        {deleteTarget && (
+          <div
+            className="mt-4 rounded-xl px-3 py-3 text-sm"
+            style={{
+              background: 'var(--bg-base)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-base)',
+            }}
+          >
+            <div className="font-medium mb-1">{deleteTarget.name}</div>
+            {deletePreview && (
+              <div className="whitespace-pre-line" style={{ color: 'var(--text-secondary)' }}>
+                {deletePreview}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button
+            onClick={() => setDeleteTarget(null)}
+            disabled={deletingModule !== null}
+            className="btn-secondary"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            onClick={() => void handleDeleteModule()}
+            disabled={deletingModule !== null}
+            className="btn-primary"
+            style={{ background: 'var(--color-error)' }}
+          >
+            {deletingModule !== null ? t('common.delete') : t('common.confirm')}
+          </button>
+        </div>
+      </AnimatedDialog>
 
       {newModule.open && (
         <div

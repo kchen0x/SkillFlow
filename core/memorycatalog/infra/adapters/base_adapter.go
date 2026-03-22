@@ -3,6 +3,7 @@ package adapters
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	gatewayport "github.com/shinerio/skillflow/core/memorycatalog/app/port/gateway"
@@ -68,6 +69,31 @@ func (b *baseAdapter) PushModuleMemory(module *domain.ModuleMemory, agentRulesDi
 
 	targetPath := filepath.Join(agentRulesDir, sfPrefix+module.Name+".md")
 	return os.WriteFile(targetPath, []byte(module.Content), 0o644)
+}
+
+// ListManagedModuleNames returns SkillFlow-managed module names from sf-*.md files.
+func (b *baseAdapter) ListManagedModuleNames(agentRulesDir string) ([]string, error) {
+	entries, err := os.ReadDir(agentRulesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, sfPrefix) || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(strings.TrimPrefix(name, sfPrefix), ".md"))
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // RemoveModuleMemory removes <agentRulesDir>/sf-<name>.md if it exists (idempotent)

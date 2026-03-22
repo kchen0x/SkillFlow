@@ -1,6 +1,7 @@
 export type CustomAgentDraft = {
   name: string
   pushDir: string
+  scanDirs: string[]
   memoryPath: string
   rulesDir: string
 }
@@ -17,6 +18,7 @@ export function createEmptyCustomAgentDraft(): CustomAgentDraft {
   return {
     name: '',
     pushDir: '',
+    scanDirs: [],
     memoryPath: '',
     rulesDir: '',
   }
@@ -45,10 +47,14 @@ export function validateCustomAgentDraft(
 
 export function buildCustomAgentProfile(draft: CustomAgentDraft) {
   const pushDir = draft.pushDir.trim()
+  const scanDirs = draft.scanDirs
+    .map(path => path.trim())
+    .filter(path => path.length > 0)
+  const normalizedScanDirs = scanDirs.length > 0 ? scanDirs : (pushDir ? [pushDir] : [])
   return {
     name: draft.name.trim(),
     pushDir,
-    scanDirs: [pushDir],
+    scanDirs: normalizedScanDirs,
     memoryPath: draft.memoryPath.trim(),
     rulesDir: draft.rulesDir.trim(),
     enabled: true,

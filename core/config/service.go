@@ -137,6 +137,7 @@ func (s *Service) Save(cfg AppConfig) error {
 	cfg.AutoPushAgents = NormalizeAgentNameList(cfg.AutoPushAgents)
 	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
 	cfg.Proxy = NormalizeProxyConfig(cfg.Proxy)
+	cfg.Agents = normalizeAgentConfigs(cfg.Agents)
 
 	shared, err := s.loadShared()
 	if err != nil {
@@ -384,6 +385,7 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 			})
 		}
 	}
+	agents = normalizeAgentConfigs(agents)
 
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
@@ -400,6 +402,49 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 		Proxy:                NormalizeProxyConfig(local.Proxy),
 		SkippedUpdateVersion: shared.SkippedUpdateVersion,
 	}
+}
+
+func normalizeAgentConfigs(agents []AgentConfig) []AgentConfig {
+	if len(agents) == 0 {
+		return nil
+	}
+	normalized := make([]AgentConfig, 0, len(agents))
+	for _, agent := range agents {
+		next := agent
+		next.Name = strings.TrimSpace(next.Name)
+		next.PushDir = strings.TrimSpace(next.PushDir)
+		next.MemoryPath = strings.TrimSpace(next.MemoryPath)
+		next.RulesDir = strings.TrimSpace(next.RulesDir)
+		next.ScanDirs = normalizeAgentPathList(next.ScanDirs)
+		if next.Custom && len(next.ScanDirs) == 0 && next.PushDir != "" {
+			next.ScanDirs = []string{next.PushDir}
+		}
+		normalized = append(normalized, next)
+	}
+	return normalized
+}
+
+func normalizeAgentPathList(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(paths))
+	normalized := make([]string, 0, len(paths))
+	for _, path := range paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 // splitShared extracts the platform-agnostic fields from AppConfig.

@@ -17,6 +17,7 @@
     "src/lib/listLoadState.ts",
     "src/lib/memoryEventSubscriptions.ts",
     "src/lib/memoryMarkdown.ts",
+    "src/lib/memoryDeleteDialog.ts",
     "src/lib/memoryPageState.ts",
     "src/lib/memoryUi.ts",
     "src/lib/motionVariants.ts",

@@ -10,16 +10,39 @@ test('createEmptyCustomAgentDraft returns blank required fields', () => {
   assert.deepEqual(createEmptyCustomAgentDraft(), {
     name: '',
     pushDir: '',
+    scanDirs: [],
     memoryPath: '',
     rulesDir: '',
   })
 })
 
-test('buildCustomAgentProfile seeds scanDirs from pushDir', () => {
+test('buildCustomAgentProfile keeps explicit scanDirs when provided', () => {
   assert.deepEqual(
     buildCustomAgentProfile({
       name: '  custom-agent  ',
       pushDir: '  /tmp/skills  ',
+      scanDirs: ['  /tmp/scan-a  ', '', ' /tmp/scan-b '],
+      memoryPath: '  /tmp/agent/AGENTS.md  ',
+      rulesDir: '  /tmp/agent/rules  ',
+    }),
+    {
+      name: 'custom-agent',
+      pushDir: '/tmp/skills',
+      scanDirs: ['/tmp/scan-a', '/tmp/scan-b'],
+      memoryPath: '/tmp/agent/AGENTS.md',
+      rulesDir: '/tmp/agent/rules',
+      enabled: true,
+      custom: true,
+    },
+  )
+})
+
+test('buildCustomAgentProfile falls back to pushDir when scanDirs are blank', () => {
+  assert.deepEqual(
+    buildCustomAgentProfile({
+      name: '  custom-agent  ',
+      pushDir: '  /tmp/skills  ',
+      scanDirs: ['   ', ''],
       memoryPath: '  /tmp/agent/AGENTS.md  ',
       rulesDir: '  /tmp/agent/rules  ',
     }),

@@ -30,6 +30,7 @@ func TestPushSelectionToAgentWritesOnlySelectedModulesAndRemovesOthers(t *testin
 			},
 		},
 	}, func(agentType string) (gatewayport.AgentMemoryPusher, bool) {
+		pusher.managedModules = []string{"style", "testing"}
 		return pusher, true
 	})
 
@@ -180,6 +181,7 @@ type recordingPusher struct {
 	mainMode       domain.PushMode
 	pushedModules  []string
 	removedModules []string
+	managedModules []string
 }
 
 func (p *recordingPusher) PushMainMemory(content string, mode domain.PushMode, agentMemoryPath string) error {
@@ -191,6 +193,10 @@ func (p *recordingPusher) PushMainMemory(content string, mode domain.PushMode, a
 func (p *recordingPusher) PushModuleMemory(module *domain.ModuleMemory, agentRulesDir string) error {
 	p.pushedModules = append(p.pushedModules, module.Name)
 	return nil
+}
+
+func (p *recordingPusher) ListManagedModuleNames(agentRulesDir string) ([]string, error) {
+	return append([]string(nil), p.managedModules...), nil
 }
 
 func (p *recordingPusher) RemoveModuleMemory(moduleName string, agentRulesDir string) error {

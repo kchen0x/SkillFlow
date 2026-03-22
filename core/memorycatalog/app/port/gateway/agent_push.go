@@ -15,6 +15,8 @@ type AgentMemoryPusher interface {
 	PushMainMemory(content string, mode domain.PushMode, agentMemoryPath string) error
 	// PushModuleMemory pushes module memory to agent's rules directory (writes sf-<name>.md).
 	PushModuleMemory(module *domain.ModuleMemory, agentRulesDir string) error
+	// ListManagedModuleNames returns SkillFlow-managed module names currently present in the agent rules directory.
+	ListManagedModuleNames(agentRulesDir string) ([]string, error)
 	// RemoveModuleMemory removes a pushed module memory from agent's rules directory.
 	RemoveModuleMemory(moduleName string, agentRulesDir string) error
 	// BuildRulesIndex builds explicit markdown refs for managed module files.

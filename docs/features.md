@@ -853,22 +853,23 @@ Store reusable system prompts inside the synced `prompts/` directory.
 
 ## 15. My Memory
 
-SkillFlow provides a unified memory management interface. Users can author and manage personal AI coding assistant memories in one place and push them to multiple AI tools.
+SkillFlow provides a unified memory management surface for authoring personal AI coding assistant memories once and distributing them to multiple agent tools. The page manages both the shared main memory and reusable module memories, while the agent side can preview the exact synced result.
 
 ### Memory Types
 
 - **Main Memory**: A single `main.md` file containing global instructions shared across all configured agents.
-- **Module Memories**: Individual topic-focused markdown files (e.g., `coding-style`, `testing-rules`) stored under `rules/`.
+- **Module Memories**: Individual topic-focused markdown files (e.g., `coding-style`, `testing-rules`) stored under `rules/` and referenced from the main memory when pushed.
 
 ### Page Layout
 
 The My Memory page shows:
+- A top toolbar with **Search**, **New Module**, and **Batch Push**.
 - A prominent **Main Memory card** with per-agent push status chips.
-- Each **Module Memory card** shows the same per-agent push status row as the main-memory card, so users can see sync state without opening the drawer.
+- A **two-column module grid** where every module card shows a content preview, per-agent status row, and module-ref hint.
 - A top **Auto Sync** panel where each enabled agent can be set to `Off`, `Auto Merge`, or `Auto Takeover`.
-- A **Batch Push** mode that turns the card list into an inline multi-select flow, keeps main memory required, and lets users choose target agents and one shared push mode for the current push.
-- A **two-column module grid** with search and inline selection checkboxes during batch push.
+- A **Batch Push** mode that turns the page into an inline multi-select flow, keeps main memory required, and lets users choose target agents plus one shared push mode for the current push.
 - A right-side **Edit Drawer** anchored as a fixed overlay, widened to roughly 72% of the viewport up to a 960 px cap, with Edit / Preview tabs, save, delete, and open-in-editor actions only.
+- A **New Module** dialog for creating module memories inline. Module names must match the lowercase `a-z`, `0-9`, `-` format used for exported agent rule files.
 
 ### Batch Push Flow
 
@@ -880,20 +881,30 @@ The My Memory page shows:
   - users multi-select target agents
   - users choose one push mode for the whole operation: **Merge** or **Takeover**
 - The push writes the selected module set to the selected agents and rebuilds main-memory module references from that same selection.
+- Any previously SkillFlow-managed module files on the target agent that are not part of the current selection are removed during that push, so the agent rules directory matches the chosen module set.
 - Explicit module references are rendered as one markdown link per line inside a dedicated `<skillflow-module>...</skillflow-module>` block, for example `[testing](rules/sf-testing.md)`.
 - Those module links always use forward-slash relative paths from the agent main-memory file so synced configs stay portable across different machines.
+- Because push status compares against the full current local memory set, a partial batch push keeps that agent in **Pending** until it matches the current main memory plus the full local module set again.
+
+### Auto Sync Behaviour
+
+- The **Auto Sync** panel is per agent and exposes three modes: `Off`, `Auto Merge`, and `Auto Takeover`.
+- Enabling either auto-sync mode immediately pushes the current main memory plus all current module memories to that agent using the selected mode.
+- After auto sync is enabled, editing the main memory, creating a module, saving a module, or deleting a module automatically syncs the change to every enabled auto-sync agent.
+- When a module is deleted locally, SkillFlow also removes the corresponding managed `sf-<name>.md` file from each auto-sync agent and rewrites the main-memory module reference block to match.
 
 ### Editing Behaviour
 
 - Closing the drawer with unsaved changes shows a confirmation with **Discard**, **Save and Close**, and **Keep Editing**.
 - The preview tab renders Markdown instead of raw text.
+- Each module drawer includes a delete action that opens a dedicated confirmation dialog with the module name and a short content preview before removal.
 
 ### Push Modes (per agent)
 
 | Mode | Behaviour |
 |------|-----------|
-| **Merge** | SkillFlow writes the main memory inside `<skillflow-managed>...</skillflow-managed>` and writes explicit module refs in a separate `<skillflow-module>...</skillflow-module>` block. Content outside those SkillFlow-managed sections is preserved. |
-| **Takeover** | SkillFlow owns the entire memory file and rules directory. |
+| **Merge** | SkillFlow writes the main memory inside `<skillflow-managed>...</skillflow-managed>` and writes explicit module refs in a separate `<skillflow-module>...</skillflow-module>` block. Content outside those SkillFlow-managed sections is preserved. Before writing, SkillFlow repairs incomplete managed tags so the next sync can rebuild a clean managed block. |
+| **Takeover** | SkillFlow owns the entire memory file and rules directory for the managed memory content. |
 
 ### Push Status
 
@@ -901,8 +912,8 @@ Each agent shows one of three statuses:
 
 | Status | Meaning |
 |--------|---------|
-| ✓ Synced | Last push matches current local memory. |
-| ⚠ Pending | Local memory has changed since the last push. |
+| ✓ Synced | Last push matches current local main memory plus the current local module set. |
+| ⚠ Pending | Local memory has changed since the last full push, or the agent currently reflects only a partial module selection. |
 | Never Pushed | The agent has never received a memory push from SkillFlow. |
 
 ### Module File Naming
@@ -911,7 +922,7 @@ Module memories are written with an `sf-` prefix to the agent rules directory (e
 
 ### Open in External Editor
 
-Each memory card provides an **Open in Editor** button that opens the file in the system default text editor. SkillFlow detects file changes and refreshes the content automatically.
+Each memory drawer provides an **Open in Editor** button that opens the file in the system default text editor. SkillFlow detects file changes and refreshes the content automatically.
 
 ### Agent Settings
 
@@ -920,6 +931,10 @@ In **Settings → Agents**, each agent now exposes:
 - **Memory Paths** – grouped block containing the main memory file and rules directory.
 - **Memory File** – path to the agent's main memory file (default shown; user-overridable).
 - **Rules Directory** – path to the agent's rules directory.
+
+### Agent-side Verification
+
+The **My Agents → Memory** panel lets users inspect the selected agent's current main memory file and flat rules-directory markdown files directly from disk, including `sf-*.md` files marked as **Managed**. This acts as the verification surface for memory auto sync and batch push results.
 
 ### Cloud Backup
 

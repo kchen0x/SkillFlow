@@ -78,6 +78,55 @@ func TestSaveAndLoadPreservesAgentMemoryPaths(t *testing.T) {
 	assert.Equal(t, filepath.Join(dir, "custom-agent-rules"), local.Agents[0].RulesDir)
 }
 
+func TestSaveAndLoadCustomAgentPreservesExplicitScanDirs(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Agents = append(cfg.Agents, config.AgentConfig{
+		Name:       "custom-agent",
+		PushDir:    filepath.Join(dir, "push"),
+		ScanDirs:   []string{filepath.Join(dir, "scan-a"), filepath.Join(dir, "scan-b")},
+		MemoryPath: filepath.Join(dir, "custom-agent-memory.md"),
+		RulesDir:   filepath.Join(dir, "custom-agent-rules"),
+		Enabled:    true,
+		Custom:     true,
+	})
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	require.Len(t, loaded.Agents, len(cfg.Agents))
+
+	customAgent := loaded.Agents[len(loaded.Agents)-1]
+	assert.Equal(t, "custom-agent", customAgent.Name)
+	assert.Equal(t, []string{filepath.Join(dir, "scan-a"), filepath.Join(dir, "scan-b")}, customAgent.ScanDirs)
+}
+
+func TestSaveAndLoadCustomAgentFallsBackScanDirsToPushDir(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Agents = append(cfg.Agents, config.AgentConfig{
+		Name:       "custom-agent",
+		PushDir:    filepath.Join(dir, "push"),
+		ScanDirs:   nil,
+		MemoryPath: filepath.Join(dir, "custom-agent-memory.md"),
+		RulesDir:   filepath.Join(dir, "custom-agent-rules"),
+		Enabled:    true,
+		Custom:     true,
+	})
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	require.Len(t, loaded.Agents, len(cfg.Agents))
+
+	customAgent := loaded.Agents[len(loaded.Agents)-1]
+	assert.Equal(t, []string{filepath.Join(dir, "push")}, customAgent.ScanDirs)
+}
+
 func TestAutoUpdateSkillsStoredOnlyInLocalConfig(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)
