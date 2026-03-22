@@ -13,7 +13,7 @@ import (
 
 func TestPushSelectionToAgentWritesOnlySelectedModulesAndRemovesOthers(t *testing.T) {
 	storage := &testMemoryStorage{
-		main: &domain.MainMemory{Content: "Main memory", UpdatedAt: time.Now()},
+		main: &domain.MainMemory{Content: "Main memory body", UpdatedAt: time.Now()},
 		modules: map[string]*domain.ModuleMemory{
 			"style":   {Name: "style", Content: "Style rules", UpdatedAt: time.Now()},
 			"testing": {Name: "testing", Content: "Always test", UpdatedAt: time.Now()},
@@ -38,9 +38,14 @@ func TestPushSelectionToAgentWritesOnlySelectedModulesAndRemovesOthers(t *testin
 	assert.Equal(t, []string{"testing"}, pusher.pushedModules)
 	assert.Equal(t, []string{"style"}, pusher.removedModules)
 	assert.Equal(t, domain.PushModeMerge, pusher.mainMode)
-	assert.True(t, strings.Contains(pusher.mainContent, "Main memory"))
-	assert.True(t, strings.Contains(pusher.mainContent, "testing"))
-	assert.False(t, strings.Contains(pusher.mainContent, "style"))
+	assert.Equal(t, strings.TrimSpace(`
+<skillflow-managed>
+Main memory body
+</skillflow-managed>
+
+<skillflow-module>
+[testing](rules/sf-testing.md)
+</skillflow-module>`), pusher.mainContent)
 	assert.NotEmpty(t, storage.pushState["codex"].LastPushedHash)
 }
 
@@ -192,13 +197,12 @@ func (p *recordingPusher) RemoveModuleMemory(moduleName string, agentRulesDir st
 	return nil
 }
 
-func (p *recordingPusher) BuildRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gatewayport.RulesIndex {
+func (p *recordingPusher) BuildRulesIndex(modules []*domain.ModuleMemory, agentMemoryPath string, agentRulesDir string) gatewayport.RulesIndex {
 	entries := make([]string, 0, len(modules))
 	for _, module := range modules {
-		entries = append(entries, module.Name)
+		entries = append(entries, "["+module.Name+"](rules/sf-"+module.Name+".md)")
 	}
 	return gatewayport.RulesIndex{
-		Header:  "Selected modules:",
 		Entries: entries,
 	}
 }
