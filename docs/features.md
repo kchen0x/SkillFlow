@@ -489,15 +489,25 @@ For each built-in or custom agent:
 | Control | Description |
 |---------|-------------|
 | **Enable toggle** | Enables or disables the agent across the app |
+| **Skill Paths section** | Dedicated grouped block for skill distribution paths |
 | **Push directory** | Single directory where skills are copied on push; supports both manual text entry and folder-picker button (FolderOpen icon), which opens at the current path or nearest existing parent |
 | **Scan directories** | Multiple directories searched when pulling; each row has a folder-picker button and a delete button; new directories added with an input + folder-picker + "Add" button, with the picker reopening at the current path or nearest existing parent |
+| **Memory Paths section** | Dedicated grouped block for memory-sync paths |
+| **Memory file** | Path to the agent's main memory file |
+| **Rules directory** | Path to the agent's rules directory |
 | **Delete agent** (custom agents only) | Removes the custom agent entry |
 
-**Add Custom Agent** section (dashed border):
+**Add Custom Agent** entry point (dashed border):
 
-- Agent name input.
-- Push directory input with folder-picker button that reopens at the current path or nearest existing parent.
-- **"Add"** button — `AddCustomAgent(name, pushDir)`.
+- Opens a centered modal dialog instead of using an inline form.
+- The dialog collects:
+  - agent name
+  - initial skill path (`pushDir`)
+  - memory file (`memoryPath`)
+  - rules directory (`rulesDir`)
+- Creating the agent seeds `scanDirs` with the same initial skill path.
+- Additional scan paths are still added later on the agent card inside **Skill Paths**.
+- The dialog updates the current in-memory Settings draft; final persistence still happens through **Save Settings**.
 
 ### Cloud Tab
 
@@ -939,6 +949,8 @@ Each memory card provides an **Open in Editor** button that opens the file in th
 ### Agent Settings
 
 In **Settings → Agents**, each agent now exposes:
+- **Skill Paths** – grouped block containing the push directory plus the editable multi-row scan directory list.
+- **Memory Paths** – grouped block containing the main memory file and rules directory.
 - **Memory File** – path to the agent's main memory file (default shown; user-overridable).
 - **Rules Directory** – path to the agent's rules directory.
 

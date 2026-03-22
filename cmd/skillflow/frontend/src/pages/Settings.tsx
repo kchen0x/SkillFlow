@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { GetConfig, SaveConfig, ListCloudProviders, AddCustomAgent, RemoveCustomAgent, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir, TestProxyConnection, GetAppDataDir, OpenAppDataDir } from '../../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, ListCloudProviders, OpenFolderDialog, CheckAppUpdateAndNotify, GetAppVersion, GetLogDir, OpenLogDir, TestProxyConnection, GetAppDataDir, OpenAppDataDir } from '../../wailsjs/go/main/App'
 import { Plus, Trash2, Settings, Globe, FolderOpen, RefreshCw, Sun, Moon, Sparkles, Check, Package, Wrench, ArrowUpFromLine, ArrowDownToLine, Star } from 'lucide-react'
+import AnimatedDialog from '../components/ui/AnimatedDialog'
 import { ToolIcon } from '../config/toolIcons'
 import { useThemeContext } from '../contexts/ThemeContext'
 import { useSkillStatusVisibilityContext } from '../contexts/SkillStatusVisibilityContext'
@@ -17,6 +18,7 @@ import {
 import { orderCloudProviders } from '../lib/cloudProviderOrder'
 import { DEFAULT_PROXY_TEST_URL, buildProxyConnectionPayload } from '../lib/proxyConnection'
 import { buildSettingsPathRows } from '../lib/settingsPaths'
+import { buildCustomAgentProfile, createEmptyCustomAgentDraft, validateCustomAgentDraft } from '../lib/agentSettings'
 
 type Tab = 'agents' | 'cloud' | 'general' | 'network'
 type ProxyMode = 'none' | 'system' | 'manual'
@@ -392,8 +394,10 @@ export default function SettingsPage() {
   const [cfg, setCfg] = useState<any>(null)
   const [providers, setProviders] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
-  const [newAgent, setNewAgent] = useState({ name: '', pushDir: '' })
   const [newScanDirs, setNewScanDirs] = useState<Record<string, string>>({})
+  const [showAddCustomToolDialog, setShowAddCustomToolDialog] = useState(false)
+  const [customAgentDraft, setCustomAgentDraft] = useState(createEmptyCustomAgentDraft())
+  const [customAgentError, setCustomAgentError] = useState('')
   const [appVersion, setAppVersion] = useState('')
   const [appDataDir, setAppDataDir] = useState('')
   const [logDir, setLogDir] = useState('')
@@ -642,9 +646,40 @@ export default function SettingsPage() {
     setCfg((prev: any) => ({ ...prev, proxy: { ...prev.proxy, url } }))
   }
 
+  const removeCustomAgentDraft = (name: string) => {
+    setCfg((prev: any) => ({
+      ...prev,
+      agents: prev.agents.filter((agent: any) => !(agent.custom && agent.name === name)),
+    }))
+  }
+
   const pickDir = async (onPick: (path: string) => void, currentPath = '') => {
     const dir = await OpenFolderDialog(currentPath)
     if (dir) onPick(dir)
+  }
+
+  const closeAddCustomToolDialog = () => {
+    setShowAddCustomToolDialog(false)
+    setCustomAgentError('')
+    setCustomAgentDraft(createEmptyCustomAgentDraft())
+  }
+
+  const saveCustomAgentDraft = () => {
+    const validation = validateCustomAgentDraft(customAgentDraft, cfg?.agents ?? [])
+    if (!validation.ok) {
+      setCustomAgentError(
+        validation.reason === 'duplicate_name'
+          ? t('settings.agentNameDuplicate')
+          : t('settings.agentFieldsRequired'),
+      )
+      return
+    }
+
+    setCfg((prev: any) => ({
+      ...prev,
+      agents: [...(prev.agents ?? []), buildCustomAgentProfile(customAgentDraft)],
+    }))
+    closeAddCustomToolDialog()
   }
 
   const selectedProvider = providers.find((p: any) => p.name === cfg?.cloud?.provider)
@@ -733,115 +768,135 @@ export default function SettingsPage() {
                 </label>
               </div>
 
-              <div className="mb-3">
-                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.pushPath')}</p>
-                <div className="flex gap-2">
-                  <input
-                    value={agent.pushDir ?? ''}
-                    onChange={e => updateAgent(agent.name, 'pushDir', e.target.value)}
-                    className="input-base flex-1 font-mono"
-                  />
-                  <button
-                    onClick={() => pickDir(dir => updateAgent(agent.name, 'pushDir', dir), agent.pushDir ?? '')}
-                    className="btn-secondary px-2.5 rounded-lg"
-                    title={t('settings.selectDir')}
-                  >
-                    <FolderOpen size={14} />
-                  </button>
-                </div>
-              </div>
+              <div className="space-y-3">
+                <section
+                  className="rounded-xl p-3"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-base)' }}
+                >
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>
+                    {t('settings.skillPathsSection')}
+                  </p>
 
-              <div className="mb-3">
-                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.agentMemoryPath')}</p>
-                <div className="flex gap-2">
-                  <input
-                    value={agent.memoryPath ?? ''}
-                    onChange={e => updateAgent(agent.name, 'memoryPath', e.target.value)}
-                    placeholder={t('settings.agentMemoryPathPlaceholder')}
-                    className="input-base flex-1 font-mono"
-                  />
-                  <button
-                    onClick={() => pickDir(dir => updateAgent(agent.name, 'memoryPath', dir), agent.memoryPath ?? '')}
-                    className="btn-secondary px-2.5 rounded-lg"
-                    title={t('settings.selectDir')}
-                  >
-                    <FolderOpen size={14} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.agentRulesDir')}</p>
-                <div className="flex gap-2">
-                  <input
-                    value={agent.rulesDir ?? ''}
-                    onChange={e => updateAgent(agent.name, 'rulesDir', e.target.value)}
-                    placeholder={t('settings.agentRulesDirPlaceholder')}
-                    className="input-base flex-1 font-mono"
-                  />
-                  <button
-                    onClick={() => pickDir(dir => updateAgent(agent.name, 'rulesDir', dir), agent.rulesDir ?? '')}
-                    className="btn-secondary px-2.5 rounded-lg"
-                    title={t('settings.selectDir')}
-                  >
-                    <FolderOpen size={14} />
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.scanPaths')}</p>
-                <div className="space-y-2">
-                  {(agent.scanDirs ?? []).map((dir: string, idx: number) => (
-                    <div key={`${agent.name}-scan-${idx}`} className="flex gap-2">
+                  <div className="mb-3">
+                    <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.pushPath')}</p>
+                    <div className="flex gap-2">
                       <input
-                        value={dir}
-                        onChange={e => updateScanDir(agent.name, idx, e.target.value)}
+                        value={agent.pushDir ?? ''}
+                        onChange={e => updateAgent(agent.name, 'pushDir', e.target.value)}
                         className="input-base flex-1 font-mono"
                       />
                       <button
-                        onClick={() => pickDir(d => updateScanDir(agent.name, idx, d), dir ?? '')}
+                        onClick={() => pickDir(dir => updateAgent(agent.name, 'pushDir', dir), agent.pushDir ?? '')}
+                        className="btn-secondary px-2.5 rounded-lg"
+                        title={t('settings.selectDir')}
+                      >
+                        <FolderOpen size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.scanPaths')}</p>
+                    <div className="space-y-2">
+                      {(agent.scanDirs ?? []).map((dir: string, idx: number) => (
+                        <div key={`${agent.name}-scan-${idx}`} className="flex gap-2">
+                          <input
+                            value={dir}
+                            onChange={e => updateScanDir(agent.name, idx, e.target.value)}
+                            className="input-base flex-1 font-mono"
+                          />
+                          <button
+                            onClick={() => pickDir(d => updateScanDir(agent.name, idx, d), dir ?? '')}
+                            className="btn-secondary px-2.5 rounded-lg"
+                            title={t('settings.selectDir')}
+                          >
+                            <FolderOpen size={14} />
+                          </button>
+                          <button
+                            onClick={() => removeScanDir(agent.name, idx)}
+                            className="btn-secondary px-2.5 rounded-lg"
+                            title={t('settings.deleteScanPath')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={newScanDirs[agent.name] ?? ''}
+                        onChange={e => setNewScanDirs(prev => ({ ...prev, [agent.name]: e.target.value }))}
+                        placeholder="/path/to/scan"
+                        className="input-base flex-1 font-mono"
+                      />
+                      <button
+                        onClick={() => pickDir(d => setNewScanDirs(prev => ({ ...prev, [agent.name]: d })), newScanDirs[agent.name] ?? '')}
                         className="btn-secondary px-2.5 rounded-lg"
                         title={t('settings.selectDir')}
                       >
                         <FolderOpen size={14} />
                       </button>
                       <button
-                        onClick={() => removeScanDir(agent.name, idx)}
-                        className="btn-secondary px-2.5 rounded-lg"
-                        title={t('settings.deleteScanPath')}
+                        onClick={() => addScanDir(agent.name)}
+                        className="btn-secondary px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"
                       >
-                        <Trash2 size={14} />
+                        <Plus size={14} /> {t('settings.addPath')}
                       </button>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    value={newScanDirs[agent.name] ?? ''}
-                    onChange={e => setNewScanDirs(prev => ({ ...prev, [agent.name]: e.target.value }))}
-                    placeholder="/path/to/scan"
-                    className="input-base flex-1 font-mono"
-                  />
-                  <button
-                    onClick={() => pickDir(d => setNewScanDirs(prev => ({ ...prev, [agent.name]: d })), newScanDirs[agent.name] ?? '')}
-                    className="btn-secondary px-2.5 rounded-lg"
-                    title={t('settings.selectDir')}
-                  >
-                    <FolderOpen size={14} />
-                  </button>
-                  <button
-                    onClick={() => addScanDir(agent.name)}
-                    className="btn-secondary px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"
-                  >
-                    <Plus size={14} /> {t('settings.addPath')}
-                  </button>
-                </div>
+                  </div>
+                </section>
+
+                <section
+                  className="rounded-xl p-3"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-base)' }}
+                >
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>
+                    {t('settings.memoryPathsSection')}
+                  </p>
+
+                  <div className="mb-3">
+                    <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.agentMemoryPath')}</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={agent.memoryPath ?? ''}
+                        onChange={e => updateAgent(agent.name, 'memoryPath', e.target.value)}
+                        placeholder={t('settings.agentMemoryPathPlaceholder')}
+                        className="input-base flex-1 font-mono"
+                      />
+                      <button
+                        onClick={() => pickDir(dir => updateAgent(agent.name, 'memoryPath', dir), agent.memoryPath ?? '')}
+                        className="btn-secondary px-2.5 rounded-lg"
+                        title={t('settings.selectDir')}
+                      >
+                        <FolderOpen size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{t('settings.agentRulesDir')}</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={agent.rulesDir ?? ''}
+                        onChange={e => updateAgent(agent.name, 'rulesDir', e.target.value)}
+                        placeholder={t('settings.agentRulesDirPlaceholder')}
+                        className="input-base flex-1 font-mono"
+                      />
+                      <button
+                        onClick={() => pickDir(dir => updateAgent(agent.name, 'rulesDir', dir), agent.rulesDir ?? '')}
+                        className="btn-secondary px-2.5 rounded-lg"
+                        title={t('settings.selectDir')}
+                      >
+                        <FolderOpen size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </section>
               </div>
 
               {agent.custom && (
                 <button
-                  onClick={async () => { await RemoveCustomAgent(agent.name); const c = await GetConfig(); setCfg(syncActiveCloudProfile(c)) }}
+                  onClick={() => removeCustomAgentDraft(agent.name)}
                   className="mt-2 text-xs flex items-center gap-1 transition-colors"
                   style={{ color: 'var(--color-error)' }}
                 >
@@ -856,43 +911,151 @@ export default function SettingsPage() {
             className="rounded-xl p-4"
             style={{ border: '1px dashed var(--border-surface)', background: 'var(--bg-surface)' }}
           >
-            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>{t('settings.addCustomTool')}</p>
-            <div className="flex gap-2 mb-2">
-              <input
-                value={newAgent.name}
-                onChange={e => setNewAgent(p => ({ ...p, name: e.target.value }))}
-                placeholder={t('settings.toolName')}
-                className="input-base flex-1"
-              />
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={newAgent.pushDir}
-                onChange={e => setNewAgent(p => ({ ...p, pushDir: e.target.value }))}
-                placeholder="/path/to/push"
-                className="input-base flex-1 font-mono"
-              />
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{t('settings.addCustomTool')}</p>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+                  {t('settings.addCustomToolDialogHint')}
+                </p>
+              </div>
               <button
-                onClick={() => pickDir(d => setNewAgent(p => ({ ...p, pushDir: d })), newAgent.pushDir)}
-                className="btn-secondary px-2.5 rounded-lg"
-                title={t('settings.selectDir')}
-              >
-                <FolderOpen size={14} />
-              </button>
-              <button
-                onClick={async () => {
-                  if (newAgent.name && newAgent.pushDir) {
-                    await AddCustomAgent(newAgent.name, newAgent.pushDir)
-                    const c = await GetConfig(); setCfg(syncActiveCloudProfile(c))
-                    setNewAgent({ name: '', pushDir: '' })
-                  }
+                onClick={() => {
+                  setCustomAgentError('')
+                  setCustomAgentDraft(createEmptyCustomAgentDraft())
+                  setShowAddCustomToolDialog(true)
                 }}
                 className="btn-primary px-3 py-1.5 rounded-lg text-sm flex items-center gap-1"
               >
-                <Plus size={14} /> {t('settings.addPath')}
+                <Plus size={14} /> {t('settings.addCustomTool')}
               </button>
             </div>
           </div>
+
+          <AnimatedDialog open={showAddCustomToolDialog} onClose={closeAddCustomToolDialog} width="w-[560px] max-w-[calc(100vw-2rem)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {t('settings.addCustomToolDialogTitle')}
+                </h3>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+                  {t('settings.addCustomToolDialogHint')}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.toolName')}</p>
+                <input
+                  value={customAgentDraft.name}
+                  onChange={e => {
+                    setCustomAgentError('')
+                    setCustomAgentDraft(prev => ({ ...prev, name: e.target.value }))
+                  }}
+                  placeholder={t('settings.toolName')}
+                  className="input-base"
+                />
+              </div>
+
+              <section
+                className="rounded-xl p-3"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-base)' }}
+              >
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>
+                  {t('settings.skillPathsSection')}
+                </p>
+                <div>
+                  <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.addCustomToolSkillPath')}</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={customAgentDraft.pushDir}
+                      onChange={e => {
+                        setCustomAgentError('')
+                        setCustomAgentDraft(prev => ({ ...prev, pushDir: e.target.value }))
+                      }}
+                      placeholder="/path/to/push"
+                      className="input-base flex-1 font-mono"
+                    />
+                    <button
+                      onClick={() => pickDir(dir => setCustomAgentDraft(prev => ({ ...prev, pushDir: dir })), customAgentDraft.pushDir)}
+                      className="btn-secondary px-2.5 rounded-lg"
+                      title={t('settings.selectDir')}
+                    >
+                      <FolderOpen size={14} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section
+                className="rounded-xl p-3"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-base)' }}
+              >
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>
+                  {t('settings.memoryPathsSection')}
+                </p>
+
+                <div className="mb-3">
+                  <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.agentMemoryPath')}</p>
+                  <input
+                    value={customAgentDraft.memoryPath}
+                    onChange={e => {
+                      setCustomAgentError('')
+                      setCustomAgentDraft(prev => ({ ...prev, memoryPath: e.target.value }))
+                    }}
+                    placeholder={t('settings.agentMemoryPathPlaceholder')}
+                    className="input-base font-mono"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>{t('settings.agentRulesDir')}</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={customAgentDraft.rulesDir}
+                      onChange={e => {
+                        setCustomAgentError('')
+                        setCustomAgentDraft(prev => ({ ...prev, rulesDir: e.target.value }))
+                      }}
+                      placeholder={t('settings.agentRulesDirPlaceholder')}
+                      className="input-base flex-1 font-mono"
+                    />
+                    <button
+                      onClick={() => pickDir(dir => setCustomAgentDraft(prev => ({ ...prev, rulesDir: dir })), customAgentDraft.rulesDir)}
+                      className="btn-secondary px-2.5 rounded-lg"
+                      title={t('settings.selectDir')}
+                    >
+                      <FolderOpen size={14} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {customAgentError && (
+                <div
+                  className="rounded-lg px-3 py-2 text-sm"
+                  style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--color-error)' }}
+                >
+                  {customAgentError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={closeAddCustomToolDialog}
+                  className="btn-secondary px-4 py-2 rounded-lg text-sm"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={saveCustomAgentDraft}
+                  className="btn-primary px-4 py-2 rounded-lg text-sm"
+                >
+                  {t('settings.addCustomToolSave')}
+                </button>
+              </div>
+            </div>
+          </AnimatedDialog>
         </div>
       )}
 
