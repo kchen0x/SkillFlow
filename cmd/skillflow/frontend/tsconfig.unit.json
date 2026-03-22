@@ -15,6 +15,7 @@
     "src/lib/dashboardManualPushState.ts",
     "src/lib/dashboardSkillSettings.ts",
     "src/lib/listLoadState.ts",
+    "src/lib/memoryEventSubscriptions.ts",
     "src/lib/memoryMarkdown.ts",
     "src/lib/memoryPageState.ts",
     "src/lib/memoryUi.ts",
@@ -32,3 +33,5 @@
     "src/hooks/useTheme.ts"
   ]
 }
+
+
