@@ -263,7 +263,28 @@ func (p *GitProvider) ensureRepo(localDir string) error {
 			return fmt.Errorf("写入 .gitignore 失败: %w", err)
 		}
 	}
+	for _, pattern := range snapshotinfra.ExcludedPatterns() {
+		if err := ensureIgnoredPath(localDir, pattern); err != nil {
+			return fmt.Errorf("写入 .gitignore 失败: %w", err)
+		}
+	}
 	return nil
+}
+
+// removeExcludedFromCache untracks any files that are currently indexed but
+// should not be backed up (e.g. *local.json files that were committed before
+// the .gitignore entry was added).
+func (p *GitProvider) removeExcludedFromCache(localDir string) {
+	out, err := p.run(localDir, "ls-files")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && snapshotinfra.ShouldSkipBackupPath(line) {
+			p.run(localDir, "rm", "--cached", "--ignore-unmatch", line) //nolint
+		}
+	}
 }
 
 func (p *GitProvider) Sync(_ context.Context, localDir, _, _ string, onProgress func(file string)) error {
@@ -280,6 +301,7 @@ func (p *GitProvider) Sync(_ context.Context, localDir, _, _ string, onProgress 
 			return fmt.Errorf("git rm --cached %s 失败: %s", dir, out)
 		}
 	}
+	p.removeExcludedFromCache(localDir)
 	statusOut, _ := p.run(localDir, "status", "--porcelain")
 	_, headErr := p.run(localDir, "rev-parse", "--verify", "HEAD")
 	if strings.TrimSpace(statusOut) == "" && headErr != nil {
@@ -313,6 +335,7 @@ func (p *GitProvider) autoCommitLocal(localDir string) {
 	for _, dir := range snapshotinfra.ExcludedDirectories() {
 		p.run(localDir, "rm", "-r", "--cached", "--ignore-unmatch", dir) //nolint
 	}
+	p.removeExcludedFromCache(localDir)
 	statusOut, _ := p.run(localDir, "status", "--porcelain")
 	if strings.TrimSpace(statusOut) != "" {
 		p.run(localDir, "commit", "-m", "SkillFlow: pre-pull auto-commit") //nolint

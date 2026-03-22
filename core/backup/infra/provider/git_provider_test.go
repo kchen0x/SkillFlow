@@ -72,6 +72,12 @@ func TestGitProviderSyncInitializesRepoAndPushes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(localDir, "cache", "tmp.bin"), []byte("tmp"), 0644); err != nil {
 		t.Fatalf("write cache file: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(localDir, "memory"), 0755); err != nil {
+		t.Fatalf("mkdir memory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "memory", "memory_local.json"), []byte(`{}`), 0644); err != nil {
+		t.Fatalf("write memory_local.json: %v", err)
+	}
 
 	p := NewGitProvider()
 	if err := p.Init(map[string]string{
@@ -99,10 +105,16 @@ func TestGitProviderSyncInitializesRepoAndPushes(t *testing.T) {
 	if !strings.Contains(string(gitignore), "cache/") {
 		t.Fatalf("expected .gitignore to contain cache/, got: %q", string(gitignore))
 	}
+	if !strings.Contains(string(gitignore), "*local.json") {
+		t.Fatalf("expected .gitignore to contain *local.json, got: %q", string(gitignore))
+	}
 	_ = runGit(t, "", "--git-dir", remoteDir, "rev-parse", "--verify", "refs/heads/main")
 	remoteFiles := runGit(t, "", "--git-dir", remoteDir, "ls-tree", "-r", "--name-only", "main")
 	if strings.Contains(remoteFiles, "cache/") {
 		t.Fatalf("cache should not be tracked, remote files: %s", remoteFiles)
+	}
+	if strings.Contains(remoteFiles, "memory_local.json") {
+		t.Fatalf("memory_local.json should not be tracked, remote files: %s", remoteFiles)
 	}
 }
 

@@ -7,7 +7,11 @@
       "Bash(grep -v \"^frontend$\\\\|^build$\\\\|^tools$\")",
       "Bash(grep -rn \"app_services\\\\|app_log\\\\|app_path\\\\|app_perf\\\\|app_proxy\\\\|app_visibility\\\\|skill_state\\\\|uttype\" /Users/shinerio/Workspace/code/SkillFlow/cmd/skillflow/*.go)",
       "Bash(git -C /Users/shinerio/Workspace/code/SkillFlow log --oneline)",
-      "Bash(git -C /Users/shinerio/Workspace/code/SkillFlow show 22d5c2e --stat)"
+      "Bash(git -C /Users/shinerio/Workspace/code/SkillFlow show 22d5c2e --stat)",
+      "Bash(go test:*)",
+      "Bash(gh pr:*)",
+      "Bash(go build:*)",
+      "Bash(gh auth:*)"
     ]
   }
 }

@@ -34,13 +34,13 @@ jobs:
         working-directory: cmd/skillflow/frontend
         run: npm ci
 
+      - name: Build frontend
+        working-directory: cmd/skillflow/frontend
+        run: npm run build
+
       - name: Run Go tests
-        run: make test
+        run: go test ./core/... ./cmd/skillflow
 
       - name: Run frontend unit tests
         working-directory: cmd/skillflow/frontend
         run: npm run test:unit
-
-      - name: Build frontend
-        working-directory: cmd/skillflow/frontend
-        run: npm run build
