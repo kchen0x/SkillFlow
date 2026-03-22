@@ -218,7 +218,6 @@ These flows are coordination concerns, but they are better owned by the shell co
 - source-cache settings such as `repoCacheDir` -> `skillsource`, plus shell rebuild of repo-cache-dependent runtime adapters
 - agent profiles, auto-push, and recursive scan depth -> `agentintegration`
 - backup provider selection, sync interval, and cloud profile split -> `backup`
-- card-status visibility -> `readmodel/preferences`
 - shell preferences such as launch-at-login, proxy, log level, skipped update version, and window state -> `cmd/skillflow` and `platform/`
 
 Prompt persistence currently lives under `prompts/` and is not edited through the Settings page. Starred-repo identity tracking still lives under `star_repos*.json`, while the local repo-cache root is edited through Settings and must rewire cache-dependent shell services after save.
@@ -269,7 +268,6 @@ Current implementation uses `core/config` as a settings facade for `GetConfig` /
 - skill-library settings from `skillcatalog`
 - agent and auto-push settings from `agentintegration`
 - backup settings from `backup`
-- card-status visibility from `readmodel/preferences`
 - shell/platform settings
 
 Prompt storage and starred-repo tracking remain outside this facade unless they gain dedicated settings keys later.

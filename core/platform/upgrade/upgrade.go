@@ -59,20 +59,11 @@ func migrateJSONFile(path string, migrate func(map[string]any) (bool, error)) er
 
 func migrateSharedConfig(payload map[string]any) (bool, error) {
 	changed := renameKey(payload, "tools", "agents")
-
-	visibility, ok := payload["skillStatusVisibility"]
-	if !ok {
-		return changed, nil
+	if _, ok := payload["skillStatusVisibility"]; ok {
+		delete(payload, "skillStatusVisibility")
+		changed = true
 	}
-	visibilityMap, ok := visibility.(map[string]any)
-	if !ok {
-		return false, fmt.Errorf("skillStatusVisibility must be an object")
-	}
-	visibilityChanged, err := migrateVisibilityConfig(visibilityMap)
-	if err != nil {
-		return false, err
-	}
-	return changed || visibilityChanged, nil
+	return changed, nil
 }
 
 func migrateLocalConfig(payload map[string]any, dataDir string) (bool, error) {
@@ -128,41 +119,6 @@ func migrateStarReposFile(path string) error {
 		return fmt.Errorf("encode %s: %w", filepath.Base(path), err)
 	}
 	return writeFileAtomically(path, encoded, 0o644)
-}
-
-func migrateVisibilityConfig(payload map[string]any) (bool, error) {
-	changed := false
-	changed = renameKey(payload, "myTools", "myAgents") || changed
-	changed = renameKey(payload, "pushToTool", "pushToAgent") || changed
-	changed = renameKey(payload, "pullFromTool", "pullFromAgent") || changed
-	if _, ok := payload["githubInstall"]; ok {
-		delete(payload, "githubInstall")
-		changed = true
-	}
-
-	for key, value := range payload {
-		items, ok := value.([]any)
-		if !ok {
-			continue
-		}
-		listChanged := false
-		for i, item := range items {
-			str, ok := item.(string)
-			if !ok {
-				continue
-			}
-			if str == "pushedTools" {
-				items[i] = "pushedAgents"
-				listChanged = true
-			}
-		}
-		if listChanged {
-			payload[key] = items
-			changed = true
-		}
-	}
-
-	return changed, nil
 }
 
 func renameKey(payload map[string]any, oldKey string, newKey string) bool {

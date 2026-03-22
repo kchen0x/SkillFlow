@@ -37,7 +37,6 @@ type AppConfig struct {
 	DefaultCategory       string                         `json:"defaultCategory"`
 	LogLevel              string                         `json:"logLevel"` // "debug" | "info" | "error"
 	RepoScanMaxDepth      int                            `json:"repoScanMaxDepth"`
-	SkillStatusVisibility SkillStatusVisibilityConfig    `json:"skillStatusVisibility"`
 	Agents                []AgentConfig                  `json:"agents"`
 	Cloud                 CloudConfig                    `json:"cloud"`
 	CloudProfiles         map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`

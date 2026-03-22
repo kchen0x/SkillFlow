@@ -130,8 +130,6 @@ Logical ownership:
   - active backup profile
   - provider selection and interval
   - cloud profile / credential split across shared and local config
-- `readmodel/preferences`
-  - card-status visibility policy
 - shell/platform
   - launch-at-login
   - window state
@@ -150,7 +148,6 @@ Implementation ownership:
 
 - app-data path ownership lives in `core/platform/appdata`
 - shell proxy, window, log-level, and skipped-update preferences live in `core/platform/shellsettings` plus `core/platform/settingsstore`
-- skill-status visibility preferences live in `core/readmodel/preferences`
 - cross-context write flows for import, push/pull, update, and restore compensation live in `core/orchestration`
 - installed-skill, starred-skill, and agent-presence composition lives in `core/readmodel/skills` plus `core/readmodel/viewstate`
 - `core/config` is the frontend-facing settings facade and split/merge persistence adapter around these context- and platform-owned settings components

@@ -435,15 +435,25 @@ For each built-in or custom agent:
 | Control | Description |
 |---------|-------------|
 | **Enable toggle** | Enables or disables the agent across the app |
+| **Skill Paths section** | Dedicated grouped block for skill distribution paths |
 | **Push directory** | Single directory where skills are copied on push; supports both manual text entry and folder-picker button (FolderOpen icon), which opens at the current path or nearest existing parent |
 | **Scan directories** | Multiple directories searched when pulling; each row has a folder-picker button and a delete button; new directories added with an input + folder-picker + "Add" button, with the picker reopening at the current path or nearest existing parent |
+| **Memory Paths section** | Dedicated grouped block for memory-sync paths |
+| **Memory file** | Path to the agent's main memory file |
+| **Rules directory** | Path to the agent's rules directory |
 | **Delete agent** (custom agents only) | Removes the custom agent entry |
 
-**Add Custom Agent** section (dashed border):
+**Add Custom Agent** entry point (dashed border):
 
-- Agent name input.
-- Push directory input with folder-picker button that reopens at the current path or nearest existing parent.
-- **"Add"** button — `AddCustomAgent(name, pushDir)`.
+- Opens a centered modal dialog instead of using an inline form.
+- The dialog collects:
+  - agent name
+  - initial skill path (`pushDir`)
+  - memory file (`memoryPath`)
+  - rules directory (`rulesDir`)
+- Creating the agent seeds `scanDirs` with the same initial skill path.
+- Additional scan paths are still added later on the agent card inside **Skill Paths**.
+- The dialog updates the current in-memory Settings draft; final persistence still happens through **Save Settings**.
 
 ### Cloud Tab
 
@@ -465,7 +475,6 @@ For each built-in or custom agent:
 |---------|-------------|
 | **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
 | **Appearance theme** | Three visual presets shown as preview cards: **Young** (default, a softened paper-blue evolution of the previous sky-blue Light palette), **Dark** (refined graphite with muted mist-blue accents), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
-| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed agents; **My Agents** = imported + updatable + pushed agents; **Starred Repos** = imported + pushed agents |
 | **App data directory** | Fixed root for installed skills, prompts, metadata, and backup working state on the current device; shown read-only with a one-click open action |
 | **Repository cache directory** | Local-only root path for cloned starred repositories; manual text entry + folder-picker button that opens at the current path or nearest existing parent; defaults to `<AppDataDir>/cache/repos` |
 | **Skill recursive scan depth** | Maximum recursion depth used when scanning local agent directories and starred repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
@@ -904,6 +913,8 @@ Each memory card provides an **Open in Editor** button that opens the file in th
 ### Agent Settings
 
 In **Settings → Agents**, each agent now exposes:
+- **Skill Paths** – grouped block containing the push directory plus the editable multi-row scan directory list.
+- **Memory Paths** – grouped block containing the main memory file and rules directory.
 - **Memory File** – path to the agent's main memory file (default shown; user-overridable).
 - **Rules Directory** – path to the agent's rules directory.
 

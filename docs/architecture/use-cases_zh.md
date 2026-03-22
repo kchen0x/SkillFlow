@@ -218,7 +218,6 @@
 - 源仓库缓存设置，例如 `repoCacheDir` -> `skillsource`，同时由壳层重建依赖 repo cache 的运行时适配器
 - Agent 配置、自动推送和递归扫描深度 -> `agentintegration`
 - 备份 provider 选择、同步间隔与云配置拆分 -> `backup`
-- 卡片状态可见性 -> `readmodel/preferences`
 - 开机自启、代理、日志级别、跳过更新版本、窗口状态等壳层偏好 -> `cmd/skillflow` 与 `platform/`
 
 Prompt 持久化目前直接位于 `prompts/` 目录树，且不通过 Settings 页面编辑。收藏仓库身份跟踪仍位于 `star_repos*.json`，而本地 repo cache 根目录则通过 Settings 编辑，保存后需要同步重建依赖 cache 的壳层服务。
@@ -269,7 +268,6 @@ Prompt 持久化目前直接位于 `prompts/` 目录树，且不通过 Settings 
 - `skillcatalog` 的技能库设置
 - `agentintegration` 的 Agent 与自动推送设置
 - `backup` 的备份设置
-- `readmodel/preferences` 的卡片状态可见性
 - 壳层 / platform 设置
 
 除非未来新增专门的设置字段，否则 Prompt 存储与收藏仓库跟踪不会进入这个门面。

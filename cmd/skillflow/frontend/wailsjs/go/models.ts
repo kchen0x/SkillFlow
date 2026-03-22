@@ -91,7 +91,6 @@ export namespace config {
 	    defaultCategory: string;
 	    logLevel: string;
 	    repoScanMaxDepth: number;
-	    skillStatusVisibility: preferences.SkillStatusVisibilityConfig;
 	    agents: domain.AgentProfile[];
 	    cloud: app.CloudConfig;
 	    cloudProfiles?: Record<string, app.CloudProviderConfig>;
@@ -111,7 +110,6 @@ export namespace config {
 	        this.defaultCategory = source["defaultCategory"];
 	        this.logLevel = source["logLevel"];
 	        this.repoScanMaxDepth = source["repoScanMaxDepth"];
-	        this.skillStatusVisibility = this.convertValues(source["skillStatusVisibility"], preferences.SkillStatusVisibilityConfig);
 	        this.agents = this.convertValues(source["agents"], domain.AgentProfile);
 	        this.cloud = this.convertValues(source["cloud"], app.CloudConfig);
 	        this.cloudProfiles = this.convertValues(source["cloudProfiles"], app.CloudProviderConfig, true);
@@ -691,31 +689,6 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.agentType = source["agentType"];
 	        this.status = source["status"];
-	    }
-	}
-
-}
-
-export namespace preferences {
-	
-	export class SkillStatusVisibilityConfig {
-	    mySkills: string[];
-	    myAgents: string[];
-	    pushToAgent: string[];
-	    pullFromAgent: string[];
-	    starredRepos: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new SkillStatusVisibilityConfig(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.mySkills = source["mySkills"];
-	        this.myAgents = source["myAgents"];
-	        this.pushToAgent = source["pushToAgent"];
-	        this.pullFromAgent = source["pullFromAgent"];
-	        this.starredRepos = source["starredRepos"];
 	    }
 	}
 
