@@ -191,7 +191,16 @@ func (a *App) SaveMemoryPushConfig(agentType, mode string, autoPush bool) error 
 		Mode:      memorydomain.PushMode(mode),
 		AutoPush:  autoPush,
 	}
-	return a.memoryService.SavePushConfig(cfg)
+	if err := a.memoryService.SavePushConfig(cfg); err != nil {
+		return err
+	}
+	if !autoPush {
+		return nil
+	}
+	if _, err := a.PushMemoryToAgent(agentType); err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetAllMemoryPushConfigs returns push configurations for all agents that have been configured.

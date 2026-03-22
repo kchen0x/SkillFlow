@@ -44,6 +44,7 @@ Main memory body
 </skillflow-managed>
 
 <skillflow-module>
+Please be sure to load all module memories below.
 [testing](rules/sf-testing.md)
 </skillflow-module>`), pusher.mainContent)
 	assert.NotEmpty(t, storage.pushState["codex"].LastPushedHash)
@@ -209,4 +210,20 @@ func (p *recordingPusher) BuildRulesIndex(modules []*domain.ModuleMemory, agentM
 
 func (p *recordingPusher) RepairManagedBlock(agentMemoryPath string) error {
 	return nil
+}
+
+func TestComposeManagedMemoryAddsModuleLoadInstructionAsFirstLine(t *testing.T) {
+	content := composeManagedMemory("Main memory body", gatewayport.RulesIndex{
+		Entries: []string{"[testing](rules/sf-testing.md)"},
+	})
+
+	assert.Equal(t, strings.TrimSpace(`
+<skillflow-managed>
+Main memory body
+</skillflow-managed>
+
+<skillflow-module>
+Please be sure to load all module memories below.
+[testing](rules/sf-testing.md)
+</skillflow-module>`), content)
 }

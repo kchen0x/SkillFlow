@@ -146,6 +146,7 @@ func composeManagedMemory(mainContent string, rulesIndex gatewayport.RulesIndex)
 	}
 
 	sb.WriteString("\n\n<skillflow-module>\n")
+	sb.WriteString("Please be sure to load all module memories below.\n")
 	for i, entry := range rulesIndex.Entries {
 		if i > 0 {
 			sb.WriteString("\n")
