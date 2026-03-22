@@ -126,6 +126,10 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 		return fmt.Errorf("push main memory to agent %q: %w", agentType, err)
 	}
 
+	if err := pusher.SyncConfig(selectedModules, agentCfg.RulesDir); err != nil {
+		return fmt.Errorf("sync config for agent %q: %w", agentType, err)
+	}
+
 	hash, err := computeMemoryHash(mainMemory.Content, selectedModules)
 	if err != nil {
 		return fmt.Errorf("compute pushed hash for agent %q: %w", agentType, err)
