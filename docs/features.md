@@ -11,8 +11,8 @@
 
 1. [Navigation & Shell](#1-navigation--shell)
 2. [My Skills (Dashboard)](#2-my-skills-dashboard)
-3. [Push to Agents](#3-push-to-agents)
-4. [Pull from Agents](#4-pull-from-agents)
+3. [Legacy Push Route](#3-legacy-push-route)
+4. [Legacy Pull Route](#4-legacy-pull-route)
 5. [Starred Repos](#5-starred-repos)
 6. [Cloud Backup](#6-cloud-backup)
 7. [Settings](#7-settings)
@@ -34,10 +34,9 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 | Route | Icon | Label |
 |-------|------|-------|
 | `/` | Package | My Skills |
-| `/tools` | Wrench | My Agents |
 | `/prompts` | FileText | My Prompts |
-| `/sync/push` | ArrowUpFromLine | Push to Agents |
-| `/sync/pull` | ArrowDownToLine | Pull from Agents |
+| `/memory` | Brain | My Memory |
+| `/tools` | Wrench | My Agents |
 | `/starred` | Star | Starred Repos |
 | `/backup` | Cloud | Cloud Backup |
 | `/settings` | Settings | Settings |
@@ -47,6 +46,11 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
 - Top-left of sidebar: the `SkillFlow` wordmark shows the app icon immediately to the left; the icon is slightly taller than the text for clarity and preserves its aspect ratio.
 - Top-right of sidebar: **Languages** shortcut button; toggles immediately between **Chinese** and **English**, and persists the preference to `localStorage`.
 - Next to it: **Palette** theme shortcut button; cycles immediately through **Dark → Young → Light**.
+- Primary sidebar section now contains only the four core work surfaces: **My Skills**, **My Prompts**, **My Memory**, and **My Agents**.
+- The lower utility section keeps **Starred Repos**, **Cloud Backup**, **Settings**, and **Feedback**.
+- Legacy routes remain valid for compatibility:
+  - `/sync/push` redirects to `/`
+  - `/sync/pull` redirects to `/tools`
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
 - Window close button behavior: clicking the top-left close button closes the current UI process instead of only hiding it. The lightweight helper remains in the tray/menu bar, so `Show SkillFlow` or launching the app again opens a fresh window.
 - Primary-page refresh behavior: route transitions remount the page subtree keyed by `location.pathname`, so re-entering pages such as **My Skills**, **My Agents**, **My Prompts**, and **Starred Repos** fetches fresh backend state again without requiring a manual in-page refresh.
@@ -69,13 +73,14 @@ Central library for managing your skill collection.
 | **Search input** | Wide search field for real-time case-insensitive filter by skill name; the toolbar wraps on narrower window widths so controls stay visible |
 | **Sort toggle** | Two-button toggle for alphabetical order by skill name: **A-Z** or **Z-A** |
 | **Update** (RefreshCw) | Calls backend `CheckUpdates()`; groups installed Git-backed skills by normalized repo source + subpath, compares installed `SourceSHA` against the same subpath inside the local repo cache, refreshes `LatestSHA` (synced) and `LastCheckedAt` (local-only), marks updatable cards with a red dot and Update action, and clears stale markers when an installed instance is already current. This checks only — it does not overwrite local files by itself |
+| **Manual Push** (ArrowUpFromLine) | Enters inline manual-push mode inside **My Skills** without leaving the page |
 | **Batch Delete** (CheckSquare) | Toggles multi-select mode |
 | **Import** (FolderOpen) | Opens native folder-picker → `ImportLocal(dir)` |
 | **Auto Update** (ToggleLeft / ToggleRight) | Uses a clear on/off state button in the old remote-install slot: when auto update is off, the control shows a muted "Turn Auto Update On" action; when it is on, it switches to a highlighted "Turn Auto Update Off" action. Successful toggles show a confirmation notice, and enabled state keeps the same local-only automatic update behavior after startup or manual starred-repo refresh |
 
 ### Auto Push Targets
 
-- A compact single-row strip under the toolbar shows the **Auto Push Targets** title and agent chips together, using the same icon-chip selection style as **Push to Agents**.
+- A compact single-row strip under the toolbar shows the **Auto Push Targets** title and agent chips together, using the same icon-chip selection style as the inline manual-push mode.
 - The selection is persisted locally on the current device and reused for future imports into **My Skills**.
 - The toolbar **Auto Update** toggle is also persisted locally on the current device, alongside the auto-push target selection.
 - The button now exposes the next action instead of a static label, and also uses left/right toggle icons plus contrastful styling so the current state is visible before you click it.
@@ -84,6 +89,20 @@ Central library for managing your skill collection.
 - If a cloud restore brings skills onto the current device, SkillFlow auto-pushes any newly restored or newly updated library skills to the selected agents on this device.
 - Import auto-push remains non-destructive: if a selected agent already contains a same-name skill in its `PushDir`, SkillFlow skips that target instead of overwriting it.
 - Turning an agent off in this strip does not delete anything that was already pushed earlier; removing agent copies still requires manual deletion from **My Agents** or the agent directory.
+
+### Manual Push Mode
+
+- Clicking **Manual Push** turns the dashboard into an inline batch-push surface instead of navigating to a separate page.
+- The current category filter, search query, and sort order define the candidate skill list for this push.
+- In manual-push mode:
+  - skill cards become selectable
+  - the strip below the toolbar switches from **Auto Push Targets** to **Manual Push Targets**
+  - users can select one or more enabled agents
+  - users can **Select All / Deselect All** for the currently visible filtered skills
+  - the toolbar shows **Start Push (n)** and **Cancel**
+- Manual push is enabled only when at least one target agent and one visible skill are selected.
+- Before pushing, SkillFlow still performs the same missing-directory confirmation used by the old dedicated push page.
+- Push conflicts still use the existing overwrite/skip dialog behavior, but the flow now completes inside **My Skills**.
 
 ### Select Mode (activated by "Batch Delete")
 
@@ -161,96 +180,23 @@ SourceSHA = LatestSHA -> clear update marker
 
 ---
 
-## 3. Push to Agents
+## 3. Legacy Push Route
 
-Copies skills from your library to external agent directories.
+The standalone **Push to Agents** page is no longer a primary navigation destination.
 
-### Layout
-
-- Uses a two-column layout similar to My Skills.
-- Left sidebar shows category filters: **All** plus every existing category.
-- Right side shows the agent selector, search + A-Z/Z-A sort controls, push mode controls, and a skill-card grid for the current category scope.
-- Spacing is tuned so the adaptive startup window can usually show the header controls, the current skill grid, and the bottom push action together on common laptop/desktop displays before scrolling is needed.
-
-### Agent Selection
-
-- One toggle button per enabled agent (icon + name).
-- Multiple agents can be selected simultaneously.
-- Active category, agent, and scope buttons use a brighter theme-tinted background, a lighter border, and a clearer glow so selection remains obvious in dark mode without adding extra symbols.
-
-### Sync Scope
-
-Two push behaviors based on the current left-sidebar category filter:
-
-| Mode | Behavior |
-|------|----------|
-| **Manual Select** | Shown to the left of **Push All / Push Current Category** and selected by default; uses the current sidebar filter as the candidate list, shows selection checkboxes on cards, and allows select-all for the visible list |
-| **Push All / Push Current Category** | If the sidebar is on **All**, pushes the whole library; if a category is selected, pushes only that category |
-
-### Missing Directory Check
-
-Before pushing, the app calls `CheckMissingPushDirs()`. If any target agent directory does not exist yet, a confirmation dialog appears:
-
-- Lists each missing agent name and its full directory path.
-- **"Create & Push"** — creates the directory then proceeds.
-- **"Cancel"** — aborts without creating anything.
-
-### Conflict Handling
-
-If a skill already exists in the target directory, a conflict dialog appears for each one (see [Conflict Dialog](#101-conflict-dialog)).
-
-### Skill Grid
-
-- Library cards surface only push-relevant state on this page: which agents already contain that logical skill in their `PushDir`.
-- Cards also keep the installed-source badge from My Skills so users can still distinguish manual imports from git-backed installs while deciding what to push.
-- The pushed-agent indicator uses compact agent icons with ellipsis overflow and hover-to-reveal full lists.
-
-### Bottom Bar
-
-- **"Start Push (n)"** button — disabled when no agents selected or skill count is zero; shows "Pushing…" while in progress.
-- **"Push complete ✓"** — green success message after all pushes finish.
+- `/sync/push` is preserved as a compatibility route.
+- Opening it now redirects to **My Skills** (`/`).
+- Manual push behavior now lives in the dashboard's inline **Manual Push** mode.
 
 ---
 
-## 4. Pull from Agents
+## 4. Legacy Pull Route
 
-Imports skills from external agent directories into your library.
+The standalone **Pull from Agents** page is no longer a primary navigation destination.
 
-### Layout
-
-- Uses the same two-column shell as Push to Agents.
-- Left sidebar lists all categories and controls the import target category.
-- Right side contains the source-agent selector, scan feedback, search + A-Z/Z-A sort controls, selectable skill grid, and bottom action bar.
-
-### Agent Selection
-
-- Same toggle buttons as Push; selecting a different agent resets the scanned list.
-- The active import target category and selected source agent use the same brighter background, lighter border, and glow treatment as Push so the current choice stays visually distinct in dark mode.
-
-### Scan
-
-- **"Scan"** button — calls `ScanAgentSkills(agentName)`; recursively searches the agent's configured scan directories for `skill.md` files.
-- Local agent scanning uses the same configurable depth limit from **Settings → General** (default `5`, saved range `1-20`).
-- Shows animated "Scanning…" state while in progress.
-- **Error alert** (red) if scan fails; **warning alert** (yellow) if no skills found.
-- Agent-scan candidates are deduplicated and correlated by logical key first; same-name items are kept distinct when their content-derived keys differ.
-
-### Skill Grid
-
-- Appears after a successful scan.
-- Search field filters the scanned skill list by name in real time.
-- Two-button sort toggle switches between **A-Z** and **Z-A** ordering by skill name.
-- When a scanned item correlates to an already installed My Skills entry, the card also shows that installed entry's source badge so users can tell manual imports from git-backed installs at a glance.
-- Cards still show the pull-specific imported state; newly discovered scan items that do not correlate to an installed entry keep the source badge empty instead of guessing.
-- After each scan, all skills start unchecked by default.
-- Select individual skills, use "Select All / Deselect All" for the currently visible list, or use the matching square-style "Select Not Imported" toggle to bulk-select only visible skills that are not yet imported.
-- Selection and pull conflicts are tracked by scanned path, so same-name skills from different agent folders remain independent.
-
-### Bottom Bar
-
-- **"Start Pull (n)"** button — calls `PullFromAgent()`.
-- **"Pull complete ✓"** — green success message.
-- Conflicts handled by the same [Conflict Dialog](#101-conflict-dialog).
+- `/sync/pull` is preserved as a compatibility route.
+- Opening it now redirects to **My Agents** (`/tools`).
+- Manual pull behavior now lives in the **My Agents** skills panel through the inline **Manual Pull** mode for the currently selected agent.
 
 ---
 
@@ -284,7 +230,7 @@ Browse and import skills directly from watched Git repositories without installi
 | Button | Action |
 |--------|--------|
 | **Select All / Deselect All** | Toggles all visible skills |
-| **Push to Agents (n)** | Opens the Push to Agents dialog (see below) |
+| **Push to Agents (n)** | Opens the push-to-agents dialog (legacy flow, still available from Starred Repos) |
 | **Import to My Skills (n)** | Opens the Import dialog |
 | **Cancel** | Exits select mode |
 
@@ -382,7 +328,7 @@ Refresh Starred Repos list                     Clear update marker in My Skills
 
 ### Missing Directory Confirmation
 
-Same behavior as [Push to Agents page](#missing-directory-check): confirms before creating absent push directories.
+Same behavior as the current manual-push flow in **My Skills**: confirms before creating absent push directories.
 
 ### Push Conflict Dialog
 
@@ -519,7 +465,7 @@ For each built-in or custom agent:
 |---------|-------------|
 | **Language** | Two buttons, **中文** and **English**, switch the entire frontend language immediately; shares the same state as the sidebar **Languages** button and persists to `localStorage` |
 | **Appearance theme** | Three visual presets shown as preview cards: **Young** (default, a softened paper-blue evolution of the previous sky-blue Light palette), **Dark** (refined graphite with muted mist-blue accents), and **Light** (new low-saturation gray-white palette inspired by Messor); persisted to `localStorage`; changes apply immediately without restart; legacy stored `Light` preference auto-migrates to `Young` |
-| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed agents; **My Agents** = imported + updatable + pushed agents; **Push to Agent** = pushed agents; **Pull from Agent** = imported; **Starred Repos** = imported + pushed agents |
+| **Card status visibility** | A compact per-page row list that lets users hide or show only the statuses that page supports by default. Unsupported statuses are not offered for that page. Default policy: **My Skills** = updatable + pushed agents; **My Agents** = imported + updatable + pushed agents; **Starred Repos** = imported + pushed agents |
 | **App data directory** | Fixed root for installed skills, prompts, metadata, and backup working state on the current device; shown read-only with a one-click open action |
 | **Repository cache directory** | Local-only root path for cloned starred repositories; manual text entry + folder-picker button that opens at the current path or nearest existing parent; defaults to `<AppDataDir>/cache/repos` |
 | **Skill recursive scan depth** | Maximum recursion depth used when scanning local agent directories and starred repos; default `5`; saved values are clamped to `1-20` to avoid pathological nested trees |
@@ -773,22 +719,25 @@ Browse the skills currently present inside each enabled agent.
 ### Layout
 
 - Left sidebar lists enabled agents.
-- Main area shows one shared toolbar plus a top segmented control: **Skills | Memory**.
+- Main area shows one shared toolbar plus a top segmented control for the skills and memory surfaces.
 - The segmented control defaults to **Skills** when the page first loads.
+- In Chinese mode the segmented labels are localized instead of mixing English into the primary workflow.
 - Switching to another agent keeps the current panel selection instead of forcing the page back to **Skills**.
 
 ### Toolbar
 
 | Control | Description |
 |---------|-------------|
-| **Skills \| Memory** | Switches the right-side content surface between skill management and memory preview |
+| **Skills / Memory segmented control** | Switches the right-side content surface between skill management and memory preview |
 | **Search input** | Filters only the currently active panel in real time |
 | **Sort toggle** | Stays shared in the toolbar; in **Skills** it sorts Push Path and Scan Path cards, and in **Memory** it reorders the visible memory entries within that panel |
 | **Batch Delete** | Available only in the **Skills** panel when the visible Push Path list is non-empty; enters select mode |
+| **Manual Pull** | Available in the **Skills** panel; enters inline scan-and-pull mode for the currently selected agent |
 
 The result counter in the toolbar is panel-scoped:
 - **Skills** counts visible Push Path plus Scan Path cards only.
 - **Memory** counts visible memory preview entries only.
+- **Manual Pull mode** counts only the currently visible scanned candidates.
 
 ### Memory Panel
 
@@ -803,6 +752,22 @@ The result counter in the toolbar is panel-scoped:
 ### Skills Panel
 
 - Shown only when the top segmented control is switched to **Skills**.
+
+### Manual Pull Mode
+
+- Clicking **Manual Pull** does not open a separate page or modal. It converts the current skills panel into an inline pull surface for the selected agent.
+- Entering the mode triggers a fresh `ScanAgentSkills(agentName)` scan against the selected agent's configured scan directories.
+- The target category is chosen directly in the toolbar instead of a dedicated left category sidebar.
+- While in manual-pull mode, the toolbar exposes:
+  - target category selector
+  - **Select All / Deselect All**
+  - **Select Not Imported**
+  - **Start Pull (n)**
+  - **Cancel**
+- Search and sorting apply only to the scanned results while this mode is active.
+- Scan errors still surface as a red alert and empty scans still surface as a yellow warning state.
+- Pull conflicts still use the shared overwrite/skip dialog behavior, but the resolution flow now completes inside **My Agents**.
+- After a successful pull, the page exits manual-pull mode and shows a green completion notice at the top of the skills panel.
 
 ### Push Path Section
 

@@ -58,6 +58,7 @@ test('tool skills event subscriptions reload on skills.updated', () => {
 test('dashboard toolbar actions replace remote install with auto update', () => {
   assert.deepEqual(listDashboardToolbarActionKeys(), [
     'update',
+    'manualPush',
     'batchDelete',
     'import',
     'autoUpdate',

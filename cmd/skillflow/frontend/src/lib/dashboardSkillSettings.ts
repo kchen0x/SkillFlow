@@ -10,7 +10,7 @@ export type DashboardSkillSettings = {
   autoUpdateSkills: boolean
 }
 
-export type DashboardToolbarActionKey = 'update' | 'batchDelete' | 'import' | 'autoUpdate'
+export type DashboardToolbarActionKey = 'update' | 'manualPush' | 'batchDelete' | 'import' | 'autoUpdate'
 
 export type DashboardAutoUpdateActionState = {
   buttonTone: 'primary' | 'secondary'
@@ -19,6 +19,7 @@ export type DashboardAutoUpdateActionState = {
 
 const DASHBOARD_TOOLBAR_ACTION_KEYS: readonly DashboardToolbarActionKey[] = [
   'update',
+  'manualPush',
   'batchDelete',
   'import',
   'autoUpdate',

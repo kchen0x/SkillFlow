@@ -4,12 +4,15 @@ import {
   ListSkills, ListCategories, MoveSkillCategory,
   DeleteSkill, DeleteSkills, ImportLocal, UpdateSkill, CheckUpdates,
   OpenFolderDialog, GetSkillMeta, GetConfig, SaveConfig,
+  CheckMissingAgentPushDirs, PushToAgents, PushToAgentsForce,
 } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import CategoryPanel from '../components/CategoryPanel'
 import SkillCard from '../components/SkillCard'
 import SkillTooltip from '../components/SkillTooltip'
-import { FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, X } from 'lucide-react'
+import ConflictDialog from '../components/ConflictDialog'
+import AnimatedDialog from '../components/ui/AnimatedDialog'
+import { FolderOpen, RefreshCw, Trash2, CheckSquare, ArrowUpFromLine, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, X, FolderPlus } from 'lucide-react'
 import {
   gridContainerVariants,
   cardVariants,
@@ -30,6 +33,14 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 import { ToolIcon } from '../config/toolIcons'
 import { subscribeToEvents } from '../lib/wailsEvents'
+import {
+  createDashboardManualPushState,
+  toggleDashboardManualPushAgent,
+  toggleDashboardManualPushSkill,
+  toggleDashboardManualPushAllVisible,
+  syncDashboardManualPushVisibleSelection,
+  isDashboardManualPushReady,
+} from '../lib/dashboardManualPushState'
 
 type SkillUpdateNotice = {
   tone: 'progress' | 'success' | 'error'
@@ -49,6 +60,8 @@ export default function Dashboard() {
   const [categoryDragActive, setCategoryDragActive] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIDs, setSelectedIDs] = useState<Set<string>>(new Set())
+  const [manualPushMode, setManualPushMode] = useState(false)
+  const [manualPushState, setManualPushState] = useState(createDashboardManualPushState())
   const [agentOptions, setAgentOptions] = useState<any[]>([])
   const [autoPushAgents, setAutoPushAgents] = useState<Set<string>>(new Set())
   const [autoUpdateSkills, setAutoUpdateSkills] = useState(false)
@@ -58,6 +71,10 @@ export default function Dashboard() {
   const [savingAutoUpdate, setSavingAutoUpdate] = useState(false)
   const [updatingSkillIDs, setUpdatingSkillIDs] = useState<Set<string>>(new Set())
   const [updateNotice, setUpdateNotice] = useState<SkillUpdateNotice | null>(null)
+  const [pushing, setPushing] = useState(false)
+  const [pendingPush, setPendingPush] = useState(false)
+  const [missingDirs, setMissingDirs] = useState<{ name: string; dir: string }[]>([])
+  const [pushConflicts, setPushConflicts] = useState<any[]>([])
 
   // Hover tooltip state
   const [hoveredSkill, setHoveredSkill] = useState<{ skill: any; rect: DOMRect } | null>(null)
@@ -124,6 +141,7 @@ export default function Dashboard() {
   const animateGridIntro = shouldAnimateSkillGridIntro(filtered.length, hasRenderedSkillGrid.current)
   const autoUpdateAction = getDashboardAutoUpdateActionState(autoUpdateSkills)
   const savingDashboardSettings = savingAutoPush || savingAutoUpdate
+  const manualPushReady = isDashboardManualPushReady(manualPushState)
 
   useEffect(() => {
     if (listState !== 'loading') {
@@ -180,9 +198,35 @@ export default function Dashboard() {
   }
 
   const toggleSelectMode = () => {
+    if (manualPushMode) {
+      setManualPushMode(false)
+      setManualPushState(createDashboardManualPushState())
+      setMissingDirs([])
+      setPendingPush(false)
+      setPushConflicts([])
+    }
     setSelectMode(prev => !prev)
     setSelectedIDs(new Set())
     clearHover()
+  }
+
+  const enterManualPushMode = () => {
+    setSelectMode(false)
+    setSelectedIDs(new Set())
+    clearHover()
+    setManualPushMode(true)
+    setManualPushState(createDashboardManualPushState())
+    setMissingDirs([])
+    setPendingPush(false)
+    setPushConflicts([])
+  }
+
+  const exitManualPushMode = () => {
+    setManualPushMode(false)
+    setManualPushState(createDashboardManualPushState())
+    setMissingDirs([])
+    setPendingPush(false)
+    setPushConflicts([])
   }
 
   const toggleSelectID = (id: string) => {
@@ -224,7 +268,23 @@ export default function Dashboard() {
     })
   }, [filtered, selectMode])
 
+  useEffect(() => {
+    if (!manualPushMode) return
+    const nextIDs = syncDashboardManualPushVisibleSelection(
+      manualPushState.selectedSkillIDs,
+      filtered.map(sk => sk.id),
+    )
+    const same = nextIDs.length === manualPushState.selectedSkillIDs.length
+      && nextIDs.every((id, index) => id === manualPushState.selectedSkillIDs[index])
+    if (same) return
+    setManualPushState(prev => ({
+      ...prev,
+      selectedSkillIDs: nextIDs,
+    }))
+  }, [filtered, manualPushMode, manualPushState.selectedSkillIDs])
+
   const allSelected = filtered.length > 0 && filtered.every(sk => selectedIDs.has(sk.id))
+  const allPushSelected = filtered.length > 0 && filtered.every(sk => manualPushState.selectedSkillIDs.includes(sk.id))
 
   const toolbarButtons = useMemo(() => listDashboardToolbarActionKeys().map((key) => {
     switch (key) {
@@ -234,6 +294,17 @@ export default function Dashboard() {
           icon: <RefreshCw size={14} />,
           label: t('dashboard.update'),
           onClick: async (): Promise<void> => { await CheckUpdates(); load() },
+          disabled: false,
+          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          style: { color: 'var(--text-muted)' },
+          title: undefined as string | undefined,
+        }
+      case 'manualPush':
+        return {
+          key,
+          icon: <ArrowUpFromLine size={14} />,
+          label: t('dashboard.manualPush'),
+          onClick: enterManualPushMode,
           disabled: false,
           className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
           style: { color: 'var(--text-muted)' },
@@ -278,6 +349,62 @@ export default function Dashboard() {
         }
     }
   }), [autoUpdateAction, load, savingAutoUpdate, savingDashboardSettings, t])
+
+  const finishManualPush = useCallback((message: string) => {
+    exitManualPushMode()
+    void load({ silent: true })
+    setUpdateNotice({
+      tone: 'success',
+      message,
+    })
+  }, [load])
+
+  const doManualPush = useCallback(async () => {
+    setPushing(true)
+    setUpdateNotice({
+      tone: 'progress',
+      message: t('dashboard.manualPushRunning', { count: manualPushState.selectedSkillIDs.length }),
+    })
+
+    try {
+      const conflicts = await PushToAgents(manualPushState.selectedSkillIDs, manualPushState.selectedAgents)
+      if (conflicts && conflicts.length > 0) {
+        setPushConflicts(conflicts)
+        setUpdateNotice(null)
+        return
+      }
+      finishManualPush(t('dashboard.manualPushSuccess', {
+        count: manualPushState.selectedSkillIDs.length,
+        agents: manualPushState.selectedAgents.length,
+      }))
+    } catch (error) {
+      setUpdateNotice({
+        tone: 'error',
+        message: t('dashboard.manualPushFailed', {
+          msg: String(error instanceof Error ? error.message : error),
+        }),
+      })
+    } finally {
+      setPushing(false)
+    }
+  }, [finishManualPush, manualPushState.selectedAgents, manualPushState.selectedSkillIDs, t])
+
+  const startManualPush = async () => {
+    if (!manualPushReady) return
+    const missing = await CheckMissingAgentPushDirs(manualPushState.selectedAgents)
+    if (missing && missing.length > 0) {
+      setMissingDirs(missing as { name: string; dir: string }[])
+      setPendingPush(true)
+      return
+    }
+    await doManualPush()
+  }
+
+  const confirmMkdirAndPush = async () => {
+    setMissingDirs([])
+    setPendingPush(false)
+    await doManualPush()
+  }
 
   const toggleAutoPushAgent = async (name: string) => {
     if (!dashboardCfg || savingDashboardSettings) return
@@ -480,6 +607,39 @@ export default function Dashboard() {
                 {t('common.cancel')}
               </button>
             </div>
+          ) : manualPushMode ? (
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <button
+                onClick={() => setManualPushState(prev => ({
+                  ...prev,
+                  selectedSkillIDs: toggleDashboardManualPushAllVisible(prev.selectedSkillIDs, filtered.map(sk => sk.id)),
+                }))}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+              >
+                <CheckSquare size={14} />
+                {allPushSelected ? t('common.deselectAll') : t('common.selectAll')}
+              </button>
+              <button
+                onClick={() => void startManualPush()}
+                disabled={!manualPushReady || pushing}
+                className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-all disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {pushing ? <RefreshCw size={14} className="animate-spin" /> : <ArrowUpFromLine size={14} />}
+                {t('dashboard.manualPushStart', { count: manualPushState.selectedSkillIDs.length })}
+              </button>
+              <button
+                onClick={exitManualPushMode}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               {toolbarButtons.map(btn => (
@@ -574,12 +734,20 @@ export default function Dashboard() {
             ) : agentOptions.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                 {agentOptions.map(agent => {
-                  const active = autoPushAgents.has(agent.name)
+                  const active = manualPushMode
+                    ? manualPushState.selectedAgents.includes(agent.name)
+                    : autoPushAgents.has(agent.name)
+                  const handleClick = manualPushMode
+                    ? () => setManualPushState(prev => ({
+                      ...prev,
+                      selectedAgents: toggleDashboardManualPushAgent(prev.selectedAgents, agent.name),
+                    }))
+                    : () => void toggleAutoPushAgent(agent.name)
                   return (
                     <button
                       key={agent.name}
-                      onClick={() => void toggleAutoPushAgent(agent.name)}
-                      disabled={savingDashboardSettings}
+                      onClick={handleClick}
+                      disabled={!manualPushMode && savingDashboardSettings}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${active ? 'font-semibold -translate-y-px' : ''}`}
                       style={active ? {
                         background: 'var(--active-surface)',
@@ -597,7 +765,7 @@ export default function Dashboard() {
                     </button>
                   )
                 })}
-                {savingAutoPush && (
+                {!manualPushMode && savingAutoPush && (
                   <span className="text-xs whitespace-nowrap ml-1" style={{ color: 'var(--text-muted)' }}>
                     {t('common.saving')}
                   </span>
@@ -610,9 +778,17 @@ export default function Dashboard() {
             )}
             <div className="flex items-center gap-2 shrink-0 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
               <ArrowUpFromLine size={15} />
-              {t('dashboard.autoPushTitle')}
+              {manualPushMode ? t('dashboard.manualPushTargets') : t('dashboard.autoPushTitle')}
             </div>
           </div>
+          {manualPushMode && (
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {t('dashboard.manualPushHint', {
+                skillCount: manualPushState.selectedSkillIDs.length,
+                agentCount: manualPushState.selectedAgents.length,
+              })}
+            </p>
+          )}
         </div>
 
         {/* Skills grid */}
@@ -662,9 +838,20 @@ export default function Dashboard() {
                       setDraggingSkillID(dragging ? sk.id : null)
                       if (!dragging) setCategoryDragActive(false)
                     }}
-                    selectMode={selectMode}
-                    selected={selectedIDs.has(sk.id)}
-                    onToggleSelect={() => toggleSelectID(sk.id)}
+                    selectMode={selectMode || manualPushMode}
+                    selected={selectMode ? selectedIDs.has(sk.id) : manualPushState.selectedSkillIDs.includes(sk.id)}
+                    onToggleSelect={() => {
+                      if (selectMode) {
+                        toggleSelectID(sk.id)
+                        return
+                      }
+                      if (manualPushMode) {
+                        setManualPushState(prev => ({
+                          ...prev,
+                          selectedSkillIDs: toggleDashboardManualPushSkill(prev.selectedSkillIDs, sk.id),
+                        }))
+                      }
+                    }}
                     onHoverStart={rect => handleHoverStart(sk, rect)}
                     onHoverEnd={handleHoverEnd}
                   />
@@ -682,6 +869,57 @@ export default function Dashboard() {
           anchorRect={hoveredSkill.rect}
         />
       )}
+
+      <ConflictDialog
+        conflicts={pushConflicts}
+        labelForConflict={(conflict) => `${conflict.skillName} → ${conflict.agentName}`}
+        onOverwrite={async (conflict) => {
+          if (conflict.skillId) {
+            await PushToAgentsForce([conflict.skillId], [conflict.agentName])
+          }
+          setPushConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))
+        }}
+        onSkip={(conflict) => setPushConflicts(prev => prev.filter(item => !(item.skillId === conflict.skillId && item.agentName === conflict.agentName)))}
+        onDone={() => finishManualPush(t('dashboard.manualPushCompleted'))}
+      />
+
+      <AnimatedDialog open={pendingPush} width="w-[460px]" zIndex={50}>
+        <div className="flex justify-between items-center mb-1">
+          <h3 className="font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <FolderPlus size={16} /> {t('syncPush.mkdirTitle')}
+          </h3>
+          <button
+            onClick={() => { setMissingDirs([]); setPendingPush(false) }}
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>{t('syncPush.mkdirDesc')}</p>
+        <ul className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">
+          {missingDirs.map(dir => (
+            <li
+              key={dir.name}
+              className="text-sm rounded-lg px-3 py-2"
+              style={{ background: 'var(--bg-surface)' }}
+            >
+              <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{dir.name}</span>
+              <span className="text-xs block truncate" style={{ color: 'var(--text-muted)' }} title={dir.dir}>{dir.dir}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-3">
+          <button onClick={() => void confirmMkdirAndPush()} className="btn-primary flex-1 py-2 rounded-lg text-sm">
+            {t('syncPush.createAndPush')}
+          </button>
+          <button
+            onClick={() => { setMissingDirs([]); setPendingPush(false) }}
+            className="btn-secondary flex-1 py-2 rounded-lg text-sm"
+          >
+            {t('common.cancel')}
+          </button>
+        </div>
+      </AnimatedDialog>
     </div>
   )
 }
