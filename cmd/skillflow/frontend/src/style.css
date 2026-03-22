@@ -152,6 +152,55 @@
   --active-shadow: 0 12px 24px rgba(20, 85, 217, 0.16);
 }
 
+[data-theme="sport"] {
+  --bg-base: #f1fff7;
+  --bg-surface: #e5f9ef;
+  --bg-elevated: #ffffff;
+  --bg-overlay: #d6f0e4;
+  --bg-hover: rgba(16, 57, 45, 0.07);
+
+  --text-primary: #10392d;
+  --text-secondary: #244c40;
+  --text-muted: #47695e;
+  --text-disabled: #6f8d82;
+
+  --accent-primary: #006947;
+  --accent-secondary: #00856a;
+  --accent-glow: rgba(0, 105, 71, 0.16);
+  --accent-glow-strong: rgba(0, 105, 71, 0.28);
+
+  --btn-primary-bg: #006947;
+  --btn-primary-hover: #005c3d;
+
+  --border-base: rgba(16, 57, 45, 0.14);
+  --border-surface: rgba(16, 57, 45, 0.18);
+  --border-accent: rgba(0, 105, 71, 0.34);
+  --border-accent-glow: rgba(0, 105, 71, 0.52);
+
+  --color-success: #0f8f68;
+  --color-warning: #c47b17;
+  --color-error: #c85d5d;
+  --color-info: #0f7f92;
+
+  --shadow-card: 0 14px 34px rgba(0, 78, 54, 0.12);
+  --shadow-dialog: 0 24px 52px rgba(0, 72, 50, 0.18);
+
+  --glow-accent: 0 12px 28px rgba(0, 105, 71, 0.14);
+  --glow-accent-sm: 0 8px 18px rgba(0, 105, 71, 0.12);
+  --glow-btn: 0 10px 24px rgba(0, 105, 71, 0.24);
+
+  --sidebar-border: rgba(16, 57, 45, 0.12);
+  --app-shell: radial-gradient(circle at top right, rgba(105, 246, 184, 0.24), transparent 30%), radial-gradient(circle at bottom left, rgba(0, 220, 253, 0.1), transparent 34%), linear-gradient(180deg, #f4fff8 0%, #e8fff3 54%, #f9fffb 100%);
+  --glass-bg: rgba(255, 255, 255, 0.86);
+  --brand-color: #0f4d38;
+  --brand-shadow: 0 8px 18px rgba(0, 105, 71, 0.08);
+  --shell-divider: rgba(0, 105, 71, 0.18);
+  --active-surface: rgba(0, 105, 71, 0.16);
+  --active-text: #0d4d37;
+  --active-border: rgba(0, 105, 71, 0.32);
+  --active-shadow: 0 12px 24px rgba(0, 105, 71, 0.12);
+}
+
 /* ===== Global Utility Classes ===== */
 
 html,
