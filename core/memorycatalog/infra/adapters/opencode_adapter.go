@@ -10,10 +10,7 @@ import (
 	"github.com/shinerio/skillflow/core/memorycatalog/domain"
 )
 
-const (
-	openCodeConfigFile = "opencode.json"
-	openCodeRulesGlob  = "rules/*.md"
-)
+const openCodeConfigFile = "opencode.json"
 
 // OpenCodeAdapter implements AgentMemoryPusher for OpenCode.
 type OpenCodeAdapter struct{ *baseAdapter }
@@ -32,7 +29,9 @@ func (a *OpenCodeAdapter) BuildRulesIndex(_ []*domain.ModuleMemory, _ string) ga
 // SyncConfig updates opencode.json to add or remove the "rules/*.md" glob from the
 // instructions whitelist depending on whether any module memories are present.
 func (a *OpenCodeAdapter) SyncConfig(modules []*domain.ModuleMemory, agentRulesDir string) error {
-	configDir := filepath.Dir(filepath.Clean(agentRulesDir))
+	cleanRulesDir := filepath.Clean(agentRulesDir)
+	rulesGlob := filepath.ToSlash(filepath.Join(cleanRulesDir, "*.md"))
+	configDir := filepath.Dir(cleanRulesDir)
 	configPath := filepath.Join(configDir, openCodeConfigFile)
 
 	// Read existing config or start fresh.
@@ -60,16 +59,16 @@ func (a *OpenCodeAdapter) SyncConfig(modules []*domain.ModuleMemory, agentRulesD
 	}
 
 	hasModules := len(modules) > 0
-	hasGlob := containsString(instructions, openCodeRulesGlob)
+	hasGlob := containsString(instructions, rulesGlob)
 
 	switch {
 	case hasModules && !hasGlob:
-		instructions = append(instructions, openCodeRulesGlob)
+		instructions = append(instructions, rulesGlob)
 		cfg["instructions"] = instructions
 	case !hasModules && hasGlob:
 		filtered := make([]string, 0, len(instructions)-1)
 		for _, s := range instructions {
-			if s != openCodeRulesGlob {
+			if s != rulesGlob {
 				filtered = append(filtered, s)
 			}
 		}
