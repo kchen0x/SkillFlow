@@ -11,7 +11,9 @@
       "Bash(go test:*)",
       "Bash(gh pr:*)",
       "Bash(go build:*)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Skill(shinerio-code-plugin:gitacp)",
+      "WebFetch(domain:opencode.ai)"
     ]
   }
 }

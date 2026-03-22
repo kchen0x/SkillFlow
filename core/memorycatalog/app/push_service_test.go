@@ -46,7 +46,7 @@ Main memory body
 
 <skillflow-module>
 Please be sure to load all module memories below.
-[testing](rules/sf-testing.md)
+- @rules/sf-testing.md
 </skillflow-module>`), pusher.mainContent)
 	assert.NotEmpty(t, storage.pushState["codex"].LastPushedHash)
 }
@@ -207,11 +207,15 @@ func (p *recordingPusher) RemoveModuleMemory(moduleName string, agentRulesDir st
 func (p *recordingPusher) BuildRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gatewayport.RulesIndex {
 	entries := make([]string, 0, len(modules))
 	for _, module := range modules {
-		entries = append(entries, "["+module.Name+"](rules/sf-"+module.Name+".md)")
+		entries = append(entries, "- @rules/sf-"+module.Name+".md")
 	}
 	return gatewayport.RulesIndex{
 		Entries: entries,
 	}
+}
+
+func (p *recordingPusher) SyncConfig(_ []*domain.ModuleMemory, _ string) error {
+	return nil
 }
 
 func (p *recordingPusher) RepairManagedBlock(agentMemoryPath string) error {
@@ -220,7 +224,7 @@ func (p *recordingPusher) RepairManagedBlock(agentMemoryPath string) error {
 
 func TestComposeManagedMemoryAddsModuleLoadInstructionAsFirstLine(t *testing.T) {
 	content := composeManagedMemory("Main memory body", gatewayport.RulesIndex{
-		Entries: []string{"[testing](rules/sf-testing.md)"},
+		Entries: []string{"- @rules/sf-testing.md"},
 	})
 
 	assert.Equal(t, strings.TrimSpace(`
@@ -230,6 +234,6 @@ Main memory body
 
 <skillflow-module>
 Please be sure to load all module memories below.
-[testing](rules/sf-testing.md)
+- @rules/sf-testing.md
 </skillflow-module>`), content)
 }

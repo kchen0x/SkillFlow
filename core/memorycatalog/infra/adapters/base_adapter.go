@@ -171,6 +171,11 @@ func findManagedRange(fileContent string) (int, int) {
 
 }
 
+// SyncConfig is a no-op for agents that require no additional config file updates.
+func (b *baseAdapter) SyncConfig(_ []*domain.ModuleMemory, _ string) error {
+	return nil
+}
+
 // buildExplicitRulesIndex returns a RulesIndex with explicit file listings for agents
 // that do not auto-discover rules files.
 func buildExplicitRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gatewayport.RulesIndex {

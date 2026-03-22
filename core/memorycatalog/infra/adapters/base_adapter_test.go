@@ -20,8 +20,8 @@ func TestBuildExplicitRulesIndexUsesAbsolutePaths(t *testing.T) {
 	index := buildExplicitRulesIndex(modules, rulesDir)
 
 	require.Equal(t, []string{
-		"[testing](" + filepath.ToSlash(filepath.Join(rulesDir, "sf-testing.md")) + ")",
-		"[style](" + filepath.ToSlash(filepath.Join(rulesDir, "sf-style.md")) + ")",
+		"- @" + filepath.ToSlash(filepath.Join(rulesDir, "sf-testing.md")),
+		"- @" + filepath.ToSlash(filepath.Join(rulesDir, "sf-style.md")),
 	}, index.Entries)
 }
 
@@ -29,7 +29,7 @@ func TestPushMainMemoryMergeUsesTaggedManagedSections(t *testing.T) {
 	tmpDir := t.TempDir()
 	memoryPath := filepath.Join(tmpDir, "AGENTS.md")
 	adapter := &baseAdapter{}
-	content := "<skillflow-managed>\nmain\n</skillflow-managed>\n\n<skillflow-module>\n[module](rules/sf-module.md)\n</skillflow-module>"
+	content := "<skillflow-managed>\nmain\n</skillflow-managed>\n\n<skillflow-module>\n- @rules/sf-module.md\n</skillflow-module>"
 
 	require.NoError(t, adapter.PushMainMemory(content, domain.PushModeMerge, memoryPath))
 
