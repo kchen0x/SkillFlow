@@ -45,6 +45,7 @@ Main memory body
 </skillflow-managed>
 
 <skillflow-module>
+Module memories are only located in the same directory as this memory file. Do not search in other locations.
 Please be sure to load all module memories below.
 [testing](rules/sf-testing.md)
 </skillflow-module>`), pusher.mainContent)
@@ -229,6 +230,7 @@ Main memory body
 </skillflow-managed>
 
 <skillflow-module>
+Module memories are only located in the same directory as this memory file. Do not search in other locations.
 Please be sure to load all module memories below.
 [testing](rules/sf-testing.md)
 </skillflow-module>`), content)

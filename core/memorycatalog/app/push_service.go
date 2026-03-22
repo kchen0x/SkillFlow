@@ -152,6 +152,7 @@ func composeManagedMemory(mainContent string, rulesIndex gatewayport.RulesIndex)
 	}
 
 	sb.WriteString("\n\n<skillflow-module>\n")
+	sb.WriteString("Module memories are only located in the same directory as this memory file. Do not search in other locations.\n")
 	sb.WriteString("Please be sure to load all module memories below.\n")
 	for i, entry := range rulesIndex.Entries {
 		if i > 0 {
