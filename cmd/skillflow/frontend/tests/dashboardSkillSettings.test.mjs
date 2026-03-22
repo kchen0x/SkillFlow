@@ -7,7 +7,7 @@ import {
   createToolSkillsEventSubscriptions,
   getDashboardAutoUpdateActionState,
   listDashboardToolbarActionKeys,
-} from '../.tmp-tests/dashboardSkillSettings.js'
+} from '../.tmp-tests/src/lib/dashboardSkillSettings.js'
 
 test('readDashboardSkillSettings defaults auto update to false', () => {
   assert.deepEqual(readDashboardSkillSettings(undefined), {
@@ -58,6 +58,7 @@ test('tool skills event subscriptions reload on skills.updated', () => {
 test('dashboard toolbar actions replace remote install with auto update', () => {
   assert.deepEqual(listDashboardToolbarActionKeys(), [
     'update',
+    'manualPush',
     'batchDelete',
     'import',
     'autoUpdate',

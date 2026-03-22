@@ -4,7 +4,7 @@ import {
   pageVariants,
   shouldAnimateSkillCards,
   shouldAnimateSkillGridIntro,
-} from '../.tmp-tests/motionVariants.js'
+} from '../.tmp-tests/src/lib/motionVariants.js'
 
 test('pageVariants uses fade-only transitions for route changes', () => {
   assert.deepEqual(pageVariants.initial, { opacity: 0 })

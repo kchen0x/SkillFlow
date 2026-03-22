@@ -191,7 +191,16 @@ func (a *App) SaveMemoryPushConfig(agentType, mode string, autoPush bool) error 
 		Mode:      memorydomain.PushMode(mode),
 		AutoPush:  autoPush,
 	}
-	return a.memoryService.SavePushConfig(cfg)
+	if err := a.memoryService.SavePushConfig(cfg); err != nil {
+		return err
+	}
+	if !autoPush {
+		return nil
+	}
+	if _, err := a.PushMemoryToAgent(agentType); err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetAllMemoryPushConfigs returns push configurations for all agents that have been configured.
@@ -382,7 +391,11 @@ func (a *App) OpenMemoryInEditor(memoryType string, moduleName string) error {
 	default:
 		return fmt.Errorf("unknown memoryType %q", memoryType)
 	}
-	return memoryeditor.OpenFile(path)
+	if err := memoryeditor.OpenFile(path); err != nil {
+		return err
+	}
+	a.watchExternalMemoryChanges(memoryType, moduleName, path)
+	return nil
 }
 
 func (a *App) syncMemoryToAutoPushAgents() error {

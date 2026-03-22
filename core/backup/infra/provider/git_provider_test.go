@@ -9,12 +9,17 @@ import (
 	"testing"
 )
 
+func newGitTestCommand(args ...string) *exec.Cmd {
+	return exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
+}
+
 func runGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := newGitTestCommand(args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v failed: %v, output: %s", args, err, string(out))
@@ -23,10 +28,11 @@ func runGit(t *testing.T, dir string, args ...string) string {
 }
 
 func runGitWithError(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := newGitTestCommand(args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -66,6 +72,12 @@ func TestGitProviderSyncInitializesRepoAndPushes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(localDir, "cache", "tmp.bin"), []byte("tmp"), 0644); err != nil {
 		t.Fatalf("write cache file: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(localDir, "memory"), 0755); err != nil {
+		t.Fatalf("mkdir memory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "memory", "memory_local.json"), []byte(`{}`), 0644); err != nil {
+		t.Fatalf("write memory_local.json: %v", err)
+	}
 
 	p := NewGitProvider()
 	if err := p.Init(map[string]string{
@@ -93,10 +105,16 @@ func TestGitProviderSyncInitializesRepoAndPushes(t *testing.T) {
 	if !strings.Contains(string(gitignore), "cache/") {
 		t.Fatalf("expected .gitignore to contain cache/, got: %q", string(gitignore))
 	}
+	if !strings.Contains(string(gitignore), "*local.json") {
+		t.Fatalf("expected .gitignore to contain *local.json, got: %q", string(gitignore))
+	}
 	_ = runGit(t, "", "--git-dir", remoteDir, "rev-parse", "--verify", "refs/heads/main")
 	remoteFiles := runGit(t, "", "--git-dir", remoteDir, "ls-tree", "-r", "--name-only", "main")
 	if strings.Contains(remoteFiles, "cache/") {
 		t.Fatalf("cache should not be tracked, remote files: %s", remoteFiles)
+	}
+	if strings.Contains(remoteFiles, "memory_local.json") {
+		t.Fatalf("memory_local.json should not be tracked, remote files: %s", remoteFiles)
 	}
 }
 

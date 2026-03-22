@@ -6,17 +6,18 @@
 
 Slogan: Master once. Apply everywhere.
 
-SkillFlow is a cross-platform desktop app for managing reusable skills and prompts across agent environments. It keeps a local skill library, syncs selected skills to multiple agents, tracks repo-backed sources, checks for updates, and backs up sync-safe data to object storage or Git.
+SkillFlow is a cross-platform desktop app for managing reusable skills, prompts, and memories across agent environments. It keeps local libraries for all three asset types, syncs selected skills and memories to multiple agents, tracks repo-backed sources, checks for updates, and backs up sync-safe data to object storage or Git.
 
 ![SkillFlow](docs/skillflow.gif)
 
 ## What SkillFlow Does
 
-- **📦 Turn discoveries into assets**: Solve the "saved means forgotten" problem by turning scattered skills from blogs and videos into personal assets you can manage, iterate on, retire, and update deliberately.
+- **📦 Turn discoveries into assets**: Solve the "saved means forgotten" problem by turning scattered skills, prompts, and memory snippets from blogs, videos, and daily work into personal assets you can manage, iterate on, retire, and update deliberately.
 - **🎛️ Stay in control**: Avoid black-box skill management by organizing large skill collections by scenario, so developers always understand and control an agent's capability boundaries.
-- **🔄 Sync across agents**: Break model silos by reusing one skill setup across Claude Code, Codex, Gemini, and other agents with different strengths, limits, and use cases.
-- **🖥️ Keep environments consistent**: Build a cloud-backed workflow across macOS and Windows devices so your development environment and skill configuration stay aligned wherever you work.
-- **⚡ Iterate automatically**: Replace tedious manual maintenance with automatic skill updates, so distributed sources do not turn into stale versions.
+- **🔄 Sync across agents**: Break model silos by reusing one setup across Claude Code, Codex, Gemini, and other agents with different strengths, limits, and use cases.
+- **🧠 Build modular memory systems**: Maintain one main memory plus reusable module memories, then sync them automatically to multiple AI coding tools with merge or takeover modes.
+- **🖥️ Keep environments consistent**: Build a cloud-backed workflow across macOS and Windows devices so your development environment and reusable assets stay aligned wherever you work.
+- **⚡ Iterate automatically**: Replace tedious manual maintenance with automatic skill updates and memory sync, so distributed sources do not turn into stale versions.
 - **📝 Version prompts intentionally**: Manage prompts as versioned assets instead of rewriting them ad hoc, improving consistency, optimization, and standardization over time.
 
 ## Download & Install
@@ -35,9 +36,10 @@ Get the latest release from **[GitHub Releases](https://github.com/shinerio/Skil
 |---------|-------------|
 | **Skill Library** | Local library with categories, search, sorting, drag-and-drop organization, batch delete, update checks, and auto-push targets. |
 | **My Prompts** | Synced prompt cards with category management, scoped export, conflict-aware import, copy, image previews, and web links. |
-| **Cross-agent Sync** | Push or pull skills across built-in and custom agents. |
+| **My Memory** | Unified memory workspace for main memory and module memories, with editing, preview, batch push, delete, and per-agent auto-sync modes. |
+| **Cross-agent Sync** | Push skills and automatically sync memories across built-in and custom agents. |
 | **Starred Repos** | Track Git repos, browse discovered skills, and import or push them without installing everything first. |
-| **Cloud Backup** | Back up sync-safe skills, prompts, and metadata to object storage providers or Git. |
+| **Cloud Backup** | Back up sync-safe skills, prompts, memories, and metadata to object storage providers or Git. |
 | **Desktop Experience** | Bilingual UI, multiple themes, tray/menu bar reopen, launch-at-login, proxy testing, and in-app update checks. |
 
 Detailed references:

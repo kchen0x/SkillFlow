@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Brain, CheckSquare, ExternalLink, Plus, RefreshCw, Upload, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Brain, CheckSquare, ExternalLink, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react'
 import {
   CreateModuleMemory,
   DeleteModuleMemory,
@@ -15,7 +15,11 @@ import {
   SaveModuleMemory,
 } from '../../wailsjs/go/main/App'
 import { domain, main } from '../../wailsjs/go/models'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useLanguage } from '../contexts/LanguageContext'
+import AnimatedDialog from '../components/ui/AnimatedDialog'
+import { buildModuleDeletePreview } from '../lib/memoryDeleteDialog'
+import { createMemoryEventSubscriptions } from '../lib/memoryEventSubscriptions'
 import { renderMemoryMarkdown } from '../lib/memoryMarkdown'
 import {
   createMemoryBatchPushState,
@@ -25,10 +29,17 @@ import {
   toggleMemoryBatchAgent,
   toggleMemoryBatchModule,
 } from '../lib/memoryPageState'
+import {
+  buildMemoryPushStatusEntries,
+  getMemoryAgentLabel,
+  getMemoryDrawerMetrics,
+  type MemoryPushStatus,
+} from '../lib/memoryUi'
+import { subscribeToEvents } from '../lib/wailsEvents'
 
 type MainMemoryItem = { content: string; updatedAt: string }
 type ModuleItem = { name: string; content: string; updatedAt: string }
-type PushStatus = 'synced' | 'pendingPush' | 'neverPushed'
+type PushStatus = MemoryPushStatus
 type PushStatusMap = Record<string, PushStatus>
 type PushConfigMap = Record<string, { mode: string; autoPush: boolean }>
 type DrawerState =
@@ -36,14 +47,6 @@ type DrawerState =
   | { type: 'main' }
   | { type: 'module'; name: string }
 type NewModuleState = { open: boolean; name: string; content: string; nameError: string }
-
-const agentDisplayName: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  codex: 'Codex',
-  'gemini-cli': 'Gemini CLI',
-  opencode: 'OpenCode',
-  openclaw: 'OpenClaw',
-}
 
 function statusColor(status: PushStatus): string {
   if (status === 'synced') return 'var(--color-success, #22c55e)'
@@ -58,10 +61,6 @@ function getPreviewLines(content: string, maxLines: number): string {
     .filter(line => line.trim())
     .slice(0, maxLines)
     .join('\n')
-}
-
-function getAgentLabel(agentName: string): string {
-  return agentDisplayName[agentName] ?? agentName
 }
 
 export default function Memory() {
@@ -82,6 +81,7 @@ export default function Memory() {
   const [saving, setSaving] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [pushMessage, setPushMessage] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<ModuleItem | null>(null)
   const [deletingModule, setDeletingModule] = useState<string | null>(null)
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   const [enterBatchPushAfterClose, setEnterBatchPushAfterClose] = useState(false)
@@ -92,6 +92,14 @@ export default function Memory() {
   const previewHtml = drawerContent ? renderMemoryMarkdown(drawerContent) : ''
   const batchPushReady = isMemoryBatchPushReady(batchPushState)
   const selectedMemoryCount = 1 + batchPushState.selectedModules.length
+  const memoryStatusEntries = buildMemoryPushStatusEntries(availableAgents, pushStatuses)
+  const drawerMetrics = getMemoryDrawerMetrics(window.innerWidth)
+  const deletePreview = deleteTarget
+    ? buildModuleDeletePreview(
+      drawerState.type === 'module' && drawerState.name === deleteTarget.name ? drawerContent : deleteTarget.content,
+    )
+    : ''
+  const loadAllRef = useRef<() => Promise<void>>(async () => {})
 
   const loadAll = async () => {
     try {
@@ -103,9 +111,13 @@ export default function Memory() {
         GetEnabledAgents(),
       ])
 
-      setMainMemory(mm as MainMemoryItem)
-      setModules((mods ?? []) as ModuleItem[])
-      setAgents((enabledAgents ?? []) as domain.AgentProfile[])
+      const nextMainMemory = mm as MainMemoryItem
+      const nextModules = (mods ?? []) as ModuleItem[]
+      const nextAgents = (enabledAgents ?? []) as domain.AgentProfile[]
+
+      setMainMemory(nextMainMemory)
+      setModules(nextModules)
+      setAgents(nextAgents)
 
       const statusMap: PushStatusMap = {}
       for (const status of (statuses ?? []) as main.PushStatusDTO[]) {
@@ -118,13 +130,29 @@ export default function Memory() {
         configMap[config.agentType] = { mode: config.mode, autoPush: config.autoPush }
       }
       setPushConfigs(configMap)
+
+      if (!drawerDirty && drawerState.type !== 'none') {
+        const nextDrawerContent = drawerState.type === 'main'
+          ? nextMainMemory?.content ?? ''
+          : nextModules.find(module => module.name === drawerState.name)?.content ?? ''
+        setDrawerContent(nextDrawerContent)
+        setDrawerInitialContent(nextDrawerContent)
+      }
     } catch (error) {
       console.error('Failed to load memory data', error)
     }
   }
 
+  loadAllRef.current = loadAll
+
   useEffect(() => {
     void loadAll()
+  }, [])
+
+  useEffect(() => {
+    return subscribeToEvents(EventsOn, createMemoryEventSubscriptions(() => {
+      void loadAllRef.current()
+    }))
   }, [])
 
   const filteredModules = modules.filter(module => {
@@ -293,14 +321,16 @@ export default function Memory() {
     }
   }
 
-  const handleDeleteModule = async (name: string) => {
-    if (!window.confirm(t('memory.confirmDelete'))) return
+  const handleDeleteModule = async () => {
+    if (!deleteTarget) return
+    const name = deleteTarget.name
     setDeletingModule(name)
     try {
       await DeleteModuleMemory(name)
       if (drawerState.type === 'module' && drawerState.name === name) {
         closeDrawerImmediate()
       }
+      setDeleteTarget(null)
       await loadAll()
     } catch (error) {
       console.error('DeleteModuleMemory failed', error)
@@ -421,7 +451,7 @@ export default function Memory() {
                             style={{ width: 8, height: 8, background: statusColor(status) }}
                           />
                           <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {getAgentLabel(agent.name)}
+                            {getMemoryAgentLabel(agent.name)}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
@@ -429,8 +459,8 @@ export default function Memory() {
                             <button
                               key={mode}
                               onClick={() => void handleAutoSyncModeChange(agent.name, mode)}
-                              className="text-xs px-2.5 py-1 rounded-lg"
-                              style={{
+                            className="text-xs px-2.5 py-1 rounded-lg"
+                            style={{
                                 background: currentMode === mode ? 'var(--active-surface)' : 'var(--bg-surface)',
                                 color: currentMode === mode ? 'var(--active-text)' : 'var(--text-muted)',
                                 border: currentMode === mode ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
@@ -501,7 +531,7 @@ export default function Memory() {
                           border: selected ? '1px solid var(--active-border)' : '1px solid var(--border-base)',
                         }}
                       >
-                        {getAgentLabel(agent.name)}
+                        {getMemoryAgentLabel(agent.name)}
                       </button>
                     )
                   })}
@@ -559,16 +589,16 @@ export default function Memory() {
               )}
             </div>
             <div className="flex flex-col gap-1 items-end shrink-0">
-              {availableAgents.map(agent => {
-                const status = pushStatuses[agent.name] ?? 'neverPushed'
+              {memoryStatusEntries.map(entry => {
+                const status = entry.status
                 return (
-                  <div key={agent.name} className="flex items-center gap-1" title={getAgentLabel(agent.name)}>
+                  <div key={entry.agentType} className="flex items-center gap-1" title={entry.label}>
                     <span
                       className="inline-block rounded-full"
                       style={{ width: 6, height: 6, background: statusColor(status) }}
                     />
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {getAgentLabel(agent.name)}
+                      {entry.label}
                     </span>
                   </div>
                 )
@@ -642,6 +672,22 @@ export default function Memory() {
                       {getPreviewLines(module.content, 2)}
                     </pre>
                   )}
+                  <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
+                    {memoryStatusEntries.map(entry => {
+                      const status = entry.status
+                      return (
+                        <div key={entry.agentType} className="flex items-center gap-1" title={entry.label}>
+                          <span
+                            className="inline-block rounded-full"
+                            style={{ width: 6, height: 6, background: statusColor(status) }}
+                          />
+                          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                            {entry.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
                   <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                     {t('memory.moduleRefHint')}
                   </p>
@@ -653,13 +699,34 @@ export default function Memory() {
       </div>
 
       {drawerState.type !== 'none' && (
+        <button
+          type="button"
+          aria-label={t('common.close')}
+          onClick={() => requestCloseDrawer(false)}
+          className="fixed inset-0"
+          style={{
+            background: 'rgba(15, 23, 42, 0.18)',
+            border: 'none',
+            zIndex: 30,
+          }}
+        />
+      )}
+
+      {drawerState.type !== 'none' && (
         <aside
           className="flex flex-col"
           style={{
-            width: '55%',
-            minWidth: 380,
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: drawerMetrics.width,
+            maxWidth: drawerMetrics.maxWidth,
+            minWidth: drawerMetrics.minWidth,
             borderLeft: '1px solid var(--border-base)',
             background: 'var(--bg-surface)',
+            boxShadow: '-16px 0 36px rgba(15, 23, 42, 0.14)',
+            zIndex: 40,
           }}
         >
           <div
@@ -680,7 +747,10 @@ export default function Memory() {
               </button>
               {drawerState.type === 'module' && (
                 <button
-                  onClick={() => void handleDeleteModule(drawerModuleName)}
+                  onClick={() => {
+                    const target = modules.find(module => module.name === drawerModuleName)
+                    if (target) setDeleteTarget(target)
+                  }}
                   disabled={deletingModule === drawerModuleName}
                   className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
                   style={{ color: 'var(--color-error, #ef4444)', border: '1px solid var(--border-base)' }}
@@ -812,6 +882,57 @@ export default function Memory() {
         </div>
       )}
 
+      <AnimatedDialog
+        open={deleteTarget !== null}
+        onClose={deletingModule ? undefined : () => setDeleteTarget(null)}
+        width="w-[420px]"
+        zIndex={65}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <Trash2 size={18} style={{ color: 'var(--color-error)' }} />
+          <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {t('memory.deleteConfirmTitle')}
+          </span>
+        </div>
+        <p className="text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+          {t('memory.deleteConfirmDesc')}
+        </p>
+        {deleteTarget && (
+          <div
+            className="mt-4 rounded-xl px-3 py-3 text-sm"
+            style={{
+              background: 'var(--bg-base)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-base)',
+            }}
+          >
+            <div className="font-medium mb-1">{deleteTarget.name}</div>
+            {deletePreview && (
+              <div className="whitespace-pre-line" style={{ color: 'var(--text-secondary)' }}>
+                {deletePreview}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button
+            onClick={() => setDeleteTarget(null)}
+            disabled={deletingModule !== null}
+            className="btn-secondary"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            onClick={() => void handleDeleteModule()}
+            disabled={deletingModule !== null}
+            className="btn-primary"
+            style={{ background: 'var(--color-error)' }}
+          >
+            {deletingModule !== null ? t('common.delete') : t('common.confirm')}
+          </button>
+        </div>
+      </AnimatedDialog>
+
       {newModule.open && (
         <div
           className="fixed inset-0 flex items-center justify-center z-50"
@@ -889,3 +1010,4 @@ export default function Memory() {
     </div>
   )
 }
+

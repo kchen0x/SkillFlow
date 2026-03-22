@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { applyPromptImportDecision } from '../.tmp-tests/promptImportConflicts.js'
+import { applyPromptImportDecision } from '../.tmp-tests/src/lib/promptImportConflicts.js'
 
 const conflicts = [
   { name: 'Prompt A' },

@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,7 +21,6 @@ func TestLoadDefaultConfig(t *testing.T) {
 	assert.False(t, cfg.AutoUpdateSkills)
 	assert.Equal(t, config.DefaultLogLevel, cfg.LogLevel)
 	assert.Equal(t, config.DefaultRepoScanMaxDepth, cfg.RepoScanMaxDepth)
-	assert.Equal(t, config.DefaultSkillStatusVisibility(), cfg.SkillStatusVisibility)
 	assert.NotEmpty(t, cfg.Agents)
 }
 
@@ -69,8 +69,62 @@ func TestSaveAndLoadPreservesAgentMemoryPaths(t *testing.T) {
 
 	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(localData), `"memoryPath": "`+filepath.ToSlash(filepath.Join(dir, "custom-agent-memory.md"))+`"`)
-	assert.Contains(t, string(localData), `"rulesDir": "`+filepath.ToSlash(filepath.Join(dir, "custom-agent-rules"))+`"`)
+	var local struct {
+		Agents []config.AgentConfig `json:"agents"`
+	}
+	require.NoError(t, json.Unmarshal(localData, &local))
+	require.NotEmpty(t, local.Agents)
+	assert.Equal(t, filepath.Join(dir, "custom-agent-memory.md"), local.Agents[0].MemoryPath)
+	assert.Equal(t, filepath.Join(dir, "custom-agent-rules"), local.Agents[0].RulesDir)
+}
+
+func TestSaveAndLoadCustomAgentPreservesExplicitScanDirs(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Agents = append(cfg.Agents, config.AgentConfig{
+		Name:       "custom-agent",
+		PushDir:    filepath.Join(dir, "push"),
+		ScanDirs:   []string{filepath.Join(dir, "scan-a"), filepath.Join(dir, "scan-b")},
+		MemoryPath: filepath.Join(dir, "custom-agent-memory.md"),
+		RulesDir:   filepath.Join(dir, "custom-agent-rules"),
+		Enabled:    true,
+		Custom:     true,
+	})
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	require.Len(t, loaded.Agents, len(cfg.Agents))
+
+	customAgent := loaded.Agents[len(loaded.Agents)-1]
+	assert.Equal(t, "custom-agent", customAgent.Name)
+	assert.Equal(t, []string{filepath.Join(dir, "scan-a"), filepath.Join(dir, "scan-b")}, customAgent.ScanDirs)
+}
+
+func TestSaveAndLoadCustomAgentFallsBackScanDirsToPushDir(t *testing.T) {
+	dir := t.TempDir()
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.Agents = append(cfg.Agents, config.AgentConfig{
+		Name:       "custom-agent",
+		PushDir:    filepath.Join(dir, "push"),
+		ScanDirs:   nil,
+		MemoryPath: filepath.Join(dir, "custom-agent-memory.md"),
+		RulesDir:   filepath.Join(dir, "custom-agent-rules"),
+		Enabled:    true,
+		Custom:     true,
+	})
+
+	require.NoError(t, svc.Save(cfg))
+
+	loaded, err := svc.Load()
+	require.NoError(t, err)
+	require.Len(t, loaded.Agents, len(cfg.Agents))
+
+	customAgent := loaded.Agents[len(loaded.Agents)-1]
+	assert.Equal(t, []string{filepath.Join(dir, "push")}, customAgent.ScanDirs)
 }
 
 func TestAutoUpdateSkillsStoredOnlyInLocalConfig(t *testing.T) {
@@ -138,42 +192,20 @@ func TestSkippedUpdateVersionPersistsInSharedConfig(t *testing.T) {
 	assert.Equal(t, "v9.9.9", loaded.SkippedUpdateVersion)
 }
 
-func TestSkillStatusVisibilityPersistsInSharedConfig(t *testing.T) {
+func TestConfigDoesNotPersistSkillStatusVisibility(t *testing.T) {
 	dir := t.TempDir()
 	svc := config.NewService(dir)
 	cfg := config.DefaultConfig(dir)
-	cfg.SkillStatusVisibility.MySkills = []string{config.SkillStatusPushedAgents}
-	cfg.SkillStatusVisibility.PullFromAgent = []string{}
 
 	require.NoError(t, svc.Save(cfg))
 
-	loaded, err := svc.Load()
-	require.NoError(t, err)
-	assert.Equal(t, []string{config.SkillStatusPushedAgents}, loaded.SkillStatusVisibility.MySkills)
-	assert.Equal(t, []string{}, loaded.SkillStatusVisibility.PullFromAgent)
-
 	sharedData, err := os.ReadFile(filepath.Join(dir, "config.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(sharedData), "skillStatusVisibility")
+	assert.NotContains(t, string(sharedData), "skillStatusVisibility")
 
 	localData, err := os.ReadFile(filepath.Join(dir, "config_local.json"))
 	require.NoError(t, err)
 	assert.NotContains(t, string(localData), "skillStatusVisibility")
-}
-
-func TestSkillStatusVisibilityDropsStatusesOutsidePageDefaultPolicy(t *testing.T) {
-	dir := t.TempDir()
-	svc := config.NewService(dir)
-	cfg := config.DefaultConfig(dir)
-	cfg.SkillStatusVisibility.PullFromAgent = []string{config.SkillStatusImported, config.SkillStatusPushedAgents}
-	cfg.SkillStatusVisibility.PushToAgent = []string{config.SkillStatusImported, config.SkillStatusPushedAgents}
-
-	require.NoError(t, svc.Save(cfg))
-
-	loaded, err := svc.Load()
-	require.NoError(t, err)
-	assert.Equal(t, []string{config.SkillStatusImported}, loaded.SkillStatusVisibility.PullFromAgent)
-	assert.Equal(t, []string{config.SkillStatusPushedAgents}, loaded.SkillStatusVisibility.PushToAgent)
 }
 
 func TestSaveAndLoadConfigNormalizesLogLevel(t *testing.T) {

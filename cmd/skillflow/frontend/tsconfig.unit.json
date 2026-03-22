@@ -1,0 +1,38 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "target": "ES2020",
+    "outDir": ".tmp-tests",
+    "rootDir": ".",
+    "tsBuildInfoFile": ".cache/tsconfig.unit.tsbuildinfo"
+  },
+  "files": [
+    "src/lib/agentMemoryPreview.ts",
+    "src/lib/agentSettings.ts",
+    "src/lib/clipboardCore.ts",
+    "src/lib/cloudProviderOrder.ts",
+    "src/lib/dashboardManualPushState.ts",
+    "src/lib/dashboardSkillSettings.ts",
+    "src/lib/listLoadState.ts",
+    "src/lib/memoryEventSubscriptions.ts",
+    "src/lib/memoryMarkdown.ts",
+    "src/lib/memoryDeleteDialog.ts",
+    "src/lib/memoryPageState.ts",
+    "src/lib/memoryUi.ts",
+    "src/lib/motionVariants.ts",
+    "src/lib/promptExport.ts",
+    "src/lib/promptImportConflicts.ts",
+    "src/lib/promptRichContent.ts",
+    "src/lib/proxyConnection.ts",
+    "src/lib/settingsPaths.ts",
+    "src/lib/skillStatusStrip.ts",
+    "src/lib/starredRepoListState.ts",
+    "src/lib/toolSkillsPanels.ts",
+    "src/lib/toolSkillsPullState.ts",
+    "src/lib/wailsEvents.ts",
+    "src/hooks/useTheme.ts"
+  ]
+}
+
+

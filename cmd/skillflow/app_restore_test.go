@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
-	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/platform/appdata"
+	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skilldomain "github.com/shinerio/skillflow/core/skillcatalog/domain"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
@@ -105,6 +105,7 @@ func newRestoreTestApp(t *testing.T, autoPushAgents []string) (*App, string, str
 	pushDir := filepath.Join(dataDir, "agent-skills")
 	skillsDir := appdata.SkillsDir(dataDir)
 	starsPath := filepath.Join(dataDir, "star_repos.json")
+	require.NoError(t, os.WriteFile(starsPath, []byte("[]"), 0644))
 
 	svc := config.NewService(dataDir)
 	cfg := config.DefaultConfig(dataDir)
@@ -142,8 +143,9 @@ func newLocalGitRepo(t *testing.T) string {
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git %v failed: %s", args, string(output))
 }

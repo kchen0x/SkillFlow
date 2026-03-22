@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, Route, Routes, NavLink, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Package, ArrowUpFromLine, ArrowDownToLine, Cloud, Settings, Star, X, Download, FolderOpen, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench, Palette, Languages, FileText, Brain } from 'lucide-react'
+import { Package, Cloud, Settings, Star, X, Download, FolderOpen, RefreshCw, AlertTriangle, GitMerge, MessageSquareWarning, ExternalLink, Wrench, Palette, Languages, FileText, Brain } from 'lucide-react'
 import wordmarkIcon from './assets/branding/skillflow-wordmark-icon.png'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { DownloadAppUpdate, ApplyAppUpdate, GetGitConflictPending, OpenGitBackupDir, ResolveGitConflict, OpenURL, SetSkippedUpdateVersion } from '../wailsjs/go/main/App'
@@ -24,8 +24,6 @@ type GitConflictInfo = {
 
 const feedbackIssueURL = 'https://github.com/shinerio/skillflow/issues/new/choose'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
-const SyncPush = lazy(() => import('./pages/SyncPush'))
-const SyncPull = lazy(() => import('./pages/SyncPull'))
 const Backup = lazy(() => import('./pages/Backup'))
 const SettingsPage = lazy(() => import('./pages/Settings'))
 const StarredRepos = lazy(() => import('./pages/StarredRepos'))
@@ -271,12 +269,9 @@ function AppContent() {
             </div>
           </div>
           <NavItem to="/" icon={<Package size={16} />} label={t('nav.mySkills')} />
-          <NavItem to="/tools" icon={<Wrench size={16} />} label={t('nav.myTools')} end={false} />
           <NavItem to="/prompts" icon={<FileText size={16} />} label={t('nav.myPrompts')} />
           <NavItem to="/memory" icon={<Brain size={16} />} label={t('nav.myMemory')} />
-          <p className="text-xs px-2 mt-3 mb-1" style={{ color: 'var(--text-muted)' }}>{t('nav.syncSection')}</p>
-          <NavItem to="/sync/push" icon={<ArrowUpFromLine size={16} />} label={t('nav.pushToTool')} />
-          <NavItem to="/sync/pull" icon={<ArrowDownToLine size={16} />} label={t('nav.pullFromTool')} />
+          <NavItem to="/tools" icon={<Wrench size={16} />} label={t('nav.myTools')} end={false} />
           <NavItem to="/starred" icon={<Star size={16} />} label={t('nav.starred')} end={false} />
           <div className="flex-1" />
           <div className="flex flex-col gap-1">
@@ -332,8 +327,8 @@ function AnimatedRoutes() {
         >
           <Routes location={location}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/sync/push" element={<SyncPush />} />
-            <Route path="/sync/pull" element={<SyncPull />} />
+            <Route path="/sync/push" element={<Navigate to="/" replace />} />
+            <Route path="/sync/pull" element={<Navigate to="/tools" replace />} />
             <Route path="/backup" element={<Backup />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/starred" element={<StarredRepos />} />

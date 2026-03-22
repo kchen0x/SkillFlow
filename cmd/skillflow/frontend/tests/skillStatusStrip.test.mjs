@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizePushedAgents } from '../.tmp-tests/skillStatusStrip.js'
+import { summarizePushedAgents } from '../.tmp-tests/src/lib/skillStatusStrip.js'
 
 test('summarizePushedAgents returns all agents when under the visible cap', () => {
   assert.deepEqual(

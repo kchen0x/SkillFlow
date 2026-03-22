@@ -12,7 +12,8 @@ import (
 )
 
 const defaultProxyTestTargetURL = "https://github.com"
-const proxyConnectionTestTimeout = 5 * time.Second
+
+var proxyConnectionTestTimeout = 5 * time.Second
 
 type ProxyConnectionTestResult struct {
 	TargetURL  string `json:"targetURL"`

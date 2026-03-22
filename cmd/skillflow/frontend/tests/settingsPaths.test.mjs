@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSettingsPathRows } from '../.tmp-tests/settingsPaths.js'
+import { buildSettingsPathRows } from '../.tmp-tests/src/lib/settingsPaths.js'
 
 test('settingsPaths exposes repo cache field and app data action', () => {
   const rows = buildSettingsPathRows(

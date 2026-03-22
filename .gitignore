@@ -15,6 +15,7 @@
 /cmd/skillflow/.build-cache/
 /cmd/skillflow/frontend/dist/
 /cmd/skillflow/frontend/.cache/
+/cmd/skillflow/frontend/.tmp-tests/
 /cmd/skillflow/frontend/node_modules/
 /cmd/skillflow/frontend/package.json.md5
 

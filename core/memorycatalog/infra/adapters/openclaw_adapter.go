@@ -13,7 +13,7 @@ func NewOpenClawAdapter() *OpenClawAdapter {
 	return &OpenClawAdapter{&baseAdapter{}}
 }
 
-// BuildRulesIndex returns an explicit listing of managed rule files.
+// BuildRulesIndex returns explicit markdown refs for managed rule files.
 func (a *OpenClawAdapter) BuildRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gateway.RulesIndex {
 	return buildExplicitRulesIndex(modules, agentRulesDir)
 }

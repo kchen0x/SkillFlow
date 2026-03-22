@@ -8,7 +8,7 @@ import {
   isMemoryBatchSelected,
   toggleMemoryBatchAgent,
   toggleMemoryBatchModule,
-} from '../.tmp-tests/memoryPageState.js'
+} from '../.tmp-tests/src/lib/memoryPageState.js'
 
 test('getMemoryAutoSyncMode maps stored push config to off merge and takeover', () => {
   assert.equal(getMemoryAutoSyncMode(undefined), 'off')

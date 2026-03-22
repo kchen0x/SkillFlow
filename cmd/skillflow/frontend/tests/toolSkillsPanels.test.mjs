@@ -4,7 +4,7 @@ import {
   getDefaultToolSkillsPanel,
   getVisibleToolSkillsResultCount,
   filterToolSkillsPanelContent,
-} from '../.tmp-tests/toolSkillsPanels.js'
+} from '../.tmp-tests/src/lib/toolSkillsPanels.js'
 
 test('getDefaultToolSkillsPanel returns skills', () => {
   assert.equal(getDefaultToolSkillsPanel(), 'skills')

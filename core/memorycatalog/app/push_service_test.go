@@ -13,7 +13,7 @@ import (
 
 func TestPushSelectionToAgentWritesOnlySelectedModulesAndRemovesOthers(t *testing.T) {
 	storage := &testMemoryStorage{
-		main: &domain.MainMemory{Content: "Main memory", UpdatedAt: time.Now()},
+		main: &domain.MainMemory{Content: "Main memory body", UpdatedAt: time.Now()},
 		modules: map[string]*domain.ModuleMemory{
 			"style":   {Name: "style", Content: "Style rules", UpdatedAt: time.Now()},
 			"testing": {Name: "testing", Content: "Always test", UpdatedAt: time.Now()},
@@ -30,6 +30,7 @@ func TestPushSelectionToAgentWritesOnlySelectedModulesAndRemovesOthers(t *testin
 			},
 		},
 	}, func(agentType string) (gatewayport.AgentMemoryPusher, bool) {
+		pusher.managedModules = []string{"style", "testing"}
 		return pusher, true
 	})
 
@@ -38,9 +39,15 @@ func TestPushSelectionToAgentWritesOnlySelectedModulesAndRemovesOthers(t *testin
 	assert.Equal(t, []string{"testing"}, pusher.pushedModules)
 	assert.Equal(t, []string{"style"}, pusher.removedModules)
 	assert.Equal(t, domain.PushModeMerge, pusher.mainMode)
-	assert.True(t, strings.Contains(pusher.mainContent, "Main memory"))
-	assert.True(t, strings.Contains(pusher.mainContent, "testing"))
-	assert.False(t, strings.Contains(pusher.mainContent, "style"))
+	assert.Equal(t, strings.TrimSpace(`
+<skillflow-managed>
+Main memory body
+</skillflow-managed>
+
+<skillflow-module>
+Please be sure to load all module memories below.
+[testing](rules/sf-testing.md)
+</skillflow-module>`), pusher.mainContent)
 	assert.NotEmpty(t, storage.pushState["codex"].LastPushedHash)
 }
 
@@ -174,6 +181,7 @@ type recordingPusher struct {
 	mainMode       domain.PushMode
 	pushedModules  []string
 	removedModules []string
+	managedModules []string
 }
 
 func (p *recordingPusher) PushMainMemory(content string, mode domain.PushMode, agentMemoryPath string) error {
@@ -187,6 +195,10 @@ func (p *recordingPusher) PushModuleMemory(module *domain.ModuleMemory, agentRul
 	return nil
 }
 
+func (p *recordingPusher) ListManagedModuleNames(agentRulesDir string) ([]string, error) {
+	return append([]string(nil), p.managedModules...), nil
+}
+
 func (p *recordingPusher) RemoveModuleMemory(moduleName string, agentRulesDir string) error {
 	p.removedModules = append(p.removedModules, moduleName)
 	return nil
@@ -195,14 +207,29 @@ func (p *recordingPusher) RemoveModuleMemory(moduleName string, agentRulesDir st
 func (p *recordingPusher) BuildRulesIndex(modules []*domain.ModuleMemory, agentRulesDir string) gatewayport.RulesIndex {
 	entries := make([]string, 0, len(modules))
 	for _, module := range modules {
-		entries = append(entries, module.Name)
+		entries = append(entries, "["+module.Name+"](rules/sf-"+module.Name+".md)")
 	}
 	return gatewayport.RulesIndex{
-		Header:  "Selected modules:",
 		Entries: entries,
 	}
 }
 
 func (p *recordingPusher) RepairManagedBlock(agentMemoryPath string) error {
 	return nil
+}
+
+func TestComposeManagedMemoryAddsModuleLoadInstructionAsFirstLine(t *testing.T) {
+	content := composeManagedMemory("Main memory body", gatewayport.RulesIndex{
+		Entries: []string{"[testing](rules/sf-testing.md)"},
+	})
+
+	assert.Equal(t, strings.TrimSpace(`
+<skillflow-managed>
+Main memory body
+</skillflow-managed>
+
+<skillflow-module>
+Please be sure to load all module memories below.
+[testing](rules/sf-testing.md)
+</skillflow-module>`), content)
 }

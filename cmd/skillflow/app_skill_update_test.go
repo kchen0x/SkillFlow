@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
@@ -18,6 +21,18 @@ import (
 	sourcerepo "github.com/shinerio/skillflow/core/skillsource/infra/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+type gitRepoTemplate struct {
+	dir    string
+	oldSHA string
+	newSHA string
+}
+
+var (
+	gitRepoTemplateMu     sync.Mutex
+	cachedRepoTemplates   = map[string]gitRepoTemplate{}
+	singleCommitTemplates = map[string]gitRepoTemplate{}
 )
 
 func TestCheckUpdatesUsesLocalCacheSHA(t *testing.T) {
@@ -295,44 +310,18 @@ func seedCachedSkillRepo(t *testing.T, dataDir, repoURL, skillSubPath, oldConten
 
 	repoDir, err := platformgit.CacheDir(appdata.RepoCacheDir(dataDir), repoURL)
 	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(repoDir, 0755))
-
-	runGitCmd(t, repoDir, "init")
-	runGitCmd(t, repoDir, "config", "user.name", "SkillFlow Tests")
-	runGitCmd(t, repoDir, "config", "user.email", "tests@skillflow.local")
-	runGitCmd(t, repoDir, "config", "commit.gpgsign", "false")
-
-	writeCachedSkillFiles(t, repoDir, skillSubPath, oldContent)
-	runGitCmd(t, repoDir, "add", ".")
-	runGitCmd(t, repoDir, "commit", "-m", "initial cache")
-	oldSHA, err := platformgit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
-	require.NoError(t, err)
-
-	writeCachedSkillFiles(t, repoDir, skillSubPath, newContent)
-	runGitCmd(t, repoDir, "add", ".")
-	runGitCmd(t, repoDir, "commit", "-m", "update cache")
-	newSHA, err := platformgit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
-	require.NoError(t, err)
-
-	return repoDir, oldSHA, newSHA
+	template := cachedGitRepoTemplate(t, skillSubPath, oldContent, newContent)
+	require.NoError(t, copyTestDir(template.dir, repoDir))
+	return repoDir, template.oldSHA, template.newSHA
 }
 
 func seedLocalRemoteSkillRepo(t *testing.T, repoDir, skillSubPath, content string) string {
 	t.Helper()
 	requireGitAvailable(t)
 
-	require.NoError(t, os.MkdirAll(repoDir, 0755))
-	runGitCmd(t, repoDir, "init")
-	runGitCmd(t, repoDir, "config", "user.name", "SkillFlow Tests")
-	runGitCmd(t, repoDir, "config", "user.email", "tests@skillflow.local")
-	runGitCmd(t, repoDir, "config", "commit.gpgsign", "false")
-	writeCachedSkillFiles(t, repoDir, skillSubPath, content)
-	runGitCmd(t, repoDir, "add", ".")
-	runGitCmd(t, repoDir, "commit", "-m", "initial remote")
-
-	sha, err := platformgit.GetSubPathSHA(context.Background(), repoDir, skillSubPath)
-	require.NoError(t, err)
-	return sha
+	template := singleCommitGitRepoTemplate(t, skillSubPath, content)
+	require.NoError(t, copyTestDir(template.dir, repoDir))
+	return template.oldSHA
 }
 
 func commitLocalRemoteSkillRepoUpdate(t *testing.T, repoDir, skillSubPath, content string) string {
@@ -371,6 +360,120 @@ func writeCachedSkillFiles(t *testing.T, repoDir, skillSubPath, content string) 
 	require.NoError(t, os.WriteFile(filepath.Join(skillDir, "notes.txt"), []byte("cached"), 0644))
 }
 
+func cachedGitRepoTemplate(t *testing.T, skillSubPath, oldContent, newContent string) gitRepoTemplate {
+	t.Helper()
+
+	key := strings.Join([]string{skillSubPath, oldContent, newContent}, "\x00")
+	gitRepoTemplateMu.Lock()
+	template, ok := cachedRepoTemplates[key]
+	gitRepoTemplateMu.Unlock()
+	if ok {
+		return template
+	}
+
+	dir, err := os.MkdirTemp("", "skillflow-cache-template-*")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(dir, 0755))
+
+	runGitCmd(t, dir, "init")
+	runGitCmd(t, dir, "config", "user.name", "SkillFlow Tests")
+	runGitCmd(t, dir, "config", "user.email", "tests@skillflow.local")
+	runGitCmd(t, dir, "config", "commit.gpgsign", "false")
+
+	writeCachedSkillFiles(t, dir, skillSubPath, oldContent)
+	runGitCmd(t, dir, "add", ".")
+	runGitCmd(t, dir, "commit", "-m", "initial cache")
+	oldSHA, err := platformgit.GetSubPathSHA(context.Background(), dir, skillSubPath)
+	require.NoError(t, err)
+
+	writeCachedSkillFiles(t, dir, skillSubPath, newContent)
+	runGitCmd(t, dir, "add", ".")
+	runGitCmd(t, dir, "commit", "-m", "update cache")
+	newSHA, err := platformgit.GetSubPathSHA(context.Background(), dir, skillSubPath)
+	require.NoError(t, err)
+
+	template = gitRepoTemplate{dir: dir, oldSHA: oldSHA, newSHA: newSHA}
+	gitRepoTemplateMu.Lock()
+	cachedRepoTemplates[key] = template
+	gitRepoTemplateMu.Unlock()
+	return template
+}
+
+func singleCommitGitRepoTemplate(t *testing.T, skillSubPath, content string) gitRepoTemplate {
+	t.Helper()
+
+	key := strings.Join([]string{skillSubPath, content}, "\x00")
+	gitRepoTemplateMu.Lock()
+	template, ok := singleCommitTemplates[key]
+	gitRepoTemplateMu.Unlock()
+	if ok {
+		return template
+	}
+
+	dir, err := os.MkdirTemp("", "skillflow-remote-template-*")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(dir, 0755))
+
+	runGitCmd(t, dir, "init")
+	runGitCmd(t, dir, "config", "user.name", "SkillFlow Tests")
+	runGitCmd(t, dir, "config", "user.email", "tests@skillflow.local")
+	runGitCmd(t, dir, "config", "commit.gpgsign", "false")
+	writeCachedSkillFiles(t, dir, skillSubPath, content)
+	runGitCmd(t, dir, "add", ".")
+	runGitCmd(t, dir, "commit", "-m", "initial remote")
+
+	sha, err := platformgit.GetSubPathSHA(context.Background(), dir, skillSubPath)
+	require.NoError(t, err)
+
+	template = gitRepoTemplate{dir: dir, oldSHA: sha}
+	gitRepoTemplateMu.Lock()
+	singleCommitTemplates[key] = template
+	gitRepoTemplateMu.Unlock()
+	return template
+}
+
+func copyTestDir(src, dst string) error {
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode())
+		}
+		return copyTestFile(path, target, info.Mode())
+	})
+}
+
+func copyTestFile(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return nil
+}
+
 func requireGitAvailable(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -380,8 +483,9 @@ func requireGitAvailable(t *testing.T) {
 
 func runGitCmd(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	output, err := cmd.CombinedOutput()
 	require.NoErrorf(t, err, "git %v failed: %s", args, string(output))
 }
@@ -391,5 +495,9 @@ func assertFileContentEquals(t *testing.T, path string, want string) {
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, want, string(data))
+	assert.Equal(t, normalizeTestNewlines(want), normalizeTestNewlines(string(data)))
+}
+
+func normalizeTestNewlines(value string) string {
+	return strings.ReplaceAll(value, "\r\n", "\n")
 }

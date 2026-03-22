@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import * as useThemeModule from '../.tmp-tests/theme/useTheme.js'
+import * as useThemeModule from '../.tmp-tests/src/hooks/useTheme.js'
 
 function createStorage(entries = {}) {
   return {

@@ -18,17 +18,16 @@ import (
 // sharedConfig is stored in config.json and safe to sync across platforms.
 // It contains no file system paths or sensitive cloud credentials.
 type sharedConfig struct {
-	DefaultCategory       string                         `json:"defaultCategory"`
-	LogLevel              string                         `json:"logLevel"`
-	RepoScanMaxDepth      int                            `json:"repoScanMaxDepth"`
-	SkillStatusVisibility SkillStatusVisibilityConfig    `json:"skillStatusVisibility"`
-	Agents                []sharedAgentConfig            `json:"agents"`
-	Cloud                 sharedCloudState               `json:"cloud"`
-	CloudProfiles         map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
-	SkippedUpdateVersion  string                         `json:"skippedUpdateVersion,omitempty"`
-	legacyCloudMigrated   bool                           `json:"-"`
-	legacyProxyMigrated   bool                           `json:"-"`
-	legacyProxy           ProxyConfig                    `json:"-"`
+	DefaultCategory      string                         `json:"defaultCategory"`
+	LogLevel             string                         `json:"logLevel"`
+	RepoScanMaxDepth     int                            `json:"repoScanMaxDepth"`
+	Agents               []sharedAgentConfig            `json:"agents"`
+	Cloud                sharedCloudState               `json:"cloud"`
+	CloudProfiles        map[string]CloudProviderConfig `json:"cloudProfiles,omitempty"`
+	SkippedUpdateVersion string                         `json:"skippedUpdateVersion,omitempty"`
+	legacyCloudMigrated  bool                           `json:"-"`
+	legacyProxyMigrated  bool                           `json:"-"`
+	legacyProxy          ProxyConfig                    `json:"-"`
 }
 
 type sharedCloudState struct {
@@ -137,8 +136,8 @@ func (s *Service) Save(cfg AppConfig) error {
 	cfg.LogLevel = NormalizeLogLevel(cfg.LogLevel)
 	cfg.AutoPushAgents = NormalizeAgentNameList(cfg.AutoPushAgents)
 	cfg.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth)
-	cfg.SkillStatusVisibility = NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility)
 	cfg.Proxy = NormalizeProxyConfig(cfg.Proxy)
+	cfg.Agents = normalizeAgentConfigs(cfg.Agents)
 
 	shared, err := s.loadShared()
 	if err != nil {
@@ -198,7 +197,6 @@ func (s *Service) loadShared() (sharedConfig, error) {
 	}
 	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
-	sc.SkillStatusVisibility = NormalizeSkillStatusVisibility(sc.SkillStatusVisibility)
 	sc.CloudProfiles = normalizeCloudProfiles(sc.CloudProfiles)
 
 	var legacy struct {
@@ -251,7 +249,6 @@ func (s *Service) loadLocal() localConfig {
 func (s *Service) saveShared(sc sharedConfig) error {
 	sc.LogLevel = NormalizeLogLevel(sc.LogLevel)
 	sc.RepoScanMaxDepth = NormalizeRepoScanMaxDepth(sc.RepoScanMaxDepth)
-	sc.SkillStatusVisibility = NormalizeSkillStatusVisibility(sc.SkillStatusVisibility)
 	sc.CloudProfiles = splitSharedCloudProfiles(sc.CloudProfiles)
 	return s.store.WriteShared(sc)
 }
@@ -294,11 +291,10 @@ func (s *Service) defaultShared() sharedConfig {
 		agents = append(agents, sharedAgentConfig{Name: agent.Name, Enabled: agent.Enabled})
 	}
 	return sharedConfig{
-		DefaultCategory:       defaultSkillSettings.DefaultCategory,
-		LogLevel:              defaultShellSettings.LogLevel,
-		RepoScanMaxDepth:      defaultAgentSettings.RepoScanMaxDepth,
-		SkillStatusVisibility: DefaultSkillStatusVisibility(),
-		Agents:                agents,
+		DefaultCategory:  defaultSkillSettings.DefaultCategory,
+		LogLevel:         defaultShellSettings.LogLevel,
+		RepoScanMaxDepth: defaultAgentSettings.RepoScanMaxDepth,
+		Agents:           agents,
 	}
 }
 
@@ -389,23 +385,66 @@ func (s *Service) merge(shared sharedConfig, local localConfig) AppConfig {
 			})
 		}
 	}
+	agents = normalizeAgentConfigs(agents)
 
 	cloudProfiles := mergeCloudProfiles(shared.CloudProfiles, local.CloudCredentialsByProvider)
 	return AppConfig{
-		RepoCacheDir:          local.RepoCacheDir,
-		AutoUpdateSkills:      local.AutoUpdateSkills,
-		AutoPushAgents:        NormalizeAgentNameList(local.AutoPushAgents),
-		LaunchAtLogin:         local.LaunchAtLogin,
-		DefaultCategory:       shared.DefaultCategory,
-		LogLevel:              NormalizeLogLevel(shared.LogLevel),
-		RepoScanMaxDepth:      NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
-		SkillStatusVisibility: NormalizeSkillStatusVisibility(shared.SkillStatusVisibility),
-		Agents:                agents,
-		Cloud:                 buildRuntimeCloudConfig(shared.Cloud, cloudProfiles),
-		CloudProfiles:         cloudProfiles,
-		Proxy:                 NormalizeProxyConfig(local.Proxy),
-		SkippedUpdateVersion:  shared.SkippedUpdateVersion,
+		RepoCacheDir:         local.RepoCacheDir,
+		AutoUpdateSkills:     local.AutoUpdateSkills,
+		AutoPushAgents:       NormalizeAgentNameList(local.AutoPushAgents),
+		LaunchAtLogin:        local.LaunchAtLogin,
+		DefaultCategory:      shared.DefaultCategory,
+		LogLevel:             NormalizeLogLevel(shared.LogLevel),
+		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(shared.RepoScanMaxDepth),
+		Agents:               agents,
+		Cloud:                buildRuntimeCloudConfig(shared.Cloud, cloudProfiles),
+		CloudProfiles:        cloudProfiles,
+		Proxy:                NormalizeProxyConfig(local.Proxy),
+		SkippedUpdateVersion: shared.SkippedUpdateVersion,
 	}
+}
+
+func normalizeAgentConfigs(agents []AgentConfig) []AgentConfig {
+	if len(agents) == 0 {
+		return nil
+	}
+	normalized := make([]AgentConfig, 0, len(agents))
+	for _, agent := range agents {
+		next := agent
+		next.Name = strings.TrimSpace(next.Name)
+		next.PushDir = strings.TrimSpace(next.PushDir)
+		next.MemoryPath = strings.TrimSpace(next.MemoryPath)
+		next.RulesDir = strings.TrimSpace(next.RulesDir)
+		next.ScanDirs = normalizeAgentPathList(next.ScanDirs)
+		if next.Custom && len(next.ScanDirs) == 0 && next.PushDir != "" {
+			next.ScanDirs = []string{next.PushDir}
+		}
+		normalized = append(normalized, next)
+	}
+	return normalized
+}
+
+func normalizeAgentPathList(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(paths))
+	normalized := make([]string, 0, len(paths))
+	for _, path := range paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 // splitShared extracts the platform-agnostic fields from AppConfig.
@@ -418,14 +457,13 @@ func (s *Service) splitShared(cfg AppConfig) sharedConfig {
 	}
 	profiles := mergeRuntimeCloudProfiles(nil, cfg.CloudProfiles, cfg.Cloud)
 	return sharedConfig{
-		DefaultCategory:       cfg.DefaultCategory,
-		LogLevel:              NormalizeLogLevel(cfg.LogLevel),
-		RepoScanMaxDepth:      NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
-		SkillStatusVisibility: NormalizeSkillStatusVisibility(cfg.SkillStatusVisibility),
-		Agents:                agents,
-		Cloud:                 sharedCloudState{Provider: strings.TrimSpace(cfg.Cloud.Provider), Enabled: cfg.Cloud.Enabled, SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes},
-		CloudProfiles:         splitSharedCloudProfiles(profiles),
-		SkippedUpdateVersion:  cfg.SkippedUpdateVersion,
+		DefaultCategory:      cfg.DefaultCategory,
+		LogLevel:             NormalizeLogLevel(cfg.LogLevel),
+		RepoScanMaxDepth:     NormalizeRepoScanMaxDepth(cfg.RepoScanMaxDepth),
+		Agents:               agents,
+		Cloud:                sharedCloudState{Provider: strings.TrimSpace(cfg.Cloud.Provider), Enabled: cfg.Cloud.Enabled, SyncIntervalMinutes: cfg.Cloud.SyncIntervalMinutes},
+		CloudProfiles:        splitSharedCloudProfiles(profiles),
+		SkippedUpdateVersion: cfg.SkippedUpdateVersion,
 	}
 }
 

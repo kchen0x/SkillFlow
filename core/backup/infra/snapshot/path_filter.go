@@ -15,8 +15,11 @@ var excludedDirs = []string{
 
 var excludedFiles = []string{
 	".DS_Store",
-	"config_local.json",
-	"star_repos_local.json",
+}
+
+// excludedPatterns are gitignore glob patterns for files that should never be backed up.
+var excludedPatterns = []string{
+	"*local.json",
 }
 
 func ExcludedDirectories() []string {
@@ -25,6 +28,10 @@ func ExcludedDirectories() []string {
 
 func ExcludedFiles() []string {
 	return append([]string(nil), excludedFiles...)
+}
+
+func ExcludedPatterns() []string {
+	return append([]string(nil), excludedPatterns...)
 }
 
 func ShouldSkipBackupPath(rel string) bool {
@@ -42,6 +49,9 @@ func ShouldSkipBackupPath(rel string) bool {
 		if base == file {
 			return true
 		}
+	}
+	if strings.HasSuffix(base, "local.json") {
+		return true
 	}
 	return false
 }

@@ -53,7 +53,7 @@ endif
 
 ## test: Run Go tests and frontend unit tests
 test:
-	go test ./core/...
+	go test ./core/... ./cmd/skillflow
 	cd $(APP_DIR)/frontend && npm run test:unit
 
 ## test-cloud: Run Go tests with only selected cloud providers, e.g. make test-cloud PROVIDERS="aws,google"

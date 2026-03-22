@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { renderMemoryMarkdown } from '../.tmp-tests/memoryMarkdown.js'
+import { renderMemoryMarkdown } from '../.tmp-tests/src/lib/memoryMarkdown.js'
 
 test('renderMemoryMarkdown renders common markdown blocks and inline syntax', () => {
   const html = renderMemoryMarkdown(`# Title

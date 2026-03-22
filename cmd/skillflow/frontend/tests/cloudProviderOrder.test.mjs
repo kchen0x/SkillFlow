@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { orderCloudProviders } from '../.tmp-tests/cloudProviderOrder.js'
+import { orderCloudProviders } from '../.tmp-tests/src/lib/cloudProviderOrder.js'
 
 test('orderCloudProviders keeps git pinned first and preserves backend order for others', () => {
   assert.deepEqual(

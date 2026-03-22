@@ -130,8 +130,6 @@ SkillFlow 采用 helper/UI 双进程模型：
   - 当前备份配置
   - provider 与同步间隔
   - shared/local 配置中的云配置与凭据拆分
-- `readmodel/preferences`
-  - 卡片状态可见性策略
 - 壳层 / platform
   - 开机自启
   - 窗口状态
@@ -150,7 +148,6 @@ SkillFlow 采用 helper/UI 双进程模型：
 
 - app data 路径归属位于 `core/platform/appdata`
 - 壳层的 proxy、window、log level、skipped update 偏好位于 `core/platform/shellsettings` 与 `core/platform/settingsstore`
-- Skill 状态可见性偏好位于 `core/readmodel/preferences`
 - import、push/pull、update、restore compensation 等跨上下文写流程位于 `core/orchestration`
 - installed skills、starred skills、agent presence 的组合位于 `core/readmodel/skills` 与 `core/readmodel/viewstate`
 - `core/config` 是面向前端的设置门面与 split/merge 持久化适配器，底层委托给这些上下文与 platform 拥有的设置组件

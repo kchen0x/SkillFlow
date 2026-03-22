@@ -1,17 +1,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GetEnabledAgents, GetAgentMemoryPreview, ListAgentSkills, DeleteAgentSkill, OpenPath, ReadSkillFileContent, GetSkillMetaByPath } from '../../wailsjs/go/main/App'
+import {
+  GetEnabledAgents,
+  GetAgentMemoryPreview,
+  ListAgentSkills,
+  DeleteAgentSkill,
+  OpenPath,
+  ReadSkillFileContent,
+  GetSkillMetaByPath,
+  ListCategories,
+  ScanAgentSkills,
+  PullFromAgent,
+  PullFromAgentForce,
+} from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
+import ConflictDialog from '../components/ConflictDialog'
 import { ToolIcon } from '../config/toolIcons'
 import SkillTooltip from '../components/SkillTooltip'
 import SkillStatusStrip from '../components/SkillStatusStrip'
 import SkillListControls from '../components/SkillListControls'
+import SyncSkillCard from '../components/SyncSkillCard'
 import { buildAgentMemoryEntries } from '../lib/agentMemoryPreview'
 import { copyTextToClipboard } from '../lib/clipboard'
 import { createToolSkillsEventSubscriptions } from '../lib/dashboardSkillSettings'
-import { SkillSortOrder } from '../lib/skillList'
+import { SkillSortOrder, filterAndSortSkills } from '../lib/skillList'
 import { ToolSkillsPanel, filterToolSkillsPanelContent, getDefaultToolSkillsPanel, getVisibleToolSkillsResultCount } from '../lib/toolSkillsPanels'
+import {
+  createToolSkillsPullState,
+  toggleToolSkillsPullPath,
+  toggleToolSkillsPullAllVisible,
+  toggleToolSkillsPullVisibleNotImported,
+  syncToolSkillsPullVisibleSelection,
+  getToolSkillsVisibleNotImportedPaths,
+  isToolSkillsPullReady,
+} from '../lib/toolSkillsPullState'
 import { subscribeToEvents } from '../lib/wailsEvents'
-import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine, Brain, RefreshCw } from 'lucide-react'
+import { Wrench, Trash2, FolderOpenDot, Copy, Check, CheckSquare, ArrowUpToLine, ScanLine, Brain, RefreshCw, ArrowDownToLine, AlertCircle } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSkillStatusVisibility } from '../contexts/SkillStatusVisibilityContext'
 
@@ -35,7 +58,9 @@ type AgentMemoryPreviewItem = {
 export default function ToolSkills() {
   const { t } = useLanguage()
   const visibility = useSkillStatusVisibility('myAgents')
+  const defaultCategory = 'Default'
   const [agents, setAgents] = useState<any[]>([])
+  const [categories, setCategories] = useState<string[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string>('')
   const [skills, setSkills] = useState<any[]>([])
   const [memoryPreview, setMemoryPreview] = useState<AgentMemoryPreviewItem | null>(null)
@@ -48,6 +73,14 @@ export default function ToolSkills() {
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState<SkillSortOrder>('asc')
   const [activePanel, setActivePanel] = useState<ToolSkillsPanel>(getDefaultToolSkillsPanel())
+  const [pullMode, setPullMode] = useState(false)
+  const [pullState, setPullState] = useState(createToolSkillsPullState(defaultCategory))
+  const [scanned, setScanned] = useState<any[]>([])
+  const [scanning, setScanning] = useState(false)
+  const [pulling, setPulling] = useState(false)
+  const [scanError, setScanError] = useState('')
+  const [pullConflicts, setPullConflicts] = useState<string[]>([])
+  const [pullDone, setPullDone] = useState(false)
 
   const loadSkills = useCallback(async (agentName: string) => {
     setLoading(true)
@@ -80,11 +113,13 @@ export default function ToolSkills() {
     const initialize = async () => {
       setLoading(true)
       try {
-        const enabledAgents = await GetEnabledAgents()
+        const [enabledAgents, listedCategories] = await Promise.all([GetEnabledAgents(), ListCategories()])
         if (!active) return
 
         const nextAgents = enabledAgents ?? []
+        const nextCategories = listedCategories ?? []
         setAgents(nextAgents)
+        setCategories(nextCategories)
 
         if (nextAgents.length === 0) {
           setSkills([])
@@ -121,6 +156,12 @@ export default function ToolSkills() {
     setSelectedAgent(agentName)
     setSelectMode(false)
     setSelectedPaths(new Set())
+    setPullMode(false)
+    setPullState(createToolSkillsPullState(categories[0] ?? defaultCategory))
+    setScanned([])
+    setScanError('')
+    setPullConflicts([])
+    setPullDone(false)
     setMemoryPreview(null)
     setMemoryError('')
     void loadSkills(agentName)
@@ -132,6 +173,12 @@ export default function ToolSkills() {
     if (panel !== 'skills') {
       setSelectMode(false)
       setSelectedPaths(new Set())
+      setPullMode(false)
+      setPullState(createToolSkillsPullState(categories[0] ?? defaultCategory))
+      setScanned([])
+      setScanError('')
+      setPullConflicts([])
+      setPullDone(false)
     }
   }
 
@@ -171,6 +218,11 @@ export default function ToolSkills() {
     [memoryPreview],
   )
 
+  const filteredScanned = useMemo(
+    () => filterAndSortSkills(scanned, search, sortOrder, skill => skill.name ?? ''),
+    [scanned, search, sortOrder],
+  )
+
   const { filteredPushSkills, filteredScanOnlySkills, filteredMemoryEntries } = useMemo(
     () => filterToolSkillsPanelContent({
       activePanel,
@@ -192,6 +244,13 @@ export default function ToolSkills() {
     () => filteredMemoryEntries.filter(entry => entry.kind === 'rule'),
     [filteredMemoryEntries],
   )
+
+  const availableCategories = categories.length > 0 ? categories : [defaultCategory]
+  const visibleNotImportedPaths = useMemo(
+    () => getToolSkillsVisibleNotImportedPaths(filteredScanned),
+    [filteredScanned],
+  )
+  const pullReady = isToolSkillsPullReady(pullState)
 
   const toggleSelectAll = () => {
     const visiblePaths = filteredPushSkills.map((skill: any) => skill.path)
@@ -215,15 +274,89 @@ export default function ToolSkills() {
     })
   }, [filteredPushSkills, selectMode])
 
+  useEffect(() => {
+    if (!pullMode) return
+    const nextPaths = syncToolSkillsPullVisibleSelection(
+      pullState.selectedPaths,
+      filteredScanned.map((skill: any) => skill.path),
+    )
+    const same = nextPaths.length === pullState.selectedPaths.length
+      && nextPaths.every((path, index) => path === pullState.selectedPaths[index])
+    if (same) return
+    setPullState(prev => ({
+      ...prev,
+      selectedPaths: nextPaths,
+    }))
+  }, [filteredScanned, pullMode, pullState.selectedPaths])
+
+  const scanForPull = useCallback(async (agentName: string) => {
+    setScanning(true)
+    setScanned([])
+    setScanError('')
+    setPullConflicts([])
+    setPullDone(false)
+    try {
+      const scannedSkills = await ScanAgentSkills(agentName)
+      setScanned(scannedSkills ?? [])
+      setPullState(prev => ({ ...prev, selectedPaths: [] }))
+    } catch (error: any) {
+      setScanError(String(error?.message ?? error ?? t('toolSkills.pullFailed')))
+    } finally {
+      setScanning(false)
+    }
+  }, [t])
+
+  const enterPullMode = useCallback(async () => {
+    if (!selectedAgent) return
+    setSelectMode(false)
+    setSelectedPaths(new Set())
+    setPullMode(true)
+    setPullState(createToolSkillsPullState(availableCategories[0] ?? defaultCategory))
+    await scanForPull(selectedAgent)
+  }, [availableCategories, scanForPull, selectedAgent])
+
+  const exitPullMode = () => {
+    setPullMode(false)
+    setPullState(createToolSkillsPullState(availableCategories[0] ?? defaultCategory))
+    setScanned([])
+    setScanError('')
+    setPullConflicts([])
+  }
+
+  const handleStartPull = async () => {
+    if (!selectedAgent || !pullReady) return
+    setPulling(true)
+    setScanError('')
+    setPullDone(false)
+    try {
+      const conflicts = await PullFromAgent(selectedAgent, pullState.selectedPaths, pullState.targetCategory)
+      if (conflicts && conflicts.length > 0) {
+        setPullConflicts(conflicts)
+        return
+      }
+      setPullDone(true)
+      exitPullMode()
+      await loadSkills(selectedAgent)
+    } catch (error: any) {
+      setScanError(String(error?.message ?? error ?? t('toolSkills.pullFailed')))
+    } finally {
+      setPulling(false)
+    }
+  }
+
   const agent = agents.find(t => t.name === selectedAgent)
   const allSelected = filteredPushSkills.length > 0 && filteredPushSkills.every((skill: any) => selectedPaths.has(skill.path))
-  const visibleResultCount = getVisibleToolSkillsResultCount({
+  const allPullSelected = filteredScanned.length > 0 && filteredScanned.every((skill: any) => pullState.selectedPaths.includes(skill.path))
+  const allNotImportedSelected = visibleNotImportedPaths.length > 0 && visibleNotImportedPaths.every(path => pullState.selectedPaths.includes(path))
+  const visibleResultCount = pullMode ? filteredScanned.length : getVisibleToolSkillsResultCount({
     activePanel,
     filteredPushSkills,
     filteredScanOnlySkills,
     filteredMemoryEntries,
   })
-  const searchPlaceholder = activePanel === 'memory'
+  const searchPlaceholder = pullMode
+    ? t('toolSkills.searchPullPlaceholder')
+    : activePanel === 'memory'
     ? t('toolSkills.searchMemoryPlaceholder')
     : t('toolSkills.searchSkillsPlaceholder')
 
@@ -340,18 +473,97 @@ export default function ToolSkills() {
                   {t('common.cancel')}
                 </button>
               </>
-            ) : activePanel === 'skills' ? (
-              filteredPushSkills.length > 0 && (
+            ) : activePanel === 'skills' && pullMode ? (
+              <>
+                <label
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-base)', color: 'var(--text-secondary)' }}
+                >
+                  <span>{t('toolSkills.pullTargetCategory')}</span>
+                  <select
+                    value={pullState.targetCategory}
+                    onChange={event => setPullState(prev => ({ ...prev, targetCategory: event.target.value }))}
+                    className="rounded-md px-2 py-1 text-sm outline-none"
+                    style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                  >
+                    {availableCategories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </label>
                 <button
-                  onClick={() => setSelectMode(true)}
+                  onClick={() => setPullState(prev => ({
+                    ...prev,
+                    selectedPaths: toggleToolSkillsPullAllVisible(prev.selectedPaths, filteredScanned.map((skill: any) => skill.path)),
+                  }))}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
                   style={{ color: 'var(--text-muted)' }}
                   onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
                   onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
                 >
-                  <CheckSquare size={14} /> {t('toolSkills.batchDelete')}
+                  <CheckSquare size={14} />
+                  {allPullSelected ? t('common.deselectAll') : t('common.selectAll')}
                 </button>
-              )
+                <button
+                  onClick={() => setPullState(prev => ({
+                    ...prev,
+                    selectedPaths: toggleToolSkillsPullVisibleNotImported(prev.selectedPaths, visibleNotImportedPaths),
+                  }))}
+                  disabled={visibleNotImportedPaths.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => {
+                    if (!e.currentTarget.disabled) {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
+                      e.currentTarget.style.color = 'var(--text-primary)'
+                    }
+                  }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  <CheckSquare size={14} />
+                  {allNotImportedSelected ? t('common.deselectAll') : t('syncPull.selectNotImported')}
+                </button>
+                <button
+                  onClick={() => void handleStartPull()}
+                  disabled={!pullReady || pulling}
+                  className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {pulling ? <RefreshCw size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}
+                  {t('toolSkills.manualPullStart', { count: pullState.selectedPaths.length })}
+                </button>
+                <button
+                  onClick={exitPullMode}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  {t('common.cancel')}
+                </button>
+              </>
+            ) : activePanel === 'skills' ? (
+              <>
+                <button
+                  onClick={() => void enterPullMode()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                >
+                  <ArrowDownToLine size={14} /> {t('toolSkills.manualPull')}
+                </button>
+                {filteredPushSkills.length > 0 && (
+                  <button
+                    onClick={() => setSelectMode(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    style={{ color: 'var(--text-muted)' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.color = 'var(--text-muted)' }}
+                  >
+                    <CheckSquare size={14} /> {t('toolSkills.batchDelete')}
+                  </button>
+                )}
+              </>
             ) : null
             }
           </div>
@@ -511,8 +723,69 @@ export default function ToolSkills() {
                 </div>
               ) : null}
             </section>
+          ) : pullMode ? (
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <ArrowDownToLine size={14} style={{ color: 'var(--accent-primary)' }} className="shrink-0" />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('toolSkills.manualPullTitle')}</span>
+              </div>
+
+              {scanning ? (
+                <p className="text-sm pl-5" style={{ color: 'var(--text-muted)' }}>{t('syncPull.scanning')}</p>
+              ) : scanError ? (
+                <div
+                  className="flex items-start gap-2 rounded-lg px-4 py-3 text-sm"
+                  style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: 'var(--color-error)' }}
+                >
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <span className="flex-1">{scanError}</span>
+                </div>
+              ) : scanned.length === 0 ? (
+                <div
+                  className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm"
+                  style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: 'var(--color-warning)' }}
+                >
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{t('syncPull.emptyWarning')}</span>
+                </div>
+              ) : filteredScanned.length === 0 ? (
+                <p className="text-sm pl-5" style={{ color: 'var(--text-disabled)' }}>{t('syncPull.noMatch')}</p>
+              ) : (
+                <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredScanned.map((sk: any) => (
+                    <SyncSkillCard
+                      key={sk.path}
+                      name={sk.name}
+                      source={sk.source}
+                      path={sk.path}
+                      imported={sk.imported}
+                      updatable={sk.updatable}
+                      pushedAgents={(sk.pushedAgents ?? []).filter((agentName: string) => agentName !== selectedAgent)}
+                      showImported={visibility.includes('imported')}
+                      showUpdatable={visibility.includes('updatable')}
+                      showPushedAgents={visibility.includes('pushedAgents')}
+                      selected={pullState.selectedPaths.includes(sk.path)}
+                      onToggle={() => setPullState(prev => ({
+                        ...prev,
+                        selectedPaths: toggleToolSkillsPullPath(prev.selectedPaths, sk.path),
+                      }))}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
           ) : (
             <>
+              {pullDone && (
+                <div
+                  className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm"
+                  style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', color: 'var(--color-success)' }}
+                >
+                  <Check size={16} className="shrink-0" />
+                  <span>{t('toolSkills.pullDone')}</span>
+                </div>
+              )}
+
               {/* Push dir section */}
               <section>
                 <div className="flex items-center gap-2 mb-4">
@@ -598,6 +871,21 @@ export default function ToolSkills() {
           )}
         </div>
       </div>
+
+      <ConflictDialog
+        conflicts={pullConflicts}
+        labelForConflict={(path) => scanned.find((item: any) => item.path === path)?.name ?? path}
+        onOverwrite={async (path) => {
+          await PullFromAgentForce(selectedAgent, [path], pullState.targetCategory)
+          setPullConflicts(prev => prev.filter(conflict => conflict !== path))
+        }}
+        onSkip={(path) => setPullConflicts(prev => prev.filter(conflict => conflict !== path))}
+        onDone={() => {
+          setPullDone(true)
+          exitPullMode()
+          void loadSkills(selectedAgent)
+        }}
+      />
     </div>
   )
 }

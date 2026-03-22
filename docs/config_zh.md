@@ -59,7 +59,7 @@
 
 `config.json` 只保存可跨设备移动的安全配置，不应包含机器相关绝对路径或敏感凭据。
 
-在真正加载配置之前，SkillFlow 会先执行 `core/platform/upgrade` 里的单次术语割接。旧版基于 `tools` 的键会被原地改写为新版基于 `agents` 的 schema，运行时代码只读取新 schema。
+在真正加载配置之前，SkillFlow 会先执行 `core/platform/upgrade` 里的单次术语割接。旧版基于 `tools` 的键会被原地改写为新版基于 `agents` 的 schema，已经移除的旧字段 `skillStatusVisibility` 也会在启动时被原地删除，运行时代码只读取最新 schema。
 
 ### 示例
 
@@ -68,13 +68,6 @@
   "defaultCategory": "Default",
   "logLevel": "info",
   "repoScanMaxDepth": 5,
-  "skillStatusVisibility": {
-    "mySkills": ["updatable", "pushedAgents"],
-    "myAgents": ["imported", "updatable", "pushedAgents"],
-    "pushToAgent": ["pushedAgents"],
-    "pullFromAgent": ["imported"],
-    "starredRepos": ["imported", "pushedAgents"]
-  },
   "agents": [
     { "name": "claude-code", "enabled": true },
     { "name": "codex", "enabled": true },
@@ -114,12 +107,6 @@
 | `defaultCategory` | string | 导入或创建 Skill 时默认使用的分类。 |
 | `logLevel` | string | 后端日志级别。可选值为 `debug`、`info`、`error`；非法值会被归一化为 `error`。 |
 | `repoScanMaxDepth` | number | 扫描智能体目录与仓库时允许的最大递归深度。会被归一化到 `1-20` 范围内，默认值是 `5`。 |
-| `skillStatusVisibility` | object | 不同页面上 Skill 状态徽标的显示策略。 |
-| `skillStatusVisibility.mySkills` | string[] | “我的 Skills” 页面显示哪些状态徽标。该页允许的值是 `updatable`、`pushedAgents`。 |
-| `skillStatusVisibility.myAgents` | string[] | “我的智能体” 页面显示哪些状态徽标。该页允许的值是 `imported`、`updatable`、`pushedAgents`。 |
-| `skillStatusVisibility.pushToAgent` | string[] | “推送到智能体” 页面显示哪些状态徽标。该页允许的值是 `pushedAgents`。 |
-| `skillStatusVisibility.pullFromAgent` | string[] | “从智能体拉取” 页面显示哪些状态徽标。该页允许的值是 `imported`。 |
-| `skillStatusVisibility.starredRepos` | string[] | 收藏仓库页面显示哪些状态徽标。该页允许的值是 `imported`、`pushedAgents`。 |
 | `agents` | object[] | 只保存内置智能体的启用/停用状态。路径相关设置保存在 `config_local.json`。 |
 | `agents[].name` | string | 内置智能体名，例如 `claude-code`、`codex`、`gemini-cli`、`opencode`、`openclaw`。 |
 | `agents[].enabled` | boolean | 该内置智能体是否在界面与扫描/推送流程中启用。 |

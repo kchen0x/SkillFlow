@@ -7,7 +7,7 @@ import {
   normalizePromptPreviewImageURL,
   parsePromptWebLinkLine,
   parsePromptWebLinks,
-} from '../.tmp-tests/promptRichContent.js'
+} from '../.tmp-tests/src/lib/promptRichContent.js'
 
 test('normalizePromptImageURLs trims blanks, preserves order, and caps at three items', () => {
   assert.deepEqual(
