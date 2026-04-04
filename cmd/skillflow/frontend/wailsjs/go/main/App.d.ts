@@ -192,6 +192,8 @@ export function SaveModulePushTargets(arg1:string,arg2:Array<string>):Promise<vo
 
 export function ScanAgentSkills(arg1:string):Promise<Array<domain.AgentSkillCandidate>>;
 
+export function SetModuleMemoryEnabled(arg1:string,arg2:boolean):Promise<main.ModuleMemoryDTO>;
+
 export function SetSkippedUpdateVersion(arg1:string):Promise<void>;
 
 export function TestProxyConnection(arg1:string,arg2:shellsettings.ProxyConfig):Promise<main.ProxyConnectionTestResult>;

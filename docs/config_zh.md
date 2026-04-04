@@ -414,6 +414,11 @@
       "autoPush": true | false
     }
   },
+  "moduleStates": {
+    "<moduleName>": {
+      "enabled": true | false
+    }
+  },
   "pushState": {
     "<agentType>": {
       "lastPushedAt": "2026-03-21T10:00:00Z",
@@ -430,6 +435,8 @@
 | `pushConfigs` | `<agentType>` | object | 各智能体推送配置 |
 | `pushConfigs.<agent>.mode` | — | string | `"merge"`（合并）或 `"takeover"`（覆盖） |
 | `pushConfigs.<agent>.autoPush` | — | bool | 该智能体在本地编辑后是否自动同步全部记忆 |
+| `moduleStates` | `<moduleName>` | object | 单个模块记忆的本地全局状态 |
+| `moduleStates.<module>.enabled` | — | bool | 该模块是否参与自动同步与默认的整智能体推送 |
 | `pushState` | `<agentType>` | object | 各智能体最近推送记录 |
 | `pushState.<agent>.lastPushedAt` | — | RFC3339 字符串 | 最近一次成功推送的时间戳 |
 | `pushState.<agent>.lastPushedHash` | — | string | 最近一次实际推送到该智能体内容的 SHA-256 哈希 |
@@ -437,4 +444,6 @@
 **说明：**
 
 - 已不再持久化“按模块配置推送目标”的列表；手动批量推送里的选择仅存在于当前页面状态。
+- `moduleStates` 属于本地 UI / 分发状态；如果某个模块还没有写入记录，SkillFlow 会为了兼容旧数据将其视为默认启用。
+- 停用模块会把它排除在自动同步和默认整智能体推送之外，但手动批量推送仍可显式勾选它。
 - 如果一次批量推送只推送了部分模块，`lastPushedHash` 会记录这次实际推送的快照，因此当本地记忆库比该快照包含更多模块时，该智能体仍会显示 `pendingPush`。

@@ -80,12 +80,7 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 		return fmt.Errorf("get main memory: %w", err)
 	}
 
-	allModules, err := s.storage.ListModules()
-	if err != nil {
-		return fmt.Errorf("list modules: %w", err)
-	}
-
-	selectedModules, err := selectModulesForPush(allModules, moduleNames)
+	selectedModules, err := s.modulesForPush(moduleNames)
 	if err != nil {
 		return err
 	}
@@ -143,6 +138,42 @@ func (s *PushService) pushModulesToAgent(agentType string, moduleNames []string,
 	}
 
 	return nil
+}
+
+func (s *PushService) modulesForPush(selectedNames []string) ([]*domain.ModuleMemory, error) {
+	allModules, err := s.storage.ListModules()
+	if err != nil {
+		return nil, fmt.Errorf("list modules: %w", err)
+	}
+	enabledMap, err := s.storage.GetAllModuleEnabled()
+	if err != nil {
+		return nil, fmt.Errorf("get module enabled states: %w", err)
+	}
+	for _, module := range allModules {
+		enabled, ok := enabledMap[module.Name]
+		if !ok {
+			enabled = true
+		}
+		module.Enabled = enabled
+	}
+	if len(selectedNames) == 0 {
+		return filterEnabledModules(allModules), nil
+	}
+	return selectModulesForPush(allModules, selectedNames)
+}
+
+func filterEnabledModules(modules []*domain.ModuleMemory) []*domain.ModuleMemory {
+	filtered := make([]*domain.ModuleMemory, 0, len(modules))
+	for _, module := range modules {
+		if !module.Enabled {
+			continue
+		}
+		filtered = append(filtered, module)
+	}
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Name < filtered[j].Name
+	})
+	return filtered
 }
 
 func composeManagedMemory(mainContent string, rulesIndex gatewayport.RulesIndex) string {
@@ -257,18 +288,18 @@ func (s *PushService) PushSelection(agentTypes []string, moduleNames []string, m
 }
 
 // ComputeAgentHash computes a SHA256 hash of the main memory content plus
-// all module contents, sorted by module name.
+// all enabled module contents, sorted by module name.
 func (s *PushService) ComputeAgentHash(agentType string) (string, error) {
 	mainMemory, err := s.storage.GetMainMemory()
 	if err != nil {
 		return "", fmt.Errorf("get main memory: %w", err)
 	}
 
-	allModules, err := s.storage.ListModules()
+	modules, err := s.modulesForPush(nil)
 	if err != nil {
-		return "", fmt.Errorf("list modules: %w", err)
+		return "", err
 	}
-	return computeMemoryHash(mainMemory.Content, allModules)
+	return computeMemoryHash(mainMemory.Content, modules)
 }
 
 func computeMemoryHash(mainContent string, modules []*domain.ModuleMemory) (string, error) {

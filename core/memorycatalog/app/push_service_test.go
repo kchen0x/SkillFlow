@@ -146,6 +146,33 @@ func (s *testMemoryStorage) DeleteModulePushTargets(moduleName string) error {
 	panic("unexpected call")
 }
 
+func (s *testMemoryStorage) GetModuleEnabled(moduleName string) (*bool, error) {
+	if module, ok := s.modules[moduleName]; ok {
+		enabled := module.Enabled
+		return &enabled, nil
+	}
+	return nil, nil
+}
+
+func (s *testMemoryStorage) SaveModuleEnabled(moduleName string, enabled bool) error {
+	if module, ok := s.modules[moduleName]; ok {
+		module.Enabled = enabled
+	}
+	return nil
+}
+
+func (s *testMemoryStorage) GetAllModuleEnabled() (map[string]bool, error) {
+	result := make(map[string]bool, len(s.modules))
+	for name, module := range s.modules {
+		result[name] = module.Enabled
+	}
+	return result, nil
+}
+
+func (s *testMemoryStorage) DeleteModuleEnabled(moduleName string) error {
+	return nil
+}
+
 func (s *testMemoryStorage) GetPushState(agentType string) (domain.MemoryPushState, error) {
 	return s.pushState[agentType], nil
 }

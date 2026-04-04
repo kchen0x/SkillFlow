@@ -27,6 +27,11 @@ type MemoryStorage interface {
 	GetAllModulePushTargets() ([]domain.ModulePushTargets, error)
 	DeleteModulePushTargets(moduleName string) error
 
+	GetModuleEnabled(moduleName string) (*bool, error)
+	SaveModuleEnabled(moduleName string, enabled bool) error
+	GetAllModuleEnabled() (map[string]bool, error)
+	DeleteModuleEnabled(moduleName string) error
+
 	GetPushState(agentType string) (domain.MemoryPushState, error)
 	SavePushState(agentType string, state domain.MemoryPushState) error
 	GetAllPushStates() (map[string]domain.MemoryPushState, error)
