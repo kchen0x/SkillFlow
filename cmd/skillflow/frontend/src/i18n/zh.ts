@@ -474,6 +474,7 @@ export const zh = {
   'memory.moduleDisabled': '已停用',
   'memory.moduleEnabledHint': '参与自动同步与主记忆引用',
   'memory.moduleDisabledHint': '不参与自动同步，但仍可手动批量推送',
+  'memory.batchPushDisabledModuleHint': '该模块当前已停用；这次勾选只会手动推送，不会重新加入自动同步。',
   'memory.confirmDelete': '确定要删除此模块吗？',
   'memory.deleteConfirmTitle': '删除这个模块？',
   'memory.deleteConfirmDesc': '确认后会永久删除所选模块记忆，并关闭当前编辑面板。',

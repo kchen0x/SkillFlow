@@ -186,6 +186,7 @@ func (a *App) SetModuleMemoryEnabled(name string, enabled bool) (*ModuleMemoryDT
 	})
 	if err := a.syncMemoryToAutoPushAgents(); err != nil {
 		a.logErrorf("memory auto sync failed after set module enabled: module=%s enabled=%t err=%v", name, enabled, err)
+		return nil, fmt.Errorf("module enabled state saved locally but memory auto sync failed: %w", err)
 	}
 	return &ModuleMemoryDTO{
 		Name:      m.Name,

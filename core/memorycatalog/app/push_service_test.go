@@ -51,6 +51,27 @@ Please be sure to load all module memories below.
 	assert.NotEmpty(t, storage.pushState["codex"].LastPushedHash)
 }
 
+func TestComputeAgentHashIgnoresDisabledModules(t *testing.T) {
+	storage := &testMemoryStorage{
+		main: &domain.MainMemory{Content: "Main memory", UpdatedAt: time.Now()},
+		modules: map[string]*domain.ModuleMemory{
+			"style":   {Name: "style", Content: "Style rules", Enabled: true, UpdatedAt: time.Now()},
+			"testing": {Name: "testing", Content: "Always test", Enabled: false, UpdatedAt: time.Now()},
+		},
+		pushState: make(map[string]domain.MemoryPushState),
+	}
+	service := NewPushService(storage, testAgentConfigGateway{}, func(agentType string) (gatewayport.AgentMemoryPusher, bool) {
+		return &recordingPusher{}, true
+	})
+
+	hashWithDisabledIgnored, err := service.ComputeAgentHash("codex")
+	require.NoError(t, err)
+
+	expectedHash, err := computeMemoryHash("Main memory", []*domain.ModuleMemory{{Name: "style", Content: "Style rules", Enabled: true}})
+	require.NoError(t, err)
+	assert.Equal(t, expectedHash, hashWithDisabledIgnored)
+}
+
 func TestPushSelectionToAgentLeavesAgentPendingWhenSelectionIsPartial(t *testing.T) {
 	storage := &testMemoryStorage{
 		main: &domain.MainMemory{Content: "Main memory", UpdatedAt: time.Now()},

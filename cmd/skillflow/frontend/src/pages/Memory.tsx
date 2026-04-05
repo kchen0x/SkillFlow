@@ -345,8 +345,11 @@ export default function Memory() {
   const handleToggleModuleEnabled = async (module: ModuleItem) => {
     try {
       await SetModuleMemoryEnabled(module.name, !module.enabled)
+      setPushMessage('')
       await loadAll()
     } catch (error) {
+      setPushMessage(String((error as Error)?.message ?? error))
+      await loadAll()
       console.error('SetModuleMemoryEnabled failed', error)
     }
   }
@@ -718,9 +721,16 @@ export default function Memory() {
                       </button>
                     )}
                   </div>
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                    {t('memory.moduleRefHint')}
-                  </p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {t('memory.moduleRefHint')}
+                    </p>
+                    {batchPushMode && !module.enabled && (
+                      <p className="text-[11px]" style={{ color: 'var(--color-warning, #f97316)' }}>
+                        {t('memory.batchPushDisabledModuleHint')}
+                      </p>
+                    )}
+                  </div>
                 </div>
               )
             })}
