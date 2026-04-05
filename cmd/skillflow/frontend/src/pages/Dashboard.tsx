@@ -295,7 +295,7 @@ export default function Dashboard() {
           label: t('dashboard.update'),
           onClick: async (): Promise<void> => { await CheckUpdates(); load() },
           disabled: false,
-          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          className: 'flex h-10 items-center justify-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
           style: { color: 'var(--text-muted)' },
           title: undefined as string | undefined,
         }
@@ -306,7 +306,7 @@ export default function Dashboard() {
           label: t('dashboard.manualPush'),
           onClick: enterManualPushMode,
           disabled: false,
-          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          className: 'flex h-10 items-center justify-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
           style: { color: 'var(--text-muted)' },
           title: undefined as string | undefined,
         }
@@ -317,7 +317,7 @@ export default function Dashboard() {
           label: t('dashboard.batchDelete'),
           onClick: toggleSelectMode,
           disabled: false,
-          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          className: 'flex h-10 items-center justify-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
           style: { color: 'var(--text-muted)' },
           title: undefined as string | undefined,
         }
@@ -328,7 +328,7 @@ export default function Dashboard() {
           label: t('dashboard.import'),
           onClick: handleImportButton,
           disabled: false,
-          className: 'flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
+          className: 'flex h-10 items-center justify-center gap-1.5 px-2.5 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
           style: { color: 'var(--text-muted)' },
           title: undefined as string | undefined,
         }
@@ -343,7 +343,7 @@ export default function Dashboard() {
           label: t('dashboard.autoUpdateTitle'),
           onClick: (): void => { void toggleAutoUpdateSetting() },
           disabled: savingDashboardSettings,
-          className: `${autoUpdateAction.buttonTone === 'primary' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-all disabled:cursor-not-allowed disabled:opacity-60`,
+          className: `${autoUpdateAction.buttonTone === 'primary' ? 'btn-primary' : 'btn-secondary'} flex h-10 items-center justify-center gap-1.5 px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-all disabled:cursor-not-allowed disabled:opacity-60`,
           style: undefined as CSSProperties | undefined,
           title: t('dashboard.autoUpdateDesc'),
         }
@@ -565,7 +565,7 @@ export default function Dashboard() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
         <div
-          className="flex flex-wrap items-center gap-3 px-6 py-4"
+          className="flex flex-wrap items-start gap-3 px-6 py-4"
           style={{ borderBottom: '1px solid var(--border-base)' }}
         >
           <SkillListControls

@@ -102,7 +102,7 @@ The root directory must contain **no Go source files**. All code lives in clearl
 
 ## Documentation Organization Rule - MANDATORY
 
-**Root directory may contain only `README.md`, `README_zh.md`, `contributing.md`, `contributing_zh.md`, and `AGENTS.md` (with `CLAUDE.md` as symlink) as documentation files.**
+**Root directory may contain only `README.md`, `README_zh.md`, `contributing.md`, `contributing_zh.md`, `REVIEW.md`, and `AGENTS.md` (with `CLAUDE.md` as symlink) as documentation files.**
 
 All other documentation lives under `docs/`:
 
@@ -125,7 +125,7 @@ All other documentation lives under `docs/`:
 **Rules:**
 - `README.md` / `README_zh.md` are user-facing only: features overview, download/install links, skill format, cloud backup config, contributing/build instructions. No internal code snippets, no package tables, no architecture diagrams.
 - `contributing.md` / `contributing_zh.md` are contributor-facing only: prerequisites, build/test/generate commands, and pointers to deeper architecture docs.
-- Never add new standalone `.md` files to the root directory beyond those four entrypoint documents. If you need new documentation, put it under `docs/`.
+- Never add new standalone `.md` files to the root directory beyond `README.md`, `README_zh.md`, `contributing.md`, `contributing_zh.md`, `REVIEW.md`, and `AGENTS.md`/`CLAUDE.md`. If you need other documentation, put it under `docs/`.
 
 ## Documentation Sync Rule - MANDATORY
 
