@@ -374,6 +374,10 @@ export function ScanAgentSkills(arg1) {
   return window['go']['main']['App']['ScanAgentSkills'](arg1);
 }
 
+export function SetModuleMemoryEnabled(arg1, arg2) {
+  return window['go']['main']['App']['SetModuleMemoryEnabled'](arg1, arg2);
+}
+
 export function SetSkippedUpdateVersion(arg1) {
   return window['go']['main']['App']['SetSkippedUpdateVersion'](arg1);
 }
