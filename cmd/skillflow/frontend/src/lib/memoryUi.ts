@@ -1,4 +1,5 @@
 export type MemoryPushStatus = 'synced' | 'pendingPush' | 'neverPushed'
+export type MemoryModuleStatus = 'enabled' | 'disabled'
 
 export type MemoryAgentLike = {
   name: string
@@ -41,4 +42,12 @@ export function buildMemoryPushStatusEntries(
     label: getMemoryAgentLabel(agent.name),
     status: pushStatuses[agent.name] ?? 'neverPushed',
   }))
+}
+
+export function getMemoryModuleStatus(enabled: boolean): MemoryModuleStatus {
+  return enabled ? 'enabled' : 'disabled'
+}
+
+export function getMemoryModuleStatusColor(enabled: boolean): string {
+  return enabled ? 'var(--color-success, #22c55e)' : 'var(--text-muted)'
 }

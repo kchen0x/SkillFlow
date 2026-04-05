@@ -9,6 +9,7 @@ import (
 type ModuleMemory struct {
 	Name      string // e.g. "coding-style"
 	Content   string
+	Enabled   bool
 	UpdatedAt time.Time
 }
 

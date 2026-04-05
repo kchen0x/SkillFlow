@@ -865,7 +865,7 @@ SkillFlow provides a unified memory management surface for authoring personal AI
 The My Memory page shows:
 - A top toolbar with **Search**, **New Module**, and **Batch Push**.
 - A prominent **Main Memory card** with per-agent push status chips.
-- A **two-column module grid** where every module card shows a content preview, per-agent status row, and module-ref hint.
+- A **two-column module grid** where every module card shows a content preview, a global enabled/disabled badge, an enable/disable action, and the module-ref hint.
 - A top **Auto Sync** panel where each enabled agent can be set to `Off`, `Auto Merge`, or `Auto Takeover`.
 - A **Batch Push** mode that turns the page into an inline multi-select flow, keeps main memory required, and lets users choose target agents plus one shared push mode for the current push.
 - A right-side **Edit Drawer** anchored as a fixed overlay, widened to roughly 72% of the viewport up to a 960 px cap, with Edit / Preview tabs, save, delete, and open-in-editor actions only.
@@ -889,8 +889,9 @@ The My Memory page shows:
 ### Auto Sync Behaviour
 
 - The **Auto Sync** panel is per agent and exposes three modes: `Off`, `Auto Merge`, and `Auto Takeover`.
-- Enabling either auto-sync mode immediately pushes the current main memory plus all current module memories to that agent using the selected mode.
-- After auto sync is enabled, editing the main memory, creating a module, saving a module, or deleting a module automatically syncs the change to every enabled auto-sync agent.
+- Enabling either auto-sync mode immediately pushes the current main memory plus all currently enabled module memories to that agent using the selected mode.
+- After auto sync is enabled, editing the main memory, creating a module, saving a module, toggling a module enabled state, or deleting a module automatically syncs the change to every enabled auto-sync agent.
+- Disabling a module removes it from the auto-sync baseline: SkillFlow deletes the managed `sf-<name>.md` file from each auto-sync agent and rewrites the main-memory module reference block to exclude it.
 - When a module is deleted locally, SkillFlow also removes the corresponding managed `sf-<name>.md` file from each auto-sync agent and rewrites the main-memory module reference block to match.
 
 ### Editing Behaviour
@@ -912,7 +913,7 @@ Each agent shows one of three statuses:
 
 | Status | Meaning |
 |--------|---------|
-| ✓ Synced | Last push matches current local main memory plus the current local module set. |
+| ✓ Synced | Last push matches current local main memory plus the current local enabled module set. |
 | ⚠ Pending | Local memory has changed since the last full push, or the agent currently reflects only a partial module selection. |
 | Never Pushed | The agent has never received a memory push from SkillFlow. |
 
@@ -942,4 +943,4 @@ Memory content files (`memory/main.md` and `memory/rules/*.md`) are included in 
 
 ---
 
-*Last updated: 2026-03-22*
+*Last updated: 2026-04-04*

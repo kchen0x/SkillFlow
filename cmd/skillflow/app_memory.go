@@ -21,6 +21,7 @@ type MainMemoryDTO struct {
 type ModuleMemoryDTO struct {
 	Name      string `json:"name"`
 	Content   string `json:"content"`
+	Enabled   bool   `json:"enabled"`
 	UpdatedAt string `json:"updatedAt"` // RFC3339
 }
 
@@ -95,6 +96,7 @@ func (a *App) ListModuleMemories() ([]*ModuleMemoryDTO, error) {
 		dtos = append(dtos, &ModuleMemoryDTO{
 			Name:      m.Name,
 			Content:   m.Content,
+			Enabled:   m.Enabled,
 			UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		})
 	}
@@ -110,6 +112,7 @@ func (a *App) GetModuleMemory(name string) (*ModuleMemoryDTO, error) {
 	return &ModuleMemoryDTO{
 		Name:      m.Name,
 		Content:   m.Content,
+		Enabled:   m.Enabled,
 		UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
@@ -130,6 +133,7 @@ func (a *App) CreateModuleMemory(name, content string) (*ModuleMemoryDTO, error)
 	return &ModuleMemoryDTO{
 		Name:      m.Name,
 		Content:   m.Content,
+		Enabled:   m.Enabled,
 		UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
@@ -150,6 +154,7 @@ func (a *App) SaveModuleMemory(name, content string) (*ModuleMemoryDTO, error) {
 	return &ModuleMemoryDTO{
 		Name:      m.Name,
 		Content:   m.Content,
+		Enabled:   m.Enabled,
 		UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
 }
@@ -167,6 +172,28 @@ func (a *App) DeleteModuleMemory(name string) error {
 		a.logErrorf("memory auto sync failed after delete module: module=%s err=%v", name, err)
 	}
 	return nil
+}
+
+// SetModuleMemoryEnabled updates a module's global enabled state and auto-syncs enabled agents.
+func (a *App) SetModuleMemoryEnabled(name string, enabled bool) (*ModuleMemoryDTO, error) {
+	m, err := a.memoryService.SetModuleEnabled(name, enabled)
+	if err != nil {
+		return nil, err
+	}
+	a.emitMemoryEvent(EventMemoryContentChanged, map[string]interface{}{
+		"type": "module",
+		"name": name,
+	})
+	if err := a.syncMemoryToAutoPushAgents(); err != nil {
+		a.logErrorf("memory auto sync failed after set module enabled: module=%s enabled=%t err=%v", name, enabled, err)
+		return nil, fmt.Errorf("module enabled state saved locally but memory auto sync failed: %w", err)
+	}
+	return &ModuleMemoryDTO{
+		Name:      m.Name,
+		Content:   m.Content,
+		Enabled:   m.Enabled,
+		UpdatedAt: m.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+	}, nil
 }
 
 // ── Push configuration ────────────────────────────────────────────────────────

@@ -51,6 +51,27 @@ Please be sure to load all module memories below.
 	assert.NotEmpty(t, storage.pushState["codex"].LastPushedHash)
 }
 
+func TestComputeAgentHashIgnoresDisabledModules(t *testing.T) {
+	storage := &testMemoryStorage{
+		main: &domain.MainMemory{Content: "Main memory", UpdatedAt: time.Now()},
+		modules: map[string]*domain.ModuleMemory{
+			"style":   {Name: "style", Content: "Style rules", Enabled: true, UpdatedAt: time.Now()},
+			"testing": {Name: "testing", Content: "Always test", Enabled: false, UpdatedAt: time.Now()},
+		},
+		pushState: make(map[string]domain.MemoryPushState),
+	}
+	service := NewPushService(storage, testAgentConfigGateway{}, func(agentType string) (gatewayport.AgentMemoryPusher, bool) {
+		return &recordingPusher{}, true
+	})
+
+	hashWithDisabledIgnored, err := service.ComputeAgentHash("codex")
+	require.NoError(t, err)
+
+	expectedHash, err := computeMemoryHash("Main memory", []*domain.ModuleMemory{{Name: "style", Content: "Style rules", Enabled: true}})
+	require.NoError(t, err)
+	assert.Equal(t, expectedHash, hashWithDisabledIgnored)
+}
+
 func TestPushSelectionToAgentLeavesAgentPendingWhenSelectionIsPartial(t *testing.T) {
 	storage := &testMemoryStorage{
 		main: &domain.MainMemory{Content: "Main memory", UpdatedAt: time.Now()},
@@ -144,6 +165,33 @@ func (s *testMemoryStorage) GetAllModulePushTargets() ([]domain.ModulePushTarget
 
 func (s *testMemoryStorage) DeleteModulePushTargets(moduleName string) error {
 	panic("unexpected call")
+}
+
+func (s *testMemoryStorage) GetModuleEnabled(moduleName string) (*bool, error) {
+	if module, ok := s.modules[moduleName]; ok {
+		enabled := module.Enabled
+		return &enabled, nil
+	}
+	return nil, nil
+}
+
+func (s *testMemoryStorage) SaveModuleEnabled(moduleName string, enabled bool) error {
+	if module, ok := s.modules[moduleName]; ok {
+		module.Enabled = enabled
+	}
+	return nil
+}
+
+func (s *testMemoryStorage) GetAllModuleEnabled() (map[string]bool, error) {
+	result := make(map[string]bool, len(s.modules))
+	for name, module := range s.modules {
+		result[name] = module.Enabled
+	}
+	return result, nil
+}
+
+func (s *testMemoryStorage) DeleteModuleEnabled(moduleName string) error {
+	return nil
 }
 
 func (s *testMemoryStorage) GetPushState(agentType string) (domain.MemoryPushState, error) {

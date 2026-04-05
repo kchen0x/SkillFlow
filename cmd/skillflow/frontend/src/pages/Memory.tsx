@@ -13,6 +13,7 @@ import {
   SaveMainMemory,
   SaveMemoryPushConfig,
   SaveModuleMemory,
+  SetModuleMemoryEnabled,
 } from '../../wailsjs/go/main/App'
 import { domain, main } from '../../wailsjs/go/models'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
@@ -33,12 +34,14 @@ import {
   buildMemoryPushStatusEntries,
   getMemoryAgentLabel,
   getMemoryDrawerMetrics,
+  getMemoryModuleStatus,
+  getMemoryModuleStatusColor,
   type MemoryPushStatus,
 } from '../lib/memoryUi'
 import { subscribeToEvents } from '../lib/wailsEvents'
 
 type MainMemoryItem = { content: string; updatedAt: string }
-type ModuleItem = { name: string; content: string; updatedAt: string }
+type ModuleItem = { name: string; content: string; enabled: boolean; updatedAt: string }
 type PushStatus = MemoryPushStatus
 type PushStatusMap = Record<string, PushStatus>
 type PushConfigMap = Record<string, { mode: string; autoPush: boolean }>
@@ -336,6 +339,18 @@ export default function Memory() {
       console.error('DeleteModuleMemory failed', error)
     } finally {
       setDeletingModule(null)
+    }
+  }
+
+  const handleToggleModuleEnabled = async (module: ModuleItem) => {
+    try {
+      await SetModuleMemoryEnabled(module.name, !module.enabled)
+      setPushMessage('')
+      await loadAll()
+    } catch (error) {
+      setPushMessage(String((error as Error)?.message ?? error))
+      await loadAll()
+      console.error('SetModuleMemoryEnabled failed', error)
     }
   }
 
@@ -654,9 +669,20 @@ export default function Memory() {
                       <input type="checkbox" checked={selected} readOnly />
                     </label>
                   )}
-                  <p className="font-medium text-sm mb-1 truncate pr-8" style={{ color: 'var(--text-primary)' }}>
-                    {module.name}
-                  </p>
+                  <div className="mb-1 flex items-center gap-2 pr-8">
+                    <p className="font-medium text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                      {module.name}
+                    </p>
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px]"
+                      style={{
+                        color: getMemoryModuleStatusColor(module.enabled),
+                        border: `1px solid ${getMemoryModuleStatusColor(module.enabled)}`,
+                      }}
+                    >
+                      {module.enabled ? t('memory.moduleEnabled') : t('memory.moduleDisabled')}
+                    </span>
+                  </div>
                   {module.content && (
                     <pre
                       className="text-xs whitespace-pre-wrap break-all mb-2"
@@ -672,25 +698,39 @@ export default function Memory() {
                       {getPreviewLines(module.content, 2)}
                     </pre>
                   )}
-                  <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
-                    {memoryStatusEntries.map(entry => {
-                      const status = entry.status
-                      return (
-                        <div key={entry.agentType} className="flex items-center gap-1" title={entry.label}>
-                          <span
-                            className="inline-block rounded-full"
-                            style={{ width: 6, height: 6, background: statusColor(status) }}
-                          />
-                          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                            {entry.label}
-                          </span>
-                        </div>
-                      )
-                    })}
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      <span
+                        className="inline-block rounded-full"
+                        style={{ width: 6, height: 6, background: getMemoryModuleStatusColor(module.enabled) }}
+                      />
+                      <span>
+                        {module.enabled ? t('memory.moduleEnabledHint') : t('memory.moduleDisabledHint')}
+                      </span>
+                    </div>
+                    {!batchPushMode && (
+                      <button
+                        onClick={event => {
+                          event.stopPropagation()
+                          void handleToggleModuleEnabled(module)
+                        }}
+                        className="text-[11px] px-2 py-1 rounded-lg"
+                        style={{ color: 'var(--text-muted)', border: '1px solid var(--border-base)' }}
+                      >
+                        {module.enabled ? t('memory.disableModule') : t('memory.enableModule')}
+                      </button>
+                    )}
                   </div>
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                    {t('memory.moduleRefHint')}
-                  </p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {t('memory.moduleRefHint')}
+                    </p>
+                    {batchPushMode && !module.enabled && (
+                      <p className="text-[11px]" style={{ color: 'var(--color-warning, #f97316)' }}>
+                        {t('memory.batchPushDisabledModuleHint')}
+                      </p>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -733,9 +773,27 @@ export default function Memory() {
             className="flex items-center justify-between px-4 py-3"
             style={{ borderBottom: '1px solid var(--border-base)' }}
           >
-            <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-              {drawerState.type === 'main' ? t('memory.mainMemory') : drawerModuleName}
-            </span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                {drawerState.type === 'main' ? t('memory.mainMemory') : drawerModuleName}
+              </span>
+              {drawerState.type === 'module' && (() => {
+                const currentModule = modules.find(module => module.name === drawerModuleName)
+                if (!currentModule) return null
+                const status = getMemoryModuleStatus(currentModule.enabled)
+                return (
+                  <span
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px]"
+                    style={{
+                      color: getMemoryModuleStatusColor(status === 'enabled'),
+                      border: `1px solid ${getMemoryModuleStatusColor(status === 'enabled')}`,
+                    }}
+                  >
+                    {status === 'enabled' ? t('memory.moduleEnabled') : t('memory.moduleDisabled')}
+                  </span>
+                )
+              })()}
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleOpenInEditor}
@@ -745,19 +803,31 @@ export default function Memory() {
                 <ExternalLink size={12} />
                 {t('memory.openInEditor')}
               </button>
-              {drawerState.type === 'module' && (
-                <button
-                  onClick={() => {
-                    const target = modules.find(module => module.name === drawerModuleName)
-                    if (target) setDeleteTarget(target)
-                  }}
-                  disabled={deletingModule === drawerModuleName}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
-                  style={{ color: 'var(--color-error, #ef4444)', border: '1px solid var(--border-base)' }}
-                >
-                  {t('memory.deleteModule')}
-                </button>
-              )}
+              {drawerState.type === 'module' && (() => {
+                const target = modules.find(module => module.name === drawerModuleName)
+                if (!target) return null
+                return (
+                  <>
+                    <button
+                      onClick={() => void handleToggleModuleEnabled(target)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
+                      style={{ color: 'var(--text-muted)', border: '1px solid var(--border-base)' }}
+                    >
+                      {target.enabled ? t('memory.disableModule') : t('memory.enableModule')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteTarget(target)
+                      }}
+                      disabled={deletingModule === drawerModuleName}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
+                      style={{ color: 'var(--color-error, #ef4444)', border: '1px solid var(--border-base)' }}
+                    >
+                      {t('memory.deleteModule')}
+                    </button>
+                  </>
+                )
+              })()}
               <button onClick={() => requestCloseDrawer(false)} style={{ color: 'var(--text-muted)' }}>
                 <X size={16} />
               </button>

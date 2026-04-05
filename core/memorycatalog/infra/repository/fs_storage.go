@@ -160,6 +160,7 @@ func (s *FsStorage) ListModules() ([]*domain.ModuleMemory, error) {
 		modules = append(modules, &domain.ModuleMemory{
 			Name:      name,
 			Content:   content,
+			Enabled:   true,
 			UpdatedAt: fileMtime(path),
 		})
 	}
@@ -187,6 +188,7 @@ func (s *FsStorage) GetModule(name string) (*domain.ModuleMemory, error) {
 	return &domain.ModuleMemory{
 		Name:      name,
 		Content:   content,
+		Enabled:   true,
 		UpdatedAt: fileMtime(path),
 	}, nil
 }
@@ -212,6 +214,7 @@ func (s *FsStorage) CreateModule(name, content string) (*domain.ModuleMemory, er
 	return &domain.ModuleMemory{
 		Name:      name,
 		Content:   content,
+		Enabled:   true,
 		UpdatedAt: fileMtime(path),
 	}, nil
 }
@@ -233,6 +236,7 @@ func (s *FsStorage) SaveModule(name, content string) (*domain.ModuleMemory, erro
 	return &domain.ModuleMemory{
 		Name:      name,
 		Content:   content,
+		Enabled:   true,
 		UpdatedAt: fileMtime(path),
 	}, nil
 }
@@ -257,9 +261,10 @@ func (s *FsStorage) DeleteModule(name string) error {
 // ── Local config JSON structs ─────────────────────────────────────────────────
 
 type localConfig struct {
-	PushConfigs map[string]pushConfigJSON    `json:"pushConfigs"`
-	Modules     map[string]moduleTargetsJSON `json:"modules"`
-	PushState   map[string]pushStateJSON     `json:"pushState"`
+	PushConfigs  map[string]pushConfigJSON    `json:"pushConfigs"`
+	Modules      map[string]moduleTargetsJSON `json:"modules"`
+	ModuleStates map[string]moduleStateJSON   `json:"moduleStates"`
+	PushState    map[string]pushStateJSON     `json:"pushState"`
 }
 
 type pushConfigJSON struct {
@@ -269,6 +274,10 @@ type pushConfigJSON struct {
 
 type moduleTargetsJSON struct {
 	PushTargets []string `json:"pushTargets"`
+}
+
+type moduleStateJSON struct {
+	Enabled bool `json:"enabled"`
 }
 
 type pushStateJSON struct {
@@ -447,6 +456,74 @@ func (s *FsStorage) DeleteModulePushTargets(moduleName string) error {
 		return nil
 	}
 	delete(cfg.Modules, moduleName)
+	return s.saveLocalConfig(cfg)
+}
+
+// GetModuleEnabled returns the stored enabled state for a module. Nil means unset.
+func (s *FsStorage) GetModuleEnabled(moduleName string) (*bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cfg, err := s.loadLocalConfig()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ModuleStates == nil {
+		return nil, nil
+	}
+	raw, ok := cfg.ModuleStates[moduleName]
+	if !ok {
+		return nil, nil
+	}
+	enabled := raw.Enabled
+	return &enabled, nil
+}
+
+// SaveModuleEnabled persists the enabled state for a module.
+func (s *FsStorage) SaveModuleEnabled(moduleName string, enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cfg, err := s.loadLocalConfig()
+	if err != nil {
+		return err
+	}
+	if cfg.ModuleStates == nil {
+		cfg.ModuleStates = make(map[string]moduleStateJSON)
+	}
+	cfg.ModuleStates[moduleName] = moduleStateJSON{Enabled: enabled}
+	return s.saveLocalConfig(cfg)
+}
+
+// GetAllModuleEnabled returns all stored module enabled states.
+func (s *FsStorage) GetAllModuleEnabled() (map[string]bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cfg, err := s.loadLocalConfig()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]bool, len(cfg.ModuleStates))
+	for moduleName, raw := range cfg.ModuleStates {
+		result[moduleName] = raw.Enabled
+	}
+	return result, nil
+}
+
+// DeleteModuleEnabled removes the enabled state entry for a module.
+func (s *FsStorage) DeleteModuleEnabled(moduleName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cfg, err := s.loadLocalConfig()
+	if err != nil {
+		return err
+	}
+	if cfg.ModuleStates == nil {
+		return nil
+	}
+	delete(cfg.ModuleStates, moduleName)
 	return s.saveLocalConfig(cfg)
 }
 

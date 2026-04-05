@@ -416,6 +416,11 @@ Local-only memory configuration. Excluded from cloud backup and git sync.
       "autoPush": true | false
     }
   },
+  "moduleStates": {
+    "<moduleName>": {
+      "enabled": true | false
+    }
+  },
   "pushState": {
     "<agentType>": {
       "lastPushedAt": "2026-03-21T10:00:00Z",
@@ -432,6 +437,8 @@ Local-only memory configuration. Excluded from cloud backup and git sync.
 | `pushConfigs` | `<agentType>` | object | Per-agent push configuration |
 | `pushConfigs.<agent>.mode` | — | string | `"merge"` or `"takeover"` |
 | `pushConfigs.<agent>.autoPush` | — | bool | Whether this agent auto-syncs all memories after local edits |
+| `moduleStates` | `<moduleName>` | object | Local global state for one module memory |
+| `moduleStates.<module>.enabled` | — | bool | Whether the module participates in auto sync and default full-agent push |
 | `pushState` | `<agentType>` | object | Per-agent last push tracking |
 | `pushState.<agent>.lastPushedAt` | — | RFC3339 string | Timestamp of last successful push |
 | `pushState.<agent>.lastPushedHash` | — | string | SHA-256 of the actual content most recently pushed to this agent |
@@ -439,4 +446,6 @@ Local-only memory configuration. Excluded from cloud backup and git sync.
 **Notes:**
 
 - There is no persisted per-module push-target list anymore. Manual batch push selections are temporary UI state only.
+- `moduleStates` is local-only UI/distribution state. When a module has no stored entry yet, SkillFlow treats it as enabled by default for backward compatibility.
+- Disabling a module removes it from auto-sync pushes and from the default full-agent push set, but manual batch push can still select it explicitly.
 - A partial batch push stores the pushed snapshot hash, so the same agent can still show `pendingPush` when the current local library contains more modules than the last pushed selection.
