@@ -143,6 +143,10 @@ func (a *App) rebuildPathBoundServices(repoCacheDir string) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	dataDir := appDataDirFunc()
+	if activeProcessRole == processRoleUI {
+		a.startupUILightweight(dataDir)
+		return
+	}
 	if ctx != nil {
 		runtime.LogInfof(ctx, "daemon runtime initialization started: dataDir=%s", dataDir)
 	}
@@ -641,6 +645,13 @@ func (a *App) DeleteSkills(skillIDs []string) error {
 }
 
 func (a *App) GetSkillMeta(skillID string) (*skilldomain.SkillMeta, error) {
+	if shouldProxyAppMethodsToDaemon() {
+		var meta *skilldomain.SkillMeta
+		if err := a.invokeDaemonService("GetSkillMeta", skillID, &meta); err != nil {
+			return nil, err
+		}
+		return meta, nil
+	}
 	sk, err := a.storage.Get(skillID)
 	if err != nil {
 		return nil, err
@@ -650,11 +661,25 @@ func (a *App) GetSkillMeta(skillID string) (*skilldomain.SkillMeta, error) {
 
 // GetSkillMetaByPath reads skill.md frontmatter from a skill directory path (no ID required).
 func (a *App) GetSkillMetaByPath(path string) (*skilldomain.SkillMeta, error) {
+	if shouldProxyAppMethodsToDaemon() {
+		var meta *skilldomain.SkillMeta
+		if err := a.invokeDaemonService("GetSkillMetaByPath", path, &meta); err != nil {
+			return nil, err
+		}
+		return meta, nil
+	}
 	return skilldomain.ReadMeta(path)
 }
 
 // ReadSkillFileContent returns the full text content of skill.md inside the given skill directory.
 func (a *App) ReadSkillFileContent(path string) (string, error) {
+	if shouldProxyAppMethodsToDaemon() {
+		var content string
+		if err := a.invokeDaemonService("ReadSkillFileContent", path, &content); err != nil {
+			return "", err
+		}
+		return content, nil
+	}
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return "", err

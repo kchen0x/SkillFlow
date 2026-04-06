@@ -62,6 +62,9 @@ func TestHelperControllerInitializeDaemonBackendBuildsRuntimeAndStartsServices(t
 		require.Contains(t, handlers, "ListSkills")
 		require.Contains(t, handlers, "ListCategories")
 		require.Contains(t, handlers, "GetGitConflictPending")
+		require.Contains(t, handlers, "GetSkillMeta")
+		require.Contains(t, handlers, "GetSkillMetaByPath")
+		require.Contains(t, handlers, "ReadSkillFileContent")
 		require.Contains(t, handlers, "ListCloudProviders")
 		return &daemonruntime.Service{}, nil
 	}

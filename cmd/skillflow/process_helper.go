@@ -292,6 +292,27 @@ func daemonServiceHandlers(app *App) map[string]daemonruntime.ServiceHandler {
 		"GetGitConflictPending": func(ctx context.Context, params json.RawMessage) (any, error) {
 			return app.GetGitConflictPending(), nil
 		},
+		"GetSkillMeta": func(ctx context.Context, params json.RawMessage) (any, error) {
+			var skillID string
+			if err := json.Unmarshal(params, &skillID); err != nil {
+				return nil, err
+			}
+			return app.GetSkillMeta(skillID)
+		},
+		"GetSkillMetaByPath": func(ctx context.Context, params json.RawMessage) (any, error) {
+			var path string
+			if err := json.Unmarshal(params, &path); err != nil {
+				return nil, err
+			}
+			return app.GetSkillMetaByPath(path)
+		},
+		"ReadSkillFileContent": func(ctx context.Context, params json.RawMessage) (any, error) {
+			var path string
+			if err := json.Unmarshal(params, &path); err != nil {
+				return nil, err
+			}
+			return app.ReadSkillFileContent(path)
+		},
 		"ListCloudProviders": func(ctx context.Context, params json.RawMessage) (any, error) {
 			return app.ListCloudProviders(), nil
 		},

@@ -189,7 +189,14 @@ func TestStartupSkipsAutoSyncTimerForUIProcessRole(t *testing.T) {
 	appDataDirFunc = func() string { return dir }
 	activeProcessRole = processRoleUI
 
+	svc := config.NewService(dir)
+	cfg := config.DefaultConfig(dir)
+	cfg.LogLevel = config.LogLevelDebug
+	require.NoError(t, svc.Save(cfg))
+
+	daemonRuntimeCalls := 0
 	newDaemonRuntimeFn = func(dataDir string, deps daemonruntime.Dependencies) (*daemonruntime.Runtime, error) {
+		daemonRuntimeCalls++
 		return &daemonruntime.Runtime{
 			DataDir:         dataDir,
 			ConfigService:   config.NewService(dataDir),
@@ -207,4 +214,11 @@ func TestStartupSkipsAutoSyncTimerForUIProcessRole(t *testing.T) {
 	app.startup(nil)
 
 	assert.Zero(t, autoSyncCalls)
+	assert.Zero(t, daemonRuntimeCalls)
+	assert.Nil(t, app.backendRuntime)
+	require.NotNil(t, app.config)
+	assert.Equal(t, dir, app.config.DataDir())
+	assert.NotNil(t, app.sysLog)
+	assert.NotNil(t, app.storage)
+	assert.NotNil(t, app.starStorage)
 }
