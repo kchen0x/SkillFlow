@@ -62,6 +62,8 @@ type App struct {
 	windowVisibilityMu   sync.Mutex
 	windowVisibilityInit bool
 	windowVisible        bool
+	uiQuitMu             sync.Mutex
+	uiQuitRequested      bool
 	uiControlMu          sync.Mutex
 	uiControlServer      *loopbackControlServer
 }
@@ -95,6 +97,7 @@ var startAppAutoSyncTimerFn = func(app *App, intervalMinutes int) {
 var startAppBackgroundTasksFn = func(app *App) {
 	app.startBackgroundStartupTasks()
 }
+var runtimeQuitFn = runtime.Quit
 
 func normalizeCategoryName(name string) string {
 	trimmed := strings.TrimSpace(name)
@@ -242,9 +245,16 @@ func (a *App) startBackgroundStartupTasks() {
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
+	if a.uiQuitInProgress() {
+		return false
+	}
 	a.persistCurrentWindowSize(ctx)
 	a.publishWindowVisibilityChanged(false)
 	a.logInfof("application quit started")
+	if a.shouldQuitUIProcessOnClose() && a.beginUIQuit() {
+		a.requestRuntimeQuit(ctx)
+		return true
+	}
 	return false
 }
 
@@ -279,7 +289,44 @@ func (a *App) hideMainWindow() {
 }
 
 func (a *App) quitApp() {
-	runtime.Quit(a.ctx)
+	if a.shouldQuitUIProcessOnClose() {
+		a.beginUIQuit()
+	}
+	a.requestRuntimeQuit(a.ctx)
+}
+
+func (a *App) shouldQuitUIProcessOnClose() bool {
+	return goruntime.GOOS == "darwin" && activeProcessRole == processRoleUI && helperBootstrapEnabled()
+}
+
+func (a *App) beginUIQuit() bool {
+	if a == nil {
+		return false
+	}
+	a.uiQuitMu.Lock()
+	defer a.uiQuitMu.Unlock()
+	if a.uiQuitRequested {
+		return false
+	}
+	a.uiQuitRequested = true
+	return true
+}
+
+func (a *App) uiQuitInProgress() bool {
+	if a == nil {
+		return false
+	}
+	a.uiQuitMu.Lock()
+	defer a.uiQuitMu.Unlock()
+	return a.uiQuitRequested
+}
+
+func (a *App) requestRuntimeQuit(ctx context.Context) {
+	quitCtx := ctx
+	if quitCtx == nil {
+		quitCtx = a.ctx
+	}
+	runtimeQuitFn(quitCtx)
 }
 
 // autoBackup triggers cloud backup after any mutating operation if cloud is enabled.
