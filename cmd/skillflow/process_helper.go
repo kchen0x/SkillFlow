@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/shinerio/skillflow/core/config"
+	daemonruntime "github.com/shinerio/skillflow/core/platform/daemon"
 	"github.com/shinerio/skillflow/core/platform/logging"
 )
 
@@ -21,6 +23,7 @@ type helperController struct {
 	loggerMu     sync.Mutex
 	logger       *logging.Logger
 	helperServer *loopbackControlServer
+	daemonApp    *App
 	quitCh       chan struct{}
 	quitOnce     sync.Once
 	uiArgs       []string
@@ -62,6 +65,9 @@ func (h *helperController) run() error {
 	h.logInfof("helper process started, platform=%s", goruntime.GOOS)
 
 	if err := prepareHelperRuntime(); err != nil {
+		return err
+	}
+	if err := h.initializeDaemonBackend(); err != nil {
 		return err
 	}
 
@@ -206,6 +212,30 @@ func (h *helperController) closeHelperServer() {
 		h.logErrorf("helper control server stop failed: %v", err)
 	}
 	h.helperServer = nil
+}
+
+func (h *helperController) initializeDaemonBackend() error {
+	app := newDaemonAppFn()
+	app.ctx = context.Background()
+
+	rt, err := newDaemonRuntimeFn(appDataDirFunc(), daemonruntime.Dependencies{
+		RunUpgrade:          runStartupUpgrade,
+		LoadConfig:          loadStartupConfig,
+		NewLogger:           logging.New,
+		SyncLaunchAtLogin:   app.syncLaunchAtLogin,
+		RegisterAdapters:    registerAdapters,
+		RegisterProviders:   registerProviders,
+		BuiltinStarredRepos: builtinStarredRepoURLs,
+	})
+	if err != nil {
+		return err
+	}
+
+	app.applyRuntime(rt)
+	h.daemonApp = app
+	startAppAutoSyncTimerFn(app, rt.ConfigSnapshot.Cloud.SyncIntervalMinutes)
+	startAppBackgroundTasksFn(app)
+	return nil
 }
 
 func (h *helperController) logDebugf(format string, args ...any) {

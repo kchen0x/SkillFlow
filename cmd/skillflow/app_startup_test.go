@@ -171,3 +171,40 @@ func TestStartupUsesDaemonRuntimeBuilder(t *testing.T) {
 	assert.Same(t, expectedHub, app.hub)
 	assert.Same(t, expectedConfig, app.config)
 }
+
+func TestStartupSkipsAutoSyncTimerForUIProcessRole(t *testing.T) {
+	dir := t.TempDir()
+
+	prevAppDataDirFunc := appDataDirFunc
+	prevNewDaemonRuntimeFn := newDaemonRuntimeFn
+	prevStartAppAutoSyncTimerFn := startAppAutoSyncTimerFn
+	prevActiveProcessRole := activeProcessRole
+	t.Cleanup(func() {
+		appDataDirFunc = prevAppDataDirFunc
+		newDaemonRuntimeFn = prevNewDaemonRuntimeFn
+		startAppAutoSyncTimerFn = prevStartAppAutoSyncTimerFn
+		activeProcessRole = prevActiveProcessRole
+	})
+
+	appDataDirFunc = func() string { return dir }
+	activeProcessRole = processRoleUI
+
+	newDaemonRuntimeFn = func(dataDir string, deps daemonruntime.Dependencies) (*daemonruntime.Runtime, error) {
+		return &daemonruntime.Runtime{
+			DataDir:         dataDir,
+			ConfigService:   config.NewService(dataDir),
+			ConfigSnapshot:  config.AppConfig{Cloud: config.CloudConfig{SyncIntervalMinutes: 13}},
+			Hub:             eventbus.NewHub(),
+		}, nil
+	}
+
+	autoSyncCalls := 0
+	startAppAutoSyncTimerFn = func(app *App, minutes int) {
+		autoSyncCalls++
+	}
+
+	app := NewApp()
+	app.startup(nil)
+
+	assert.Zero(t, autoSyncCalls)
+}

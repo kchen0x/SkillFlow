@@ -88,6 +88,13 @@ var loadStartupConfig = func(dataDir string) (*config.Service, config.AppConfig,
 }
 
 var newDaemonRuntimeFn = daemonruntime.NewRuntime
+var newDaemonAppFn = NewApp
+var startAppAutoSyncTimerFn = func(app *App, intervalMinutes int) {
+	app.startAutoSyncTimer(intervalMinutes)
+}
+var startAppBackgroundTasksFn = func(app *App) {
+	app.startBackgroundStartupTasks()
+}
 
 func normalizeCategoryName(name string) string {
 	trimmed := strings.TrimSpace(name)
@@ -173,7 +180,9 @@ func (a *App) startup(ctx context.Context) {
 		go forwardEvents(ctx, a.hub)
 	}
 	a.logDebugf("startup background tasks deferred until ui ready")
-	a.startAutoSyncTimer(rt.ConfigSnapshot.Cloud.SyncIntervalMinutes)
+	if activeProcessRole != processRoleUI {
+		startAppAutoSyncTimerFn(a, rt.ConfigSnapshot.Cloud.SyncIntervalMinutes)
+	}
 }
 
 func (a *App) applyRuntime(rt *daemonruntime.Runtime) {
@@ -215,7 +224,7 @@ func (a *App) domReady(ctx context.Context) {
 }
 
 func (a *App) startBackgroundStartupTasks() {
-	if a.backendRuntime == nil {
+	if a.backendRuntime == nil || activeProcessRole == processRoleUI {
 		return
 	}
 	tasks := a.startupBackgroundTaskPlan()
