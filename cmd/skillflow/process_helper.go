@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -250,7 +249,6 @@ func (h *helperController) closeDaemonService() {
 
 func (h *helperController) initializeDaemonBackend() error {
 	app := newDaemonAppFn()
-	app.ctx = context.Background()
 
 	rt, err := newDaemonRuntimeFn(appDataDirFunc(), daemonruntime.Dependencies{
 		RunUpgrade:          runStartupUpgrade,

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -82,7 +81,7 @@ func TestHelperControllerInitializeDaemonBackendBuildsRuntimeAndStartsServices(t
 	require.NoError(t, controller.initializeDaemonBackend())
 	require.NotNil(t, controller.daemonApp)
 	assert.Same(t, rt, controller.daemonApp.backendRuntime)
-	assert.IsType(t, context.Background(), controller.daemonApp.ctx)
+	assert.Nil(t, controller.daemonApp.ctx)
 	require.NotNil(t, controller.daemonService)
 	assert.Equal(t, 1, serviceCalls)
 	assert.Equal(t, 1, autoSyncCalls)

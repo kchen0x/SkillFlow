@@ -16,6 +16,8 @@ import (
 	"github.com/shinerio/skillflow/core/platform/eventbus"
 )
 
+var newRequestWithContextFn = http.NewRequestWithContext
+
 const (
 	githubOwner = "shinerio"
 	githubRepo  = "SkillFlow"
@@ -48,7 +50,7 @@ func (a *App) CheckAppUpdate() (*AppUpdateInfo, error) {
 	client := a.proxyHTTPClient()
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", githubOwner, githubRepo)
 	releasePageURL := fmt.Sprintf("https://github.com/%s/%s/releases/latest", githubOwner, githubRepo)
-	req, err := http.NewRequestWithContext(a.ctx, "GET", apiURL, nil)
+	req, err := newRequestWithContextFn(a.cloneContext(), "GET", apiURL, nil)
 	if err != nil {
 		a.logErrorf("check app update failed: %v", err)
 		return nil, err
