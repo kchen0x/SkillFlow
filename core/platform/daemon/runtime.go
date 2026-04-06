@@ -5,11 +5,17 @@ import (
 	"sync"
 	"time"
 
+	agentdomain "github.com/shinerio/skillflow/core/agentintegration/domain"
 	"github.com/shinerio/skillflow/core/config"
 	memorycatalogapp "github.com/shinerio/skillflow/core/memorycatalog/app"
+	memorypushgw "github.com/shinerio/skillflow/core/memorycatalog/app/port/gateway"
+	memorygw "github.com/shinerio/skillflow/core/memorycatalog/infra/gateway"
+	memoryadapters "github.com/shinerio/skillflow/core/memorycatalog/infra/adapters"
+	memoryrepo "github.com/shinerio/skillflow/core/memorycatalog/infra/repository"
 	"github.com/shinerio/skillflow/core/platform/appdata"
 	"github.com/shinerio/skillflow/core/platform/eventbus"
 	"github.com/shinerio/skillflow/core/platform/logging"
+	"github.com/shinerio/skillflow/core/platform/upgrade"
 	"github.com/shinerio/skillflow/core/readmodel/viewstate"
 	skillcatalogapp "github.com/shinerio/skillflow/core/skillcatalog/app"
 	skillrepo "github.com/shinerio/skillflow/core/skillcatalog/infra/repository"
@@ -57,7 +63,7 @@ type StartupTask struct {
 func NewRuntime(dataDir string, deps Dependencies) (*Runtime, error) {
 	runUpgrade := deps.RunUpgrade
 	if runUpgrade == nil {
-		runUpgrade = func(string) error { return nil }
+		runUpgrade = upgrade.Run
 	}
 	loadConfig := deps.LoadConfig
 	if loadConfig == nil {
@@ -70,6 +76,10 @@ func NewRuntime(dataDir string, deps Dependencies) (*Runtime, error) {
 	newLogger := deps.NewLogger
 	if newLogger == nil {
 		newLogger = logging.New
+	}
+	newMemoryServices := deps.NewMemoryServices
+	if newMemoryServices == nil {
+		newMemoryServices = defaultMemoryServicesFactory
 	}
 
 	if err := runUpgrade(dataDir); err != nil {
@@ -108,9 +118,7 @@ func NewRuntime(dataDir string, deps Dependencies) (*Runtime, error) {
 		repoCacheDir(cfgService, dataDir),
 	)
 	rt.ViewCache = viewstate.NewManager(filepath.Join(rt.CacheDir, "viewstate"))
-	if deps.NewMemoryServices != nil {
-		rt.MemoryService, rt.MemoryPushService = deps.NewMemoryServices(cfgService, dataDir)
-	}
+	rt.MemoryService, rt.MemoryPushService = newMemoryServices(cfgService, dataDir)
 	if deps.RegisterAdapters != nil {
 		deps.RegisterAdapters()
 	}
@@ -170,4 +178,41 @@ func (rt *Runtime) StartAutoSyncTimer(intervalMinutes int, autoSync func()) {
 			}
 		}
 	}()
+}
+
+func defaultMemoryServicesFactory(cfgService *config.Service, dataDir string) (*memorycatalogapp.MemoryService, *memorycatalogapp.PushService) {
+	storage := memoryrepo.NewFsStorage(dataDir)
+
+	profilesProvider := func() []agentdomain.AgentProfile {
+		if cfgService == nil {
+			return nil
+		}
+		cfg, err := cfgService.Load()
+		if err != nil {
+			return nil
+		}
+		return cfg.Agents
+	}
+	agentGw := memorygw.NewAgentConfigGateway(profilesProvider)
+
+	pusherResolver := func(agentType string) (memorypushgw.AgentMemoryPusher, bool) {
+		switch agentType {
+		case "claude-code":
+			return memoryadapters.NewClaudeCodeAdapter(), true
+		case "codex":
+			return memoryadapters.NewCodexAdapter(), true
+		case "gemini-cli":
+			return memoryadapters.NewGeminiAdapter(), true
+		case "opencode":
+			return memoryadapters.NewOpenCodeAdapter(), true
+		case "openclaw":
+			return memoryadapters.NewOpenClawAdapter(), true
+		default:
+			return memoryadapters.NewCustomAdapter(), true
+		}
+	}
+
+	svc := memorycatalogapp.NewMemoryService(storage)
+	pushSvc := memorycatalogapp.NewPushService(storage, agentGw, pusherResolver)
+	return svc, pushSvc
 }

@@ -148,7 +148,6 @@ func (a *App) startup(ctx context.Context) {
 		RegisterAdapters:    registerAdapters,
 		RegisterProviders:   registerProviders,
 		BuiltinStarredRepos: builtinStarredRepoURLs,
-		NewMemoryServices:   newMemoryServicesForConfig,
 	})
 	if err != nil {
 		if ctx != nil {
