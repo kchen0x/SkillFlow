@@ -68,6 +68,8 @@ export function GetAppDataDir():Promise<string>;
 
 export function GetAppVersion():Promise<string>;
 
+export function GetBackendClientConfig():Promise<{baseUrl:string, token:string}>;
+
 export function GetConfig():Promise<config.AppConfig>;
 
 export function GetEnabledAgents():Promise<Array<domain.AgentProfile>>;

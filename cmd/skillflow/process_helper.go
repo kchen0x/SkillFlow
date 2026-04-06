@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -272,54 +271,11 @@ func (h *helperController) initializeDaemonBackend() error {
 	if err != nil {
 		return err
 	}
+	service.SetEventHub(app.hub)
 	h.daemonService = service
 	startAppAutoSyncTimerFn(app, rt.ConfigSnapshot.Cloud.SyncIntervalMinutes)
 	startAppBackgroundTasksFn(app)
 	return nil
-}
-
-func daemonServiceHandlers(app *App) map[string]daemonruntime.ServiceHandler {
-	return map[string]daemonruntime.ServiceHandler{
-		"GetConfig": func(ctx context.Context, params json.RawMessage) (any, error) {
-			return app.GetConfig()
-		},
-		"ListSkills": func(ctx context.Context, params json.RawMessage) (any, error) {
-			return app.ListSkills()
-		},
-		"ListCategories": func(ctx context.Context, params json.RawMessage) (any, error) {
-			return app.ListCategories()
-		},
-		"GetGitConflictPending": func(ctx context.Context, params json.RawMessage) (any, error) {
-			return app.GetGitConflictPending(), nil
-		},
-		"GetSkillMeta": func(ctx context.Context, params json.RawMessage) (any, error) {
-			var skillID string
-			if err := json.Unmarshal(params, &skillID); err != nil {
-				return nil, err
-			}
-			return app.GetSkillMeta(skillID)
-		},
-		"GetSkillMetaByPath": func(ctx context.Context, params json.RawMessage) (any, error) {
-			var path string
-			if err := json.Unmarshal(params, &path); err != nil {
-				return nil, err
-			}
-			return app.GetSkillMetaByPath(path)
-		},
-		"ReadSkillFileContent": func(ctx context.Context, params json.RawMessage) (any, error) {
-			var path string
-			if err := json.Unmarshal(params, &path); err != nil {
-				return nil, err
-			}
-			return app.ReadSkillFileContent(path)
-		},
-		"ListCloudProviders": func(ctx context.Context, params json.RawMessage) (any, error) {
-			return app.ListCloudProviders(), nil
-		},
-		"GetAppVersion": func(ctx context.Context, params json.RawMessage) (any, error) {
-			return app.GetAppVersion(), nil
-		},
-	}
 }
 
 func (h *helperController) logDebugf(format string, args ...any) {

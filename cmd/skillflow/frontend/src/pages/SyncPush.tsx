@@ -6,7 +6,7 @@ import {
   ListSkills,
   PushToAgents,
   PushToAgentsForce,
-} from '../../wailsjs/go/main/App'
+} from '../lib/backend'
 import ConflictDialog from '../components/ConflictDialog'
 import SyncSkillCard from '../components/SyncSkillCard'
 import { ArrowUpFromLine, CheckSquare, FolderPlus, Square, X } from 'lucide-react'

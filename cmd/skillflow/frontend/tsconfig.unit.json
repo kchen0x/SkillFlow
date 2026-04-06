@@ -9,6 +9,8 @@
   },
   "files": [
     "src/lib/agentMemoryPreview.ts",
+    "src/lib/backend.ts",
+    "src/lib/backendClient.ts",
     "src/lib/agentSettings.ts",
     "src/lib/clipboardCore.ts",
     "src/lib/cloudProviderOrder.ts",
@@ -34,5 +36,4 @@
     "src/hooks/useTheme.ts"
   ]
 }
-
 

@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -12,9 +13,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"strings"
 	"sync"
 
+	"github.com/shinerio/skillflow/core/platform/eventbus"
 	daemonipc "github.com/shinerio/skillflow/core/platform/ipc"
 )
 
@@ -27,6 +30,7 @@ type Service struct {
 	server    *http.Server
 	closeOnce sync.Once
 	done      chan struct{}
+	eventHub  atomic.Pointer[eventbus.Hub]
 }
 
 type ServiceRequest struct {
@@ -66,6 +70,7 @@ func StartService(statePath string, handlers map[string]ServiceHandler) (*Servic
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/invoke", svc.handleInvoke(handlers))
+	mux.HandleFunc("/events", svc.handleEvents())
 	svc.server = &http.Server{Handler: mux}
 
 	if err := daemonipc.WriteEndpoint(statePath, daemonipc.Endpoint{
@@ -84,6 +89,10 @@ func StartService(statePath string, handlers map[string]ServiceHandler) (*Servic
 	return svc, nil
 }
 
+func (s *Service) SetEventHub(hub *eventbus.Hub) {
+	s.eventHub.Store(hub)
+}
+
 func (s *Service) Close() error {
 	var err error
 	s.closeOnce.Do(func() {
@@ -96,6 +105,11 @@ func (s *Service) Close() error {
 
 func (s *Service) handleInvoke(handlers map[string]ServiceHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		writeServiceCORSHeaders(w)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		if r.Method != http.MethodPost {
 			http.NotFound(w, r)
 			return
@@ -132,6 +146,61 @@ func (s *Service) handleInvoke(handlers map[string]ServiceHandler) http.HandlerF
 			payload = data
 		}
 		writeServiceResponse(w, http.StatusOK, ServiceResponse{OK: true, Result: payload})
+	}
+}
+
+func (s *Service) handleEvents() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeServiceCORSHeaders(w)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.TrimSpace(r.Header.Get("X-SkillFlow-Token")) != strings.TrimSpace(s.token) {
+			writeServiceResponse(w, http.StatusUnauthorized, ServiceResponse{OK: false, Error: "unauthorized"})
+			return
+		}
+
+		hub := s.eventHub.Load()
+		if hub == nil {
+			writeServiceResponse(w, http.StatusServiceUnavailable, ServiceResponse{OK: false, Error: "event stream unavailable"})
+			return
+		}
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			writeServiceResponse(w, http.StatusInternalServerError, ServiceResponse{OK: false, Error: "streaming unsupported"})
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.WriteHeader(http.StatusOK)
+		flusher.Flush()
+
+		ch := hub.Subscribe()
+		defer hub.Unsubscribe(ch)
+
+		encoder := json.NewEncoder(w)
+		for {
+			select {
+			case evt, ok := <-ch:
+				if !ok {
+					return
+				}
+				if err := encoder.Encode(evt); err != nil {
+					return
+				}
+				flusher.Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
 	}
 }
 
@@ -185,10 +254,59 @@ func InvokeService(statePath, method string, params any, result any) error {
 	return nil
 }
 
+func StreamEvents(statePath string, ctx context.Context, handle func(eventbus.Event)) error {
+	endpoint, err := daemonipc.ReadEndpoint(statePath)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+endpoint.Address+"/events", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-SkillFlow-Token", endpoint.Token)
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var serviceResp ServiceResponse
+		if err := json.NewDecoder(resp.Body).Decode(&serviceResp); err == nil && strings.TrimSpace(serviceResp.Error) != "" {
+			return errors.New(serviceResp.Error)
+		}
+		return fmt.Errorf("event stream status %d", resp.StatusCode)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		var evt eventbus.Event
+		if err := json.Unmarshal(scanner.Bytes(), &evt); err != nil {
+			return err
+		}
+		handle(evt)
+	}
+	if err := scanner.Err(); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
+	return ctx.Err()
+}
+
 func writeServiceResponse(w http.ResponseWriter, statusCode int, resp ServiceResponse) {
+	writeServiceCORSHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func writeServiceCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-SkillFlow-Token")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 }
 
 func randomServiceToken() (string, error) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { GetEnabledAgents, ScanAgentSkills, PullFromAgent, PullFromAgentForce, ListCategories } from '../../wailsjs/go/main/App'
+import { GetEnabledAgents, ScanAgentSkills, PullFromAgent, PullFromAgentForce, ListCategories } from '../lib/backend'
 import ConflictDialog from '../components/ConflictDialog'
 import SyncSkillCard from '../components/SyncSkillCard'
 import { ArrowDownToLine, AlertCircle, X, CheckSquare, Square } from 'lucide-react'

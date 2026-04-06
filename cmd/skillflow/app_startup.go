@@ -28,6 +28,7 @@ func (a *App) startupBackgroundTaskPlan() []startupBackgroundTask {
 func (a *App) startupUILightweight(dataDir string) {
 	a.config = config.NewService(dataDir)
 	a.initLogger(config.DefaultLogLevel)
+	a.startDaemonEventForwarder(a.ctx)
 
 	cfg, err := a.config.Load()
 	if err != nil {

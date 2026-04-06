@@ -6,7 +6,9 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/shinerio/skillflow/core/platform/eventbus"
 	daemonipc "github.com/shinerio/skillflow/core/platform/ipc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,4 +83,42 @@ func TestDaemonServiceReturnsHandlerError(t *testing.T) {
 	err = InvokeService(statePath, "fail", nil, nil)
 	require.Error(t, err)
 	assert.EqualError(t, err, "boom")
+}
+
+func TestDaemonServiceStreamsEvents(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "daemon-service.json")
+
+	svc, err := StartService(statePath, map[string]ServiceHandler{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = svc.Close()
+	})
+
+	hub := eventbus.NewHub()
+	svc.SetEventHub(hub)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	received := make(chan eventbus.Event, 1)
+	go func() {
+		_ = StreamEvents(statePath, ctx, func(evt eventbus.Event) {
+			received <- evt
+			cancel()
+		})
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	hub.Publish(eventbus.Event{Type: eventbus.EventSkillsUpdated, Payload: map[string]any{"count": 1}})
+
+	select {
+	case evt := <-received:
+		assert.Equal(t, eventbus.EventSkillsUpdated, evt.Type)
+		payload, ok := evt.Payload.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, float64(1), payload["count"])
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for streamed event")
+	}
 }
