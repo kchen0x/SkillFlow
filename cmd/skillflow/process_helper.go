@@ -283,6 +283,15 @@ func daemonServiceHandlers(app *App) map[string]daemonruntime.ServiceHandler {
 		"GetConfig": func(ctx context.Context, params json.RawMessage) (any, error) {
 			return app.GetConfig()
 		},
+		"ListSkills": func(ctx context.Context, params json.RawMessage) (any, error) {
+			return app.ListSkills()
+		},
+		"ListCategories": func(ctx context.Context, params json.RawMessage) (any, error) {
+			return app.ListCategories()
+		},
+		"GetGitConflictPending": func(ctx context.Context, params json.RawMessage) (any, error) {
+			return app.GetGitConflictPending(), nil
+		},
 		"ListCloudProviders": func(ctx context.Context, params json.RawMessage) (any, error) {
 			return app.ListCloudProviders(), nil
 		},

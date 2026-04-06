@@ -11,6 +11,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestGetConfigUsesDaemonServiceForUIProcessRole(t *testing.T) {
+	prevActiveProcessRole := activeProcessRole
+	prevDaemonInvokeServiceFn := daemonInvokeServiceFn
+	t.Cleanup(func() {
+		activeProcessRole = prevActiveProcessRole
+		daemonInvokeServiceFn = prevDaemonInvokeServiceFn
+	})
+
+	activeProcessRole = processRoleUI
+
+	expected := config.DefaultConfig(t.TempDir())
+	expected.DefaultCategory = ""
+	expected.LogLevel = "DEBUG"
+	expected.RepoScanMaxDepth = 0
+
+	daemonInvokeServiceFn = func(method string, params any, result any) error {
+		assert.Equal(t, "GetConfig", method)
+		assert.Nil(t, params)
+		target, ok := result.(*config.AppConfig)
+		require.True(t, ok)
+		*target = expected
+		return nil
+	}
+
+	app := NewApp()
+	cfg, err := app.GetConfig()
+	require.NoError(t, err)
+	assert.Equal(t, defaultCategoryName, cfg.DefaultCategory)
+	assert.Equal(t, config.NormalizeLogLevel(expected.LogLevel), cfg.LogLevel)
+	assert.Equal(t, config.NormalizeRepoScanMaxDepth(expected.RepoScanMaxDepth), cfg.RepoScanMaxDepth)
+}
+
 func TestSaveConfigRebuildsRepoCacheConsumers(t *testing.T) {
 	dataDir := t.TempDir()
 	svc := config.NewService(dataDir)

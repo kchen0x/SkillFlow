@@ -27,6 +27,58 @@ func TestMeasureOperationReturnsOperationResult(t *testing.T) {
 	assert.Equal(t, 42, value)
 }
 
+func TestListSkillsUsesDaemonServiceForUIProcessRole(t *testing.T) {
+	prevActiveProcessRole := activeProcessRole
+	prevDaemonInvokeServiceFn := daemonInvokeServiceFn
+	t.Cleanup(func() {
+		activeProcessRole = prevActiveProcessRole
+		daemonInvokeServiceFn = prevDaemonInvokeServiceFn
+	})
+
+	activeProcessRole = processRoleUI
+	expected := []InstalledSkillEntry{
+		{ID: "skill-1", Name: "Demo", Category: defaultCategoryName, Source: "manual"},
+	}
+	daemonInvokeServiceFn = func(method string, params any, result any) error {
+		assert.Equal(t, "ListSkills", method)
+		assert.Nil(t, params)
+		target, ok := result.(*[]InstalledSkillEntry)
+		require.True(t, ok)
+		*target = expected
+		return nil
+	}
+
+	app := NewApp()
+	entries, err := app.ListSkills()
+	require.NoError(t, err)
+	assert.Equal(t, expected, entries)
+}
+
+func TestListCategoriesUsesDaemonServiceForUIProcessRole(t *testing.T) {
+	prevActiveProcessRole := activeProcessRole
+	prevDaemonInvokeServiceFn := daemonInvokeServiceFn
+	t.Cleanup(func() {
+		activeProcessRole = prevActiveProcessRole
+		daemonInvokeServiceFn = prevDaemonInvokeServiceFn
+	})
+
+	activeProcessRole = processRoleUI
+	expected := []string{defaultCategoryName, "Tools"}
+	daemonInvokeServiceFn = func(method string, params any, result any) error {
+		assert.Equal(t, "ListCategories", method)
+		assert.Nil(t, params)
+		target, ok := result.(*[]string)
+		require.True(t, ok)
+		*target = expected
+		return nil
+	}
+
+	app := NewApp()
+	categories, err := app.ListCategories()
+	require.NoError(t, err)
+	assert.Equal(t, expected, categories)
+}
+
 func TestListSkillsUsesCachedSnapshotWhenFingerprintMatches(t *testing.T) {
 	app, _, _, _ := newViewStateTestApp(t)
 

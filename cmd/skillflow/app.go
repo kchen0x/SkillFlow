@@ -441,6 +441,13 @@ func (a *App) startAutoSyncTimer(intervalMinutes int) {
 
 // GetGitConflictPending returns true when a git conflict from startup pull is waiting to be resolved.
 func (a *App) GetGitConflictPending() bool {
+	if shouldProxyAppMethodsToDaemon() {
+		var pending bool
+		if err := a.invokeDaemonService("GetGitConflictPending", nil, &pending); err == nil {
+			return pending
+		}
+		return false
+	}
 	a.gitConflictMu.Lock()
 	defer a.gitConflictMu.Unlock()
 	return a.gitConflictPending
@@ -523,6 +530,13 @@ func (a *App) gitProxyURL() string {
 // --- Skills ---
 
 func (a *App) ListSkills() ([]InstalledSkillEntry, error) {
+	if shouldProxyAppMethodsToDaemon() {
+		var entries []InstalledSkillEntry
+		if err := a.invokeDaemonService("ListSkills", nil, &entries); err != nil {
+			return nil, err
+		}
+		return entries, nil
+	}
 	return measureOperation(a, "list_skills", func() ([]InstalledSkillEntry, error) {
 		cfg, err := a.config.Load()
 		if err != nil {
@@ -542,6 +556,13 @@ func (a *App) ListSkills() ([]InstalledSkillEntry, error) {
 }
 
 func (a *App) ListCategories() ([]string, error) {
+	if shouldProxyAppMethodsToDaemon() {
+		var categories []string
+		if err := a.invokeDaemonService("ListCategories", nil, &categories); err != nil {
+			return nil, err
+		}
+		return categories, nil
+	}
 	cats, err := a.storage.ListCategories()
 	if err != nil {
 		return nil, err
