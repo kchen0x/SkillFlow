@@ -31,6 +31,10 @@ func uiControlPath() string {
 	return filepath.Join(runtimeStateDir(), "ui-control.json")
 }
 
+func daemonServicePath() string {
+	return filepath.Join(runtimeStateDir(), "daemon-service.json")
+}
+
 func startLoopbackControlServer(statePath string, handler func(command string) error) (*loopbackControlServer, error) {
 	return daemonipc.StartLoopbackServer(statePath, handler)
 }

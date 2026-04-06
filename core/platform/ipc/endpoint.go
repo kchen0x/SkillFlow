@@ -84,6 +84,10 @@ func writeEndpoint(statePath string, endpoint Endpoint) error {
 	return nil
 }
 
-func WriteEndpointForTesting(statePath string, endpoint Endpoint) error {
+func WriteEndpoint(statePath string, endpoint Endpoint) error {
 	return writeEndpoint(statePath, endpoint)
+}
+
+func WriteEndpointForTesting(statePath string, endpoint Endpoint) error {
+	return WriteEndpoint(statePath, endpoint)
 }

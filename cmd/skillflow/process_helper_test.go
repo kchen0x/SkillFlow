@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/shinerio/skillflow/core/config"
@@ -14,12 +16,16 @@ import (
 func TestHelperControllerInitializeDaemonBackendBuildsRuntimeAndStartsServices(t *testing.T) {
 	prevNewDaemonRuntimeFn := newDaemonRuntimeFn
 	prevNewDaemonAppFn := newDaemonAppFn
+	prevStartDaemonServiceFn := startDaemonServiceFn
+	prevDaemonServicePathFn := daemonServicePathFn
 	prevStartAppAutoSyncTimerFn := startAppAutoSyncTimerFn
 	prevStartAppBackgroundTasksFn := startAppBackgroundTasksFn
 	prevActiveProcessRole := activeProcessRole
 	t.Cleanup(func() {
 		newDaemonRuntimeFn = prevNewDaemonRuntimeFn
 		newDaemonAppFn = prevNewDaemonAppFn
+		startDaemonServiceFn = prevStartDaemonServiceFn
+		daemonServicePathFn = prevDaemonServicePathFn
 		startAppAutoSyncTimerFn = prevStartAppAutoSyncTimerFn
 		startAppBackgroundTasksFn = prevStartAppBackgroundTasksFn
 		activeProcessRole = prevActiveProcessRole
@@ -42,9 +48,20 @@ func TestHelperControllerInitializeDaemonBackendBuildsRuntimeAndStartsServices(t
 	newDaemonAppFn = func() *App {
 		return NewApp()
 	}
+	daemonServicePathFn = func() string {
+		return filepath.Join(dataDir, "runtime", "daemon-service.json")
+	}
 
 	autoSyncCalls := 0
 	backgroundCalls := 0
+	serviceCalls := 0
+	startDaemonServiceFn = func(statePath string, handlers map[string]daemonruntime.ServiceHandler) (*daemonruntime.Service, error) {
+		serviceCalls++
+		assert.Equal(t, filepath.Join(dataDir, "runtime", "daemon-service.json"), statePath)
+		require.Contains(t, handlers, "GetConfig")
+		require.Contains(t, handlers, "ListCloudProviders")
+		return &daemonruntime.Service{}, nil
+	}
 	startAppAutoSyncTimerFn = func(app *App, minutes int) {
 		autoSyncCalls++
 		assert.Equal(t, 9, minutes)
@@ -60,6 +77,47 @@ func TestHelperControllerInitializeDaemonBackendBuildsRuntimeAndStartsServices(t
 	require.NotNil(t, controller.daemonApp)
 	assert.Same(t, rt, controller.daemonApp.backendRuntime)
 	assert.IsType(t, context.Background(), controller.daemonApp.ctx)
+	require.NotNil(t, controller.daemonService)
+	assert.Equal(t, 1, serviceCalls)
 	assert.Equal(t, 1, autoSyncCalls)
 	assert.Equal(t, 1, backgroundCalls)
+}
+
+func TestHelperControllerHideMainWindowStopsUIProcess(t *testing.T) {
+	prevSendUIControlCommandFn := sendUIControlCommandFn
+	t.Cleanup(func() {
+		sendUIControlCommandFn = prevSendUIControlCommandFn
+	})
+
+	var commands []string
+	sendUIControlCommandFn = func(command string) error {
+		commands = append(commands, command)
+		return nil
+	}
+
+	controller := newHelperController(nil)
+	controller.hideMainWindow()
+
+	require.Equal(t, []string{controlCommandQuit}, commands)
+}
+
+func TestHelperControllerStopUIClearsTrackedProcessAfterQuit(t *testing.T) {
+	prevSendUIControlCommandFn := sendUIControlCommandFn
+	t.Cleanup(func() {
+		sendUIControlCommandFn = prevSendUIControlCommandFn
+	})
+
+	sendUIControlCommandFn = func(command string) error {
+		require.Equal(t, controlCommandQuit, command)
+		return nil
+	}
+
+	controller := newHelperController(nil)
+	controller.uiCmd = &exec.Cmd{}
+
+	require.NoError(t, controller.stopUI())
+
+	controller.uiMu.Lock()
+	defer controller.uiMu.Unlock()
+	assert.Nil(t, controller.uiCmd)
 }
