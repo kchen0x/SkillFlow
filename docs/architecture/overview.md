@@ -15,7 +15,7 @@ The design goals are:
 ## High-Level Shape
 
 ```text
-cmd/skillflow/          Wails shell, transport adapters, OS integration, startup sequencing
+cmd/skillflow/          Wails shell, daemon/ui process host, loopback gateway, OS integration
 core/
   platform/             pure technical capabilities
   shared/               minimal shared kernel
@@ -38,6 +38,7 @@ core/
 - `backup` owns backup and restore planning, not the business truth of skills or prompts.
 - `core/config` is a settings facade for transport and shell coordination. It does not own business truth by itself.
 - shell concerns such as tray, window state, single-instance behavior, launch-at-login, and app update belong to `cmd/skillflow/` plus `platform/`, not to a bounded context.
+- the background `daemon` owns the long-lived backend runtime; the visible `ui` process is a disposable Wails shell that proxies business calls to the daemon.
 - `Settings` is not a bounded context. It is a UI composition surface over multiple contexts.
 
 In the current product shape, `skillsource` contains two different domain concepts:
@@ -79,4 +80,4 @@ Only stable concepts shared by multiple contexts belong in `shared/`, such as lo
 
 If a unified content view is needed, build it in `readmodel/` or application queries rather than by forcing a common domain parent type.
 
-*Last updated: 2026-03-21*
+*Last updated: 2026-04-06*

@@ -25,7 +25,7 @@ All synced app content now lives under `<AppDataDir>`. Only the heavyweight star
 | `meta/<skill-id>.json` | One sidecar metadata file per installed skill | Yes |
 | `meta_local/<skill-id>.local.json` | Local-only per-skill volatile metadata overlay | No |
 | `cache/viewstate/*.json` | Local derived UI/cache snapshots | No |
-| `runtime/*.json`, `runtime/helper.lock` | Local helper/UI process coordination state | No |
+| `runtime/*.json`, `runtime/helper.lock` | Local daemon/UI process coordination state | No |
 
 The table describes file roles. Synced content trees stay under `<AppDataDir>`, while starred-repo clone data may live under a separate local-only `<RepoCacheDir>`.
 
@@ -46,11 +46,12 @@ Rules:
 
 Path: `<AppDataDir>/runtime/`
 
-These files store local-only helper/UI process coordination state. Typical files include `helper-control.json`, `ui-control.json`, and `helper.lock`.
+These files store local-only daemon/UI process coordination state. Typical files include `helper-control.json`, `ui-control.json`, `daemon-service.json`, and `helper.lock`.
 
 Rules:
 
 - They contain loopback endpoint addresses, random tokens, and process IDs that are valid only on the current machine and current run.
+- `helper-control.json` and `helper.lock` are historical file names for the background process host. In the current runtime model, that host is the long-lived `daemon`.
 - They must be excluded from cloud backup, Git sync, and cross-device restore.
 - Older Git backups that once tracked `runtime/` are cleaned up on the next push.
 - They may be deleted while SkillFlow is fully stopped; the app recreates them on the next launch.

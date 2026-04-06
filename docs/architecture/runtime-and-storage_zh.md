@@ -19,7 +19,7 @@ SkillFlow 仍然是一个 Wails 桌面应用。
 
 - Wails 启动和绑定注册
 - 面向 Wails 的 transport adapter
-- helper/UI 进程启动
+- daemon/UI 进程启动
 - tray 与 window 集成
 - 单实例协调
 - 壳层启动时序
@@ -28,13 +28,14 @@ SkillFlow 仍然是一个 Wails 桌面应用。
 
 它不承载可复用的业务用例逻辑，例如技能导入规则、Prompt CRUD 规则、来源同步规则或 Agent 推拉语义。
 
-## Helper / UI 双进程
+## Daemon / UI 双进程
 
-SkillFlow 采用 helper/UI 双进程模型：
+SkillFlow 采用 daemon/UI 双进程模型：
 
-- `helper` 进程负责托盘、本地控制端点和 UI 拉起/聚焦
-- `ui` 进程负责承载 Wails、React 以及调用后端应用服务的 transport adapter
-- 关闭主窗口会退出 UI 进程，但不会终止 helper 壳层
+- `daemon` 进程负责长期驻留的后端运行时、托盘或菜单栏、本地控制端点、loopback 服务网关、后台定时任务，以及 UI 的拉起/聚焦
+- `ui` 进程负责承载 Wails、React 和仅限壳层的本地能力，例如对话框或系统打开路径
+- 前端业务调用不再直接依赖完整 Wails 后端绑定，而是由 `ui` 通过本地鉴权 loopback 网关转发给 `daemon`
+- 关闭或隐藏主窗口时，`ui` 进程会直接退出，但 `daemon` 会继续常驻；再次显示应用时会重新冷启动一个新的 `ui`
 
 ## 仓库结构
 
@@ -185,4 +186,4 @@ Gateway：
 - 机器相关路径只保留在本地配置 namespace 中
 - 敏感信息不能写入日志
 
-*最后更新：2026-03-21*
+*最后更新：2026-04-06*

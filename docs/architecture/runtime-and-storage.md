@@ -19,7 +19,7 @@ It contains:
 
 - Wails startup and binding registration
 - Wails-facing transport adapters
-- helper/UI process bootstrapping
+- daemon/UI process bootstrapping
 - tray and window integration
 - single-instance coordination
 - shell-level startup sequencing
@@ -28,13 +28,14 @@ It contains:
 
 It is not the home for reusable business use cases such as skill import rules, prompt CRUD rules, source synchronization rules, or agent push/pull semantics.
 
-## Helper and UI Runtime Split
+## Daemon and UI Runtime Split
 
-SkillFlow uses a helper/UI split:
+SkillFlow uses a daemon/UI split:
 
-- the `helper` process owns tray presence, local control endpoints, and UI relaunch/focus
-- the `ui` process hosts Wails, React, and the transport adapters that call backend application services
-- closing the main window exits the UI process without killing the helper shell
+- the `daemon` process owns the long-lived backend runtime, tray or menu-bar presence, local control endpoints, the loopback service gateway, background timers, and UI relaunch/focus
+- the `ui` process hosts Wails, React, and shell-only adapters such as dialogs or OS open actions
+- frontend business calls are proxied from the `ui` process to the `daemon` over the local authenticated loopback gateway instead of directly binding the full backend runtime into the UI process
+- closing or hiding the main window exits the `ui` process without killing the `daemon`; showing the app again cold-starts a fresh UI process
 
 ## Repository Shape
 
@@ -185,4 +186,4 @@ Existing constraints remain in force:
 - local-only machine-specific paths stay in local settings namespaces
 - secrets must never be written to logs
 
-*Last updated: 2026-03-21*
+*Last updated: 2026-04-06*
