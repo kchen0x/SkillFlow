@@ -12,16 +12,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDetermineProcessRoleDefaultsToHelper(t *testing.T) {
+func TestDetermineProcessRoleDefaultsToDaemon(t *testing.T) {
 	role, args := determineProcessRole([]string{"SkillFlow"})
-	assert.Equal(t, processRoleHelper, role)
+	assert.Equal(t, processRoleDaemon, role)
 	assert.Equal(t, []string{"SkillFlow"}, args)
 }
 
-func TestDetermineProcessRoleReturnsUIAndStripsInternalFlag(t *testing.T) {
-	role, args := determineProcessRole([]string{"SkillFlow", internalUIFlag, "--debug"})
-	assert.Equal(t, processRoleUI, role)
-	assert.Equal(t, []string{"SkillFlow", "--debug"}, args)
+func TestDetermineProcessRoleFlags(t *testing.T) {
+	roleDaemon, argsDaemon := determineProcessRole([]string{"SkillFlow", internalDaemonFlag, "--debug"})
+	assert.Equal(t, processRoleDaemon, roleDaemon)
+	assert.Equal(t, []string{"SkillFlow", "--debug"}, argsDaemon)
+
+	roleUI, argsUI := determineProcessRole([]string{"SkillFlow", internalUIFlag, "--debug"})
+	assert.Equal(t, processRoleUI, roleUI)
+	assert.Equal(t, []string{"SkillFlow", "--debug"}, argsUI)
+
+	roleLastWins, _ := determineProcessRole([]string{"SkillFlow", internalDaemonFlag, internalUIFlag})
+	assert.Equal(t, processRoleUI, roleLastWins)
 }
 
 func TestLoopbackControlServerRoundTrip(t *testing.T) {
