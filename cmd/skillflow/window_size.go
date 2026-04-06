@@ -18,6 +18,8 @@ const (
 	windowHeightMargin    = 96
 )
 
+var windowGetSizeFn = runtime.WindowGetSize
+
 func (a *App) fitInitialWindowToScreen(ctx context.Context) {
 	a.logInfof("initial window sizing started")
 
@@ -104,7 +106,7 @@ func minInt(a, b int) int {
 
 func (a *App) persistCurrentWindowSize(ctx context.Context) {
 	a.logInfof("window size persistence started")
-	width, height := runtime.WindowGetSize(ctx)
+	width, height := windowGetSizeFn(ctx)
 	state := config.NormalizeWindowState(config.WindowState{Width: width, Height: height})
 	if state.Width == 0 || state.Height == 0 {
 		a.logErrorf("window size persistence failed: invalid size width=%d height=%d", width, height)

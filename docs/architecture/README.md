@@ -24,7 +24,7 @@ SkillFlow's backend is a DDD-oriented modular monolith:
 - [Application Use Cases](./use-cases.md)
   - command/query ownership by context, shared orchestration, and read-model composition rules
 - [Runtime, Repository Layout, and Storage](./runtime-and-storage.md)
-  - Wails shell constraints, helper/UI runtime split, storage layout, and repository vs gateway rules
+  - Wails shell constraints, daemon/UI runtime split, loopback gateway responsibilities, storage layout, and repository vs gateway rules
 
 ## Invariants
 
@@ -40,4 +40,4 @@ SkillFlow's backend is a DDD-oriented modular monolith:
 
 These documents cover backend architecture only. User-facing behavior remains documented in [`docs/features.md`](../features.md), and persisted file schemas remain documented in [`docs/config.md`](../config.md).
 
-*Last updated: 2026-03-21*
+*Last updated: 2026-04-06*

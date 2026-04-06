@@ -23,7 +23,7 @@
 | `meta/<skill-id>.json` | 每个已安装 Skill 的 sidecar 元数据 | 是 |
 | `meta_local/<skill-id>.local.json` | 每个 Skill 的本地易变元数据覆盖文件 | 否 |
 | `cache/viewstate/*.json` | 本地派生 UI / 缓存快照 | 否 |
-| `runtime/*.json`、`runtime/helper.lock` | 本地 helper/UI 进程协调状态 | 否 |
+| `runtime/*.json`、`runtime/helper.lock` | 本地 daemon/UI 进程协调状态 | 否 |
 
 这个表描述的是文件职责。会参与同步的内容目录固定保存在 `<AppDataDir>` 下；而收藏仓库的 clone 数据则允许位于单独的本地 `<RepoCacheDir>`。
 
@@ -44,11 +44,12 @@
 
 路径：`<AppDataDir>/runtime/`
 
-这些文件保存 helper/UI 双进程在当前设备上的本地协调状态。典型文件包括 `helper-control.json`、`ui-control.json` 和 `helper.lock`。
+这些文件保存 daemon/UI 双进程在当前设备上的本地协调状态。典型文件包括 `helper-control.json`、`ui-control.json`、`daemon-service.json` 和 `helper.lock`。
 
 规则：
 
 - 文件里保存的是回环地址、随机 token 和 PID，只对当前设备、当前这次运行有效。
+- `helper-control.json` 与 `helper.lock` 仍沿用历史文件名，但它们现在对应的是长期驻留的后台 `daemon` 进程宿主。
 - 它们必须被排除在云备份、Git 同步和跨设备恢复之外。
 - 如果旧版本曾把 `runtime/` 跟踪进 Git 备份，下一次推送时会自动清理掉。
 - 在 SkillFlow 完全退出时可以删除；应用下次启动会自动重建。

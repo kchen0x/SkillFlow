@@ -3,27 +3,31 @@ package main
 type processRole string
 
 const (
-	processRoleHelper processRole = "helper"
+	processRoleDaemon processRole = "daemon"
 	processRoleUI     processRole = "ui"
 
-	internalUIFlag = "--internal-ui"
+	internalDaemonFlag = "--internal-daemon"
+	internalUIFlag     = "--internal-ui"
 )
 
-var activeProcessRole = processRoleHelper
+var activeProcessRole = processRoleDaemon
 
 func determineProcessRole(args []string) (processRole, []string) {
 	if len(args) == 0 {
-		return processRoleHelper, args
+		return processRoleDaemon, args
 	}
 
 	filtered := make([]string, 0, len(args))
-	role := processRoleHelper
+	role := processRoleDaemon
 	for _, arg := range args {
-		if arg == internalUIFlag {
+		switch arg {
+		case internalUIFlag:
 			role = processRoleUI
-			continue
+		case internalDaemonFlag:
+			role = processRoleDaemon
+		default:
+			filtered = append(filtered, arg)
 		}
-		filtered = append(filtered, arg)
 	}
 	return role, filtered
 }

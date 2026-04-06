@@ -40,7 +40,7 @@ Get the latest release from **[GitHub Releases](https://github.com/shinerio/Skil
 | **Cross-agent Sync** | Push skills and automatically sync memories across built-in and custom agents. |
 | **Starred Repos** | Track Git repos, browse discovered skills, and import or push them without installing everything first. |
 | **Cloud Backup** | Back up sync-safe skills, prompts, memories, and metadata to object storage providers or Git. |
-| **Desktop Experience** | Bilingual UI, multiple themes, tray/menu bar reopen, launch-at-login, proxy testing, and in-app update checks. |
+| **Desktop Experience** | Bilingual UI, multiple themes, daemon-backed tray/menu bar reopen with cold UI restart, launch-at-login, proxy testing, and in-app update checks. |
 
 Detailed references:
 

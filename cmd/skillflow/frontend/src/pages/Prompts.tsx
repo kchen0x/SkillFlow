@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Download, FileText, Plus, Trash2, Upload } from 'lucide-react'
 import {
-  CancelImportPrompts,
-  CompleteImportPrompts,
-  CreatePrompt,
-  DeletePrompt,
   ExportPromptsByNames,
-  ListPromptCategories,
-  ListPrompts,
-  MovePromptCategory,
   PrepareImportPrompts,
-  UpdatePrompt,
 } from '../../wailsjs/go/main/App'
 import PromptEditorDialog, { type PromptDraft } from '../components/PromptEditorDialog'
 import PromptCategoryPanel from '../components/PromptCategoryPanel'
@@ -24,6 +16,16 @@ import { buildPromptExportActions, canExportPromptSelection, listPromptExportCan
 import { buildPromptLinksMarkdown, normalizePromptImageURLs, type PromptWebLink } from '../lib/promptRichContent'
 import { SkillSortOrder } from '../lib/skillList'
 import { matchesKeywordExpression } from '../lib/search'
+import {
+  CancelImportPrompts,
+  CompleteImportPrompts,
+  CreatePrompt,
+  DeletePrompt,
+  ListPromptCategories,
+  ListPrompts,
+  MovePromptCategory,
+  UpdatePrompt,
+} from '../lib/backend'
 
 type PromptItem = {
   name: string

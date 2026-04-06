@@ -1,20 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Brain, CheckSquare, ExternalLink, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react'
-import {
-  CreateModuleMemory,
-  DeleteModuleMemory,
-  GetAllMemoryPushConfigs,
-  GetAllMemoryPushStatuses,
-  GetEnabledAgents,
-  GetMainMemory,
-  ListModuleMemories,
-  OpenMemoryInEditor,
-  PushSelectedMemory,
-  SaveMainMemory,
-  SaveMemoryPushConfig,
-  SaveModuleMemory,
-  SetModuleMemoryEnabled,
-} from '../../wailsjs/go/main/App'
+import { OpenMemoryInEditor } from '../../wailsjs/go/main/App'
 import { domain, main } from '../../wailsjs/go/models'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -39,6 +25,20 @@ import {
   type MemoryPushStatus,
 } from '../lib/memoryUi'
 import { subscribeToEvents } from '../lib/wailsEvents'
+import {
+  CreateModuleMemory,
+  DeleteModuleMemory,
+  GetAllMemoryPushConfigs,
+  GetAllMemoryPushStatuses,
+  GetEnabledAgents,
+  GetMainMemory,
+  ListModuleMemories,
+  PushSelectedMemory,
+  SaveMainMemory,
+  SaveMemoryPushConfig,
+  SaveModuleMemory,
+  SetModuleMemoryEnabled,
+} from '../lib/backend'
 
 type MainMemoryItem = { content: string; updatedAt: string }
 type ModuleItem = { name: string; content: string; enabled: boolean; updatedAt: string }
@@ -1080,4 +1080,3 @@ export default function Memory() {
     </div>
   )
 }
-

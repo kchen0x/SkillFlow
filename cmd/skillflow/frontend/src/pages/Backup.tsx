@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { BackupNow, GetConfig, GetLastBackupChanges, GetLastBackupCompletedAt, RestoreFromCloud } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { Cloud, Download, RefreshCw, Upload } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { subscribeToEvents } from '../lib/wailsEvents'
+import { BackupNow, GetConfig, GetLastBackupChanges, GetLastBackupCompletedAt, RestoreFromCloud } from '../lib/backend'
 
 type BackupChange = {
   path: string

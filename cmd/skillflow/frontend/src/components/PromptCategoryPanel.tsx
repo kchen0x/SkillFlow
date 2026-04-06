@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertCircle, Plus } from 'lucide-react'
 import ContextMenu from './ContextMenu'
-import { CreatePromptCategory, RenamePromptCategory, DeletePromptCategory } from '../../wailsjs/go/main/App'
+import { CreatePromptCategory, RenamePromptCategory, DeletePromptCategory } from '../lib/backend'
 import { useLanguage } from '../contexts/LanguageContext'
 import AnimatedDialog from './ui/AnimatedDialog'
 

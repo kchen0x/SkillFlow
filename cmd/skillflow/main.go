@@ -15,6 +15,7 @@ var assets embed.FS
 var (
 	runUIProcessFn           = runUIProcess
 	bootstrapHelperProcessFn = bootstrapHelperProcess
+	runDaemonProcessFn       = runDaemonProcess
 )
 
 func main() {
@@ -22,32 +23,24 @@ func main() {
 }
 
 func runEntry(args []string) int {
-	if !helperBootstrapEnabled() {
-		if err := runUIProcessFn(); err != nil {
-			println("Error:", err.Error())
-			return 1
-		}
-		return 0
-	}
-
 	role, filteredArgs := determineProcessRole(args)
 	activeProcessRole = role
 	if len(filteredArgs) > 0 {
 		os.Args = filteredArgs
 	}
-	if role == processRoleUI {
+	switch role {
+	case processRoleDaemon:
+		if err := runDaemonProcessFn(filteredArgs); err != nil {
+			println("Error:", err.Error())
+			return 1
+		}
+	case processRoleUI:
 		if err := runUIProcessFn(); err != nil {
 			println("Error:", err.Error())
 			return 1
 		}
-		return 0
-	}
-	uiArgs := []string(nil)
-	if len(filteredArgs) > 1 {
-		uiArgs = filteredArgs[1:]
-	}
-	if err := bootstrapHelperProcessFn(uiArgs); err != nil {
-		println("Error:", err.Error())
+	default:
+		println("Error: unknown process role")
 		return 1
 	}
 	return 0
@@ -57,6 +50,14 @@ func runUIProcess() error {
 	app := NewApp()
 
 	return wails.Run(buildUIOptions(app))
+}
+
+func runDaemonProcess(filteredArgs []string) error {
+	uiArgs := []string(nil)
+	if len(filteredArgs) > 1 {
+		uiArgs = filteredArgs[1:]
+	}
+	return bootstrapHelperProcessFn(uiArgs)
 }
 
 func buildUIOptions(app *App) *options.App {

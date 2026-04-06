@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	EventMemoryContentChanged = "memory:content:changed"
-	EventMemoryPushCompleted  = "memory:push:completed"
-	EventMemoryStatusChanged  = "memory:status:changed"
+	EventMemoryContentChanged = string(eventbus.EventMemoryContentChanged)
+	EventMemoryPushCompleted  = string(eventbus.EventMemoryPushCompleted)
+	EventMemoryStatusChanged  = string(eventbus.EventMemoryStatusChanged)
 )
 
 func forwardEvents(ctx context.Context, hub *eventbus.Hub) {
@@ -22,10 +22,14 @@ func forwardEvents(ctx context.Context, hub *eventbus.Hub) {
 			if !ok {
 				return
 			}
-			data, _ := json.Marshal(evt.Payload)
-			runtime.EventsEmit(ctx, string(evt.Type), string(data))
+			emitRuntimeEvent(ctx, evt)
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func emitRuntimeEvent(ctx context.Context, evt eventbus.Event) {
+	data, _ := json.Marshal(evt.Payload)
+	runtime.EventsEmit(ctx, string(evt.Type), string(data))
 }
