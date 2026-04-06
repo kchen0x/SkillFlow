@@ -1,12 +1,12 @@
 package main
 
-import "time"
+import (
+	"time"
 
-type startupBackgroundTask struct {
-	name  string
-	delay time.Duration
-	run   func()
-}
+	daemonruntime "github.com/shinerio/skillflow/core/platform/daemon"
+)
+
+type startupBackgroundTask = daemonruntime.StartupTask
 
 func scheduleStartupBackgroundTasks(tasks []startupBackgroundTask, schedule func(startupBackgroundTask)) {
 	for _, task := range tasks {
@@ -16,9 +16,9 @@ func scheduleStartupBackgroundTasks(tasks []startupBackgroundTask, schedule func
 
 func (a *App) startupBackgroundTaskPlan() []startupBackgroundTask {
 	return []startupBackgroundTask{
-		{name: "git.pull", delay: 750 * time.Millisecond, run: a.gitPullOnStartup},
-		{name: "starred.refresh", delay: 3 * time.Second, run: a.updateStarredReposOnStartup},
-		{name: "skills.check_updates", delay: 5250 * time.Millisecond, run: a.checkUpdatesOnStartup},
-		{name: "app.check_update", delay: 8 * time.Second, run: a.checkAppUpdateOnStartup},
+		{Name: "git.pull", Delay: 750 * time.Millisecond, Run: a.gitPullOnStartup},
+		{Name: "starred.refresh", Delay: 3 * time.Second, Run: a.updateStarredReposOnStartup},
+		{Name: "skills.check_updates", Delay: 5250 * time.Millisecond, Run: a.checkUpdatesOnStartup},
+		{Name: "app.check_update", Delay: 8 * time.Second, Run: a.checkAppUpdateOnStartup},
 	}
 }

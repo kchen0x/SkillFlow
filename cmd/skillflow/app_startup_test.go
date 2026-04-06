@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/shinerio/skillflow/core/config"
+	daemonruntime "github.com/shinerio/skillflow/core/platform/daemon"
+	"github.com/shinerio/skillflow/core/platform/eventbus"
 	"github.com/shinerio/skillflow/core/platform/upgrade"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,14 +20,14 @@ func TestStartupBackgroundTaskPlanUsesStaggeredDelays(t *testing.T) {
 	tasks := app.startupBackgroundTaskPlan()
 
 	require.Len(t, tasks, 4)
-	assert.Equal(t, "git.pull", tasks[0].name)
-	assert.Equal(t, 750*time.Millisecond, tasks[0].delay)
-	assert.Equal(t, "starred.refresh", tasks[1].name)
-	assert.Equal(t, 3*time.Second, tasks[1].delay)
-	assert.Equal(t, "skills.check_updates", tasks[2].name)
-	assert.Equal(t, 5250*time.Millisecond, tasks[2].delay)
-	assert.Equal(t, "app.check_update", tasks[3].name)
-	assert.Equal(t, 8*time.Second, tasks[3].delay)
+	assert.Equal(t, "git.pull", tasks[0].Name)
+	assert.Equal(t, 750*time.Millisecond, tasks[0].Delay)
+	assert.Equal(t, "starred.refresh", tasks[1].Name)
+	assert.Equal(t, 3*time.Second, tasks[1].Delay)
+	assert.Equal(t, "skills.check_updates", tasks[2].Name)
+	assert.Equal(t, 5250*time.Millisecond, tasks[2].Delay)
+	assert.Equal(t, "app.check_update", tasks[3].Name)
+	assert.Equal(t, 8*time.Second, tasks[3].Delay)
 }
 
 func TestScheduleStartupBackgroundTasksRegistersAllTasks(t *testing.T) {
@@ -33,11 +35,11 @@ func TestScheduleStartupBackgroundTasksRegistersAllTasks(t *testing.T) {
 	executed := make([]string, 0, 2)
 
 	scheduleStartupBackgroundTasks([]startupBackgroundTask{
-		{name: "first", delay: 250 * time.Millisecond, run: func() { executed = append(executed, "first") }},
-		{name: "second", delay: time.Second, run: func() { executed = append(executed, "second") }},
+		{Name: "first", Delay: 250 * time.Millisecond, Run: func() { executed = append(executed, "first") }},
+		{Name: "second", Delay: time.Second, Run: func() { executed = append(executed, "second") }},
 	}, func(task startupBackgroundTask) {
-		scheduled = append(scheduled, task.delay)
-		task.run()
+		scheduled = append(scheduled, task.Delay)
+		task.Run()
 	})
 
 	assert.Equal(t, []time.Duration{250 * time.Millisecond, time.Second}, scheduled)
@@ -121,4 +123,51 @@ func TestStartupRunsUpgradeBeforeConfigLoad(t *testing.T) {
 	assert.Contains(t, string(localData), `"repoCacheDir"`)
 	assert.NotContains(t, string(localData), `"autoPushTools"`)
 	assert.NotContains(t, string(localData), `"skillsStorageDir"`)
+}
+
+func TestStartupUsesDaemonRuntimeBuilder(t *testing.T) {
+	dir := t.TempDir()
+
+	prevAppDataDirFunc := appDataDirFunc
+	prevNewDaemonRuntimeFn := newDaemonRuntimeFn
+	t.Cleanup(func() {
+		appDataDirFunc = prevAppDataDirFunc
+		newDaemonRuntimeFn = prevNewDaemonRuntimeFn
+	})
+
+	appDataDirFunc = func() string {
+		return dir
+	}
+
+	expectedHub := eventbus.NewHub()
+	expectedConfig := config.NewService(dir)
+	expectedRuntime := &daemonruntime.Runtime{
+		DataDir:       dir,
+		ConfigService: expectedConfig,
+		ConfigSnapshot: config.AppConfig{
+			Cloud: config.CloudConfig{},
+		},
+		Hub: expectedHub,
+	}
+
+	called := 0
+	newDaemonRuntimeFn = func(dataDir string, deps daemonruntime.Dependencies) (*daemonruntime.Runtime, error) {
+		called++
+		assert.Equal(t, dir, dataDir)
+		require.NotNil(t, deps.SyncLaunchAtLogin)
+		return expectedRuntime, nil
+	}
+
+	app := NewApp()
+	app.autostartFactory = func() (launchAtLoginController, error) {
+		t.Fatal("startup should delegate launch-at-login reconciliation to daemon runtime builder")
+		return nil, nil
+	}
+
+	app.startup(nil)
+
+	assert.Equal(t, 1, called)
+	assert.Same(t, expectedRuntime, app.backendRuntime)
+	assert.Same(t, expectedHub, app.hub)
+	assert.Same(t, expectedConfig, app.config)
 }

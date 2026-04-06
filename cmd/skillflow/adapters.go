@@ -109,11 +109,11 @@ func (a *App) backupProfile(cfg config.AppConfig) backupdomain.BackupProfile {
 	}
 }
 
-func newMemoryServices(a *App) (*memorycatalogapp.MemoryService, *memorycatalogapp.PushService) {
-	storage := memoryrepo.NewFsStorage(a.dataDir())
+func newMemoryServicesForConfig(cfgService *config.Service, dataDir string) (*memorycatalogapp.MemoryService, *memorycatalogapp.PushService) {
+	storage := memoryrepo.NewFsStorage(dataDir)
 
 	profilesProvider := func() []agentdomain.AgentProfile {
-		cfg, _ := a.config.Load()
+		cfg, _ := cfgService.Load()
 		return cfg.Agents
 	}
 	agentGw := memorygw.NewAgentConfigGateway(profilesProvider)
@@ -138,4 +138,8 @@ func newMemoryServices(a *App) (*memorycatalogapp.MemoryService, *memorycataloga
 	svc := memorycatalogapp.NewMemoryService(storage)
 	pushSvc := memorycatalogapp.NewPushService(storage, agentGw, pusherResolver)
 	return svc, pushSvc
+}
+
+func newMemoryServices(a *App) (*memorycatalogapp.MemoryService, *memorycatalogapp.PushService) {
+	return newMemoryServicesForConfig(a.config, a.dataDir())
 }

@@ -20,6 +20,7 @@ import (
 	memorycatalogapp "github.com/shinerio/skillflow/core/memorycatalog/app"
 	"github.com/shinerio/skillflow/core/orchestration"
 	"github.com/shinerio/skillflow/core/platform/appdata"
+	daemonruntime "github.com/shinerio/skillflow/core/platform/daemon"
 	"github.com/shinerio/skillflow/core/platform/eventbus"
 	platformgit "github.com/shinerio/skillflow/core/platform/git"
 	"github.com/shinerio/skillflow/core/platform/logging"
@@ -37,6 +38,7 @@ import (
 
 type App struct {
 	ctx                context.Context
+	backendRuntime     *daemonruntime.Runtime
 	hub                *eventbus.Hub
 	sysLog             *logging.Logger
 	storage            *skillcatalogapp.Service
@@ -45,7 +47,6 @@ type App struct {
 	cacheDir           string
 	viewCache          *viewstate.Manager
 	promptImports      *promptImportSessionStore
-	startupOnce        sync.Once
 	initialWindowState config.WindowState
 	autostartFactory   func() (launchAtLoginController, error)
 	memoryService      *memorycatalogapp.MemoryService
@@ -54,7 +55,6 @@ type App struct {
 	// Git sync state
 	gitConflictMu      sync.Mutex
 	gitConflictPending bool
-	stopAutoSync       chan struct{}
 
 	backupResultMu       sync.RWMutex
 	lastBackupResult     []backupdomain.RemoteFile
@@ -86,6 +86,8 @@ var loadStartupConfig = func(dataDir string) (*config.Service, config.AppConfig,
 	cfg, err := svc.Load()
 	return svc, cfg, err
 }
+
+var newDaemonRuntimeFn = daemonruntime.NewRuntime
 
 func normalizeCategoryName(name string) string {
 	trimmed := strings.TrimSpace(name)
@@ -135,41 +137,60 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	dataDir := appDataDirFunc()
 	if ctx != nil {
-		runtime.LogInfof(ctx, "config upgrade started: dataDir=%s", dataDir)
+		runtime.LogInfof(ctx, "daemon runtime initialization started: dataDir=%s", dataDir)
 	}
-	if err := runStartupUpgrade(dataDir); err != nil {
+
+	rt, err := newDaemonRuntimeFn(dataDir, daemonruntime.Dependencies{
+		RunUpgrade:          runStartupUpgrade,
+		LoadConfig:          loadStartupConfig,
+		NewLogger:           logging.New,
+		SyncLaunchAtLogin:   a.syncLaunchAtLogin,
+		RegisterAdapters:    registerAdapters,
+		RegisterProviders:   registerProviders,
+		BuiltinStarredRepos: builtinStarredRepoURLs,
+		NewMemoryServices:   newMemoryServicesForConfig,
+	})
+	if err != nil {
 		if ctx != nil {
-			runtime.LogErrorf(ctx, "config upgrade failed: dataDir=%s err=%v", dataDir, err)
+			runtime.LogErrorf(ctx, "daemon runtime initialization failed: dataDir=%s err=%v", dataDir, err)
 		}
 		return
 	}
+	a.applyRuntime(rt)
 	if ctx != nil {
-		runtime.LogInfof(ctx, "config upgrade completed: dataDir=%s", dataDir)
+		runtime.LogInfof(ctx, "daemon runtime initialization completed: dataDir=%s", dataDir)
 	}
-
-	var cfg config.AppConfig
-	var err error
-	a.config, cfg, err = loadStartupConfig(dataDir)
-	if err != nil {
-		runtime.LogErrorf(ctx, "load config failed: %v", err)
-		cfg = config.DefaultConfig(dataDir)
+	if rt.ConfigLoadErr != nil {
+		a.logErrorf("load config failed: %v", rt.ConfigLoadErr)
 	}
-	a.initLogger(cfg.LogLevel)
+	if rt.LoggerInitErr != nil && ctx != nil {
+		runtime.LogErrorf(ctx, "logger init failed: %v", rt.LoggerInitErr)
+	}
 	a.logInfof("application startup, version=%s, dataDir=%s", Version, dataDir)
-	if err := a.syncLaunchAtLogin(cfg.LaunchAtLogin); err != nil {
-		a.logErrorf("application startup launch-at-login reconcile failed: %v", err)
+	if rt.LaunchAtLoginErr != nil {
+		a.logErrorf("application startup launch-at-login reconcile failed: %v", rt.LaunchAtLoginErr)
 	}
-	a.rebuildPathBoundServices(cfg.RepoCacheDir)
-	a.memoryService, a.memoryPushService = newMemoryServices(a)
-	a.cacheDir = filepath.Join(dataDir, "cache")
-	a.viewCache = viewstate.NewManager(filepath.Join(a.cacheDir, "viewstate"))
-	registerAdapters()
-	registerProviders()
 	if ctx != nil {
 		go forwardEvents(ctx, a.hub)
 	}
 	a.logDebugf("startup background tasks deferred until ui ready")
-	a.startAutoSyncTimer(cfg.Cloud.SyncIntervalMinutes)
+	a.startAutoSyncTimer(rt.ConfigSnapshot.Cloud.SyncIntervalMinutes)
+}
+
+func (a *App) applyRuntime(rt *daemonruntime.Runtime) {
+	if rt == nil {
+		return
+	}
+	a.backendRuntime = rt
+	a.hub = rt.Hub
+	a.sysLog = rt.Logger
+	a.config = rt.ConfigService
+	a.storage = rt.Storage
+	a.starStorage = rt.StarStorage
+	a.cacheDir = rt.CacheDir
+	a.viewCache = rt.ViewCache
+	a.memoryService = rt.MemoryService
+	a.memoryPushService = rt.MemoryPushService
 }
 
 // proxyHTTPClient builds an *http.Client configured according to the saved proxy settings.
@@ -195,14 +216,15 @@ func (a *App) domReady(ctx context.Context) {
 }
 
 func (a *App) startBackgroundStartupTasks() {
-	a.startupOnce.Do(func() {
-		tasks := a.startupBackgroundTaskPlan()
-		a.logDebugf("startup background tasks scheduled, count=%d", len(tasks))
-		scheduleStartupBackgroundTasks(tasks, func(task startupBackgroundTask) {
-			time.AfterFunc(task.delay, func() {
-				a.logDebugf("startup background task started: task=%s delay=%s", task.name, task.delay)
-				task.run()
-			})
+	if a.backendRuntime == nil {
+		return
+	}
+	tasks := a.startupBackgroundTaskPlan()
+	a.logDebugf("startup background tasks scheduled, count=%d", len(tasks))
+	a.backendRuntime.ScheduleStartupTasks(tasks, func(task daemonruntime.StartupTask) {
+		time.AfterFunc(task.Delay, func() {
+			a.logDebugf("startup background task started: task=%s delay=%s", task.Name, task.Delay)
+			task.Run()
 		})
 	})
 }
@@ -403,27 +425,10 @@ func (a *App) gitPullOnStartup() {
 // startAutoSyncTimer starts (or restarts) a periodic auto-backup ticker.
 // intervalMinutes <= 0 disables the timer.
 func (a *App) startAutoSyncTimer(intervalMinutes int) {
-	if a.stopAutoSync != nil {
-		close(a.stopAutoSync)
-		a.stopAutoSync = nil
-	}
-	if intervalMinutes <= 0 {
+	if a.backendRuntime == nil {
 		return
 	}
-	stop := make(chan struct{})
-	a.stopAutoSync = stop
-	go func() {
-		ticker := time.NewTicker(time.Duration(intervalMinutes) * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				a.autoBackup()
-			case <-stop:
-				return
-			}
-		}
-	}()
+	a.backendRuntime.StartAutoSyncTimer(intervalMinutes, a.autoBackup)
 }
 
 // GetGitConflictPending returns true when a git conflict from startup pull is waiting to be resolved.
