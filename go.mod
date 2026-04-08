@@ -84,5 +84,3 @@ require (
 	google.golang.org/grpc v1.79.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-// replace github.com/wailsapp/wails/v2 v2.11.0 => /Users/shinerio/go/pkg/mod
