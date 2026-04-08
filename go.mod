@@ -8,12 +8,11 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.11
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.4
-	github.com/emersion/go-autostart v0.0.0-20250403115856-34830d6457d2
 	github.com/google/uuid v1.6.0
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.25.9+incompatible
 	github.com/stretchr/testify v1.11.1
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.72
-	github.com/wailsapp/wails/v2 v2.11.0
+	github.com/wailsapp/wails/v2 v2.12.0
 	google.golang.org/api v0.269.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -22,6 +21,7 @@ require (
 	cloud.google.com/go/auth v0.18.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.6 // indirect

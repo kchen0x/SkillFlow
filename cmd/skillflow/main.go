@@ -53,11 +53,18 @@ func runUIProcess() error {
 }
 
 func runDaemonProcess(filteredArgs []string) error {
+	if !helperBootstrapEnabled() {
+		return runDaemonProcessWhenHelperDisabled(filteredArgs)
+	}
 	uiArgs := []string(nil)
 	if len(filteredArgs) > 1 {
 		uiArgs = filteredArgs[1:]
 	}
 	return bootstrapHelperProcessFn(uiArgs)
+}
+
+func runDaemonProcessWhenHelperDisabled(_ []string) error {
+	return runUIProcessFn()
 }
 
 func buildUIOptions(app *App) *options.App {

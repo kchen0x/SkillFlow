@@ -73,9 +73,14 @@ func TestRunEntryInternalDaemonStartsDaemon(t *testing.T) {
 }
 
 func TestRunDaemonProcessDelegatesToBootstrapHelper(t *testing.T) {
+	if !helperBootstrapEnabled() {
+		t.Skip("helper bootstrap disabled in this build mode")
+	}
 	prevBootstrap := bootstrapHelperProcessFn
+	prevUI := runUIProcessFn
 	t.Cleanup(func() {
 		bootstrapHelperProcessFn = prevBootstrap
+		runUIProcessFn = prevUI
 	})
 
 	var received []string
@@ -83,7 +88,35 @@ func TestRunDaemonProcessDelegatesToBootstrapHelper(t *testing.T) {
 		received = append([]string(nil), uiArgs...)
 		return nil
 	}
+	runUIProcessFn = func() error {
+		t.Fatal("runDaemonProcess should not start UI directly when helper bootstrap is enabled")
+		return nil
+	}
 
 	assert.NoError(t, runDaemonProcess([]string{"SkillFlow", "--verbose"}))
 	assert.Equal(t, []string{"--verbose"}, received)
+}
+
+func TestRunDaemonProcessStartsUIDirectlyWhenHelperBootstrapDisabled(t *testing.T) {
+	prevBootstrap := bootstrapHelperProcessFn
+	prevUI := runUIProcessFn
+	t.Cleanup(func() {
+		bootstrapHelperProcessFn = prevBootstrap
+		runUIProcessFn = prevUI
+	})
+
+	helperCalled := false
+	uiCalled := 0
+	bootstrapHelperProcessFn = func(uiArgs []string) error {
+		helperCalled = true
+		return nil
+	}
+	runUIProcessFn = func() error {
+		uiCalled++
+		return nil
+	}
+
+	assert.NoError(t, runDaemonProcessWhenHelperDisabled([]string{"SkillFlow", "--verbose"}))
+	assert.False(t, helperCalled)
+	assert.Equal(t, 1, uiCalled)
 }
