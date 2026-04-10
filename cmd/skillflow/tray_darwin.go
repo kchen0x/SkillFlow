@@ -291,7 +291,6 @@ static void skillflow_apply_accessory_policy(void) {
 
 static void skillflow_apply_regular_policy(void) {
 	skillflow_run_on_main_thread_sync(^{
-		skillflow_create_status_item();
 		[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 		skillflow_log_debug(@"tray activation policy set, mode=regular");
 	});

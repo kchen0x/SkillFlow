@@ -18,7 +18,9 @@ var (
 )
 
 func showMainWindowNative(ctx context.Context) error {
-	darwinEnsureStatusItemFn()
+	if activeProcessRole == processRoleDaemon {
+		darwinEnsureStatusItemFn()
+	}
 	darwinApplyRegularPolicyFn()
 	darwinRuntimeShowFn(ctx)
 	darwinRuntimeWindowShowFn(ctx)
@@ -27,7 +29,9 @@ func showMainWindowNative(ctx context.Context) error {
 }
 
 func hideMainWindowNative(ctx context.Context) error {
-	darwinEnsureStatusItemFn()
+	if activeProcessRole == processRoleDaemon {
+		darwinEnsureStatusItemFn()
+	}
 	darwinRuntimeHideFn(ctx)
 	return nil
 }
