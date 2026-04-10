@@ -10,9 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestShowMainWindowNativeRestoresRegularWindowLifecycle(t *testing.T) {
+func TestShowMainWindowNativeEnsuresStatusItemForHelperProcess(t *testing.T) {
 	restore := stubDarwinWindowRuntime()
 	t.Cleanup(restore)
+
+	prevActiveProcessRole := activeProcessRole
+	activeProcessRole = processRoleHelper
+	t.Cleanup(func() {
+		activeProcessRole = prevActiveProcessRole
+	})
 
 	calls := make([]string, 0, 5)
 	darwinEnsureStatusItemFn = func() {
@@ -41,9 +47,51 @@ func TestShowMainWindowNativeRestoresRegularWindowLifecycle(t *testing.T) {
 	}, calls)
 }
 
-func TestHideMainWindowNativeKeepsStatusItemAliveBeforeHide(t *testing.T) {
+func TestShowMainWindowNativeDoesNotEnsureStatusItemForUIProcess(t *testing.T) {
 	restore := stubDarwinWindowRuntime()
 	t.Cleanup(restore)
+
+	prevActiveProcessRole := activeProcessRole
+	activeProcessRole = processRoleUI
+	t.Cleanup(func() {
+		activeProcessRole = prevActiveProcessRole
+	})
+
+	calls := make([]string, 0, 4)
+	darwinEnsureStatusItemFn = func() {
+		calls = append(calls, "ensure_status_item")
+	}
+	darwinApplyRegularPolicyFn = func() {
+		calls = append(calls, "apply_regular_policy")
+	}
+	darwinRuntimeShowFn = func(context.Context) {
+		calls = append(calls, "show")
+	}
+	darwinRuntimeWindowShowFn = func(context.Context) {
+		calls = append(calls, "window_show")
+	}
+	darwinRuntimeWindowUnminimiseFn = func(context.Context) {
+		calls = append(calls, "window_unminimise")
+	}
+
+	require.NoError(t, showMainWindowNative(context.Background()))
+	assert.Equal(t, []string{
+		"apply_regular_policy",
+		"show",
+		"window_show",
+		"window_unminimise",
+	}, calls)
+}
+
+func TestHideMainWindowNativeKeepsStatusItemAliveForHelperProcess(t *testing.T) {
+	restore := stubDarwinWindowRuntime()
+	t.Cleanup(restore)
+
+	prevActiveProcessRole := activeProcessRole
+	activeProcessRole = processRoleHelper
+	t.Cleanup(func() {
+		activeProcessRole = prevActiveProcessRole
+	})
 
 	calls := make([]string, 0, 2)
 	darwinEnsureStatusItemFn = func() {
@@ -56,6 +104,30 @@ func TestHideMainWindowNativeKeepsStatusItemAliveBeforeHide(t *testing.T) {
 	require.NoError(t, hideMainWindowNative(context.Background()))
 	assert.Equal(t, []string{
 		"ensure_status_item",
+		"hide",
+	}, calls)
+}
+
+func TestHideMainWindowNativeDoesNotEnsureStatusItemForUIProcess(t *testing.T) {
+	restore := stubDarwinWindowRuntime()
+	t.Cleanup(restore)
+
+	prevActiveProcessRole := activeProcessRole
+	activeProcessRole = processRoleUI
+	t.Cleanup(func() {
+		activeProcessRole = prevActiveProcessRole
+	})
+
+	calls := make([]string, 0, 1)
+	darwinEnsureStatusItemFn = func() {
+		calls = append(calls, "ensure_status_item")
+	}
+	darwinRuntimeHideFn = func(context.Context) {
+		calls = append(calls, "hide")
+	}
+
+	require.NoError(t, hideMainWindowNative(context.Background()))
+	assert.Equal(t, []string{
 		"hide",
 	}, calls)
 }

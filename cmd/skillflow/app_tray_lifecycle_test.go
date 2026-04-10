@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSetupTrayForUIInitializesTrayWhenUIOwnsLifecycle(t *testing.T) {
+func TestSetupTrayForUIDoesNothingWhenHelperOwnsLifecycle(t *testing.T) {
 	prevSetupTrayForUIFn := setupTrayForUIFn
 	t.Cleanup(func() {
 		setupTrayForUIFn = prevSetupTrayForUIFn
@@ -24,10 +24,10 @@ func TestSetupTrayForUIInitializesTrayWhenUIOwnsLifecycle(t *testing.T) {
 	app := NewApp()
 	app.setupTrayForUI(context.Background())
 
-	assert.Equal(t, 1, calls)
+	assert.Equal(t, 0, calls)
 }
 
-func TestTeardownTrayForUIRunsWhenUIOwnsLifecycle(t *testing.T) {
+func TestTeardownTrayForUIDoesNothingWhenHelperOwnsLifecycle(t *testing.T) {
 	prevTeardownTrayForUIFn := teardownTrayForUIFn
 	t.Cleanup(func() {
 		teardownTrayForUIFn = prevTeardownTrayForUIFn
@@ -41,5 +41,5 @@ func TestTeardownTrayForUIRunsWhenUIOwnsLifecycle(t *testing.T) {
 	app := NewApp()
 	app.teardownTrayForUI()
 
-	assert.Equal(t, 1, calls)
+	assert.Equal(t, 0, calls)
 }

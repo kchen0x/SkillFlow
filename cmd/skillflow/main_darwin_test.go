@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunEntryStartsUIProcessDirectlyOnDarwin(t *testing.T) {
+func TestRunEntryBootstrapsHelperProcessOnDarwin(t *testing.T) {
 	prevRunUIProcessFn := runUIProcessFn
 	prevBootstrapHelperProcessFn := bootstrapHelperProcessFn
 	t.Cleanup(func() {
@@ -31,12 +31,12 @@ func TestRunEntryStartsUIProcessDirectlyOnDarwin(t *testing.T) {
 	exitCode := runEntry([]string{"SkillFlow"})
 
 	assert.Equal(t, 0, exitCode)
-	assert.Equal(t, 1, runUICalls)
-	assert.Equal(t, 0, helperCalls)
+	assert.Equal(t, 0, runUICalls)
+	assert.Equal(t, 1, helperCalls)
 }
 
-func TestBuildUIOptionsHideWindowOnCloseWhenUIOwnsTrayLifecycle(t *testing.T) {
+func TestBuildUIOptionsDoesNotHideWindowOnCloseWhenHelperOwnsTrayLifecycle(t *testing.T) {
 	opts := buildUIOptions(NewApp())
 	require.NotNil(t, opts)
-	assert.True(t, opts.HideWindowOnClose)
+	assert.False(t, opts.HideWindowOnClose)
 }
