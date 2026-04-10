@@ -18,7 +18,7 @@ var (
 )
 
 func showMainWindowNative(ctx context.Context) error {
-	if activeProcessRole == processRoleHelper {
+	if activeProcessRole == processRoleDaemon {
 		darwinEnsureStatusItemFn()
 	}
 	darwinApplyRegularPolicyFn()
@@ -29,7 +29,7 @@ func showMainWindowNative(ctx context.Context) error {
 }
 
 func hideMainWindowNative(ctx context.Context) error {
-	if activeProcessRole == processRoleHelper {
+	if activeProcessRole == processRoleDaemon {
 		darwinEnsureStatusItemFn()
 	}
 	darwinRuntimeHideFn(ctx)

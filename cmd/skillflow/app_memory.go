@@ -6,6 +6,7 @@ import (
 
 	memorydomain "github.com/shinerio/skillflow/core/memorycatalog/domain"
 	memoryeditor "github.com/shinerio/skillflow/core/memorycatalog/infra/editor"
+	"github.com/shinerio/skillflow/core/platform/eventbus"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -481,8 +482,16 @@ func (a *App) memoryStatusForAgent(agentType string) string {
 }
 
 func (a *App) emitMemoryEvent(eventName string, payload map[string]interface{}) {
-	if a == nil || a.ctx == nil {
+	if a == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, eventName, payload)
+	if a.hub != nil {
+		a.hub.Publish(eventbus.Event{
+			Type:    eventbus.EventType(eventName),
+			Payload: payload,
+		})
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, eventName, payload)
+	}
 }

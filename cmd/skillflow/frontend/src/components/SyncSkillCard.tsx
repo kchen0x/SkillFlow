@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { FolderOpen, Github, FolderOpenDot, Copy, Check } from 'lucide-react'
-import { OpenPath, GetSkillMeta, GetSkillMetaByPath, ReadSkillFileContent } from '../../wailsjs/go/main/App'
+import { OpenPath } from '../../wailsjs/go/main/App'
+import { GetSkillMeta, GetSkillMetaByPath, ReadSkillFileContent } from '../lib/backend'
 import { useLanguage } from '../contexts/LanguageContext'
 import { copyTextToClipboard } from '../lib/clipboard'
 import SkillTooltip from './SkillTooltip'

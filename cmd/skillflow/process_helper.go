@@ -12,15 +12,26 @@ import (
 	"time"
 
 	"github.com/shinerio/skillflow/core/config"
+	daemonruntime "github.com/shinerio/skillflow/core/platform/daemon"
 	"github.com/shinerio/skillflow/core/platform/logging"
 )
 
 const helperNotifyTimeout = 3 * time.Second
 
+var (
+	startDaemonServiceFn = daemonruntime.StartService
+	daemonServicePathFn  = daemonServicePath
+	sendUIControlCommandFn = func(command string) error {
+		return sendLoopbackControlCommand(uiControlPath(), command)
+	}
+)
+
 type helperController struct {
 	loggerMu     sync.Mutex
 	logger       *logging.Logger
 	helperServer *loopbackControlServer
+	daemonService *daemonruntime.Service
+	daemonApp    *App
 	quitCh       chan struct{}
 	quitOnce     sync.Once
 	uiArgs       []string
@@ -64,6 +75,9 @@ func (h *helperController) run() error {
 	if err := prepareHelperRuntime(); err != nil {
 		return err
 	}
+	if err := h.initializeDaemonBackend(); err != nil {
+		return err
+	}
 
 	server, err := startLoopbackControlServer(helperControlPath(), h.handleHelperControlCommand)
 	if err != nil {
@@ -71,6 +85,7 @@ func (h *helperController) run() error {
 	}
 	h.helperServer = server
 	defer h.closeHelperServer()
+	defer h.closeDaemonService()
 
 	if err := setupTray(h); err != nil {
 		return err
@@ -108,7 +123,7 @@ func (h *helperController) showMainWindow() {
 }
 
 func (h *helperController) hideMainWindow() {
-	if err := sendLoopbackControlCommand(uiControlPath(), controlCommandHide); err != nil && !isControlEndpointMissing(err) {
+	if err := h.stopUI(); err != nil && !isControlEndpointMissing(err) {
 		h.logErrorf("helper hide ui failed: %v", err)
 	}
 }
@@ -131,7 +146,7 @@ func (h *helperController) ensureUIRunningAndFocused() error {
 	h.uiMu.Lock()
 	defer h.uiMu.Unlock()
 
-	if err := sendLoopbackControlCommand(uiControlPath(), controlCommandShow); err == nil {
+	if err := sendUIControlCommandFn(controlCommandShow); err == nil {
 		return nil
 	}
 
@@ -144,7 +159,7 @@ func (h *helperController) ensureUIRunningAndFocused() error {
 
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		if err := sendLoopbackControlCommand(uiControlPath(), controlCommandShow); err == nil {
+		if err := sendUIControlCommandFn(controlCommandShow); err == nil {
 			return nil
 		}
 		time.Sleep(150 * time.Millisecond)
@@ -184,18 +199,32 @@ func (h *helperController) stopUI() error {
 	cmd := h.uiCmd
 	h.uiMu.Unlock()
 
-	err := sendLoopbackControlCommand(uiControlPath(), controlCommandQuit)
+	err := sendUIControlCommandFn(controlCommandQuit)
 	if err == nil {
+		h.clearTrackedUIProcess(cmd)
 		return nil
 	}
 
 	if cmd != nil && cmd.Process != nil {
-		return cmd.Process.Kill()
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			return killErr
+		}
+		h.clearTrackedUIProcess(cmd)
+		return nil
 	}
 	if isControlEndpointMissing(err) {
+		h.clearTrackedUIProcess(cmd)
 		return nil
 	}
 	return err
+}
+
+func (h *helperController) clearTrackedUIProcess(cmd *exec.Cmd) {
+	h.uiMu.Lock()
+	defer h.uiMu.Unlock()
+	if h.uiCmd == cmd {
+		h.uiCmd = nil
+	}
 }
 
 func (h *helperController) closeHelperServer() {
@@ -206,6 +235,45 @@ func (h *helperController) closeHelperServer() {
 		h.logErrorf("helper control server stop failed: %v", err)
 	}
 	h.helperServer = nil
+}
+
+func (h *helperController) closeDaemonService() {
+	if h.daemonService == nil {
+		return
+	}
+	if err := h.daemonService.Close(); err != nil {
+		h.logErrorf("daemon service stop failed: %v", err)
+	}
+	h.daemonService = nil
+}
+
+func (h *helperController) initializeDaemonBackend() error {
+	app := newDaemonAppFn()
+
+	rt, err := newDaemonRuntimeFn(appDataDirFunc(), daemonruntime.Dependencies{
+		RunUpgrade:          runStartupUpgrade,
+		LoadConfig:          loadStartupConfig,
+		NewLogger:           logging.New,
+		SyncLaunchAtLogin:   app.syncLaunchAtLogin,
+		RegisterAdapters:    registerAdapters,
+		RegisterProviders:   registerProviders,
+		BuiltinStarredRepos: builtinStarredRepoURLs,
+	})
+	if err != nil {
+		return err
+	}
+
+	app.applyRuntime(rt)
+	h.daemonApp = app
+	service, err := startDaemonServiceFn(daemonServicePathFn(), daemonServiceHandlers(app))
+	if err != nil {
+		return err
+	}
+	service.SetEventHub(app.hub)
+	h.daemonService = service
+	startAppAutoSyncTimerFn(app, rt.ConfigSnapshot.Cloud.SyncIntervalMinutes)
+	startAppBackgroundTasksFn(app)
+	return nil
 }
 
 func (h *helperController) logDebugf(format string, args ...any) {

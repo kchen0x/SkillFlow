@@ -3,7 +3,15 @@ package main
 import "github.com/shinerio/skillflow/core/config"
 
 func (a *App) GetConfig() (config.AppConfig, error) {
-	cfg, err := a.config.Load()
+	var (
+		cfg config.AppConfig
+		err error
+	)
+	if shouldProxyAppMethodsToDaemon() {
+		err = a.invokeDaemonService("GetConfig", nil, &cfg)
+	} else {
+		cfg, err = a.config.Load()
+	}
 	if err != nil {
 		return cfg, err
 	}

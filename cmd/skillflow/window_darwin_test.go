@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestShowMainWindowNativeEnsuresStatusItemForHelperProcess(t *testing.T) {
+func TestShowMainWindowNativeEnsuresStatusItemForDaemonProcess(t *testing.T) {
 	restore := stubDarwinWindowRuntime()
 	t.Cleanup(restore)
 
 	prevActiveProcessRole := activeProcessRole
-	activeProcessRole = processRoleHelper
+	activeProcessRole = processRoleDaemon
 	t.Cleanup(func() {
 		activeProcessRole = prevActiveProcessRole
 	})
@@ -83,12 +83,12 @@ func TestShowMainWindowNativeDoesNotEnsureStatusItemForUIProcess(t *testing.T) {
 	}, calls)
 }
 
-func TestHideMainWindowNativeKeepsStatusItemAliveForHelperProcess(t *testing.T) {
+func TestHideMainWindowNativeKeepsStatusItemAliveForDaemonProcess(t *testing.T) {
 	restore := stubDarwinWindowRuntime()
 	t.Cleanup(restore)
 
 	prevActiveProcessRole := activeProcessRole
-	activeProcessRole = processRoleHelper
+	activeProcessRole = processRoleDaemon
 	t.Cleanup(func() {
 		activeProcessRole = prevActiveProcessRole
 	})

@@ -24,7 +24,7 @@ SkillFlow 的后端是一个基于 DDD 的模块化单体：
 - [应用层用例](./use-cases_zh.md)
   - 各上下文的 command/query 归属、共享编排以及 read model 组合规则
 - [运行时、仓库布局与存储](./runtime-and-storage_zh.md)
-  - Wails 壳层约束、helper/UI 双进程、存储布局，以及 repository 与 gateway 的划分规则
+  - Wails 壳层约束、daemon/UI 双进程、loopback 网关职责、存储布局，以及 repository 与 gateway 的划分规则
 
 ## 不变约束
 
@@ -40,4 +40,4 @@ SkillFlow 的后端是一个基于 DDD 的模块化单体：
 
 这组文档只覆盖后端架构。用户可见行为仍然以 [`docs/features_zh.md`](../features_zh.md) 为准，落盘配置格式仍然以 [`docs/config_zh.md`](../config_zh.md) 为准。
 
-*最后更新：2026-03-21*
+*最后更新：2026-04-06*

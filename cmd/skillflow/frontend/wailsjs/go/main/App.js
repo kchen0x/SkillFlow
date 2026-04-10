@@ -126,6 +126,10 @@ export function GetAppVersion() {
   return window['go']['main']['App']['GetAppVersion']();
 }
 
+export function GetBackendClientConfig() {
+  return window['go']['main']['App']['GetBackendClientConfig']();
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }

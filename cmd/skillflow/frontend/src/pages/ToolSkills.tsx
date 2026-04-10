@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { OpenPath } from '../../wailsjs/go/main/App'
 import {
   GetEnabledAgents,
   GetAgentMemoryPreview,
   ListAgentSkills,
   DeleteAgentSkill,
-  OpenPath,
   ReadSkillFileContent,
   GetSkillMetaByPath,
   ListCategories,
   ScanAgentSkills,
   PullFromAgent,
   PullFromAgentForce,
-} from '../../wailsjs/go/main/App'
+} from '../lib/backend'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import ConflictDialog from '../components/ConflictDialog'
 import { ToolIcon } from '../config/toolIcons'

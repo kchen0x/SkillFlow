@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSetupTrayForUIDoesNothingWhenHelperOwnsLifecycle(t *testing.T) {
+func TestSetupTrayForUISkipsWhenUILifecycleDisabled(t *testing.T) {
 	prevSetupTrayForUIFn := setupTrayForUIFn
 	t.Cleanup(func() {
 		setupTrayForUIFn = prevSetupTrayForUIFn
@@ -27,7 +27,7 @@ func TestSetupTrayForUIDoesNothingWhenHelperOwnsLifecycle(t *testing.T) {
 	assert.Equal(t, 0, calls)
 }
 
-func TestTeardownTrayForUIDoesNothingWhenHelperOwnsLifecycle(t *testing.T) {
+func TestTeardownTrayForUISkipsWhenUILifecycleDisabled(t *testing.T) {
 	prevTeardownTrayForUIFn := teardownTrayForUIFn
 	t.Cleanup(func() {
 		teardownTrayForUIFn = prevTeardownTrayForUIFn

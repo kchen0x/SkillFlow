@@ -52,13 +52,14 @@ A fixed left sidebar (w-56) provides navigation throughout the app.
   - `/sync/push` redirects to `/`
   - `/sync/pull` redirects to `/tools`
 - Bottom-left **Feedback** button: opens the GitHub "new issue" page in the default browser.
-- Window close button behavior: clicking the top-left close button closes the current UI process instead of only hiding it. The lightweight helper remains in the tray/menu bar, so `Show SkillFlow` or launching the app again opens a fresh window.
+- Window close button behavior: clicking the top-left close button closes the current UI process instead of only hiding it. The background `daemon` remains in the tray/menu bar, so `Show SkillFlow` or launching the app again opens a fresh window.
 - Primary-page refresh behavior: route transitions remount the page subtree keyed by `location.pathname`, so re-entering pages such as **My Skills**, **My Agents**, **My Prompts**, and **Starred Repos** fetches fresh backend state again without requiring a manual in-page refresh.
 - Startup smoothing behavior: after the shell is ready, background startup jobs are staggered instead of launching together, so the first interactive second is less likely to compete with skill update checks, starred refresh, app update checks, and git startup pull at the same time.
-- Window reactivation behavior: when the window is shown again after staying hidden in the tray/menu bar or inactive for a long time, SkillFlow now keeps the current routed page tree mounted. The visible page content, scroll position, and in-progress interactions remain available immediately instead of being replaced by a temporary memory-trim placeholder or forcing a route remount.
+- Process residency behavior: when the main window is active, SkillFlow runs a background `daemon` plus a visible `ui` process. When the window is hidden to the tray/menu bar, only the `daemon` remains resident; the `ui` process exits and releases its page memory.
+- Window reactivation behavior: when the window is hidden to the tray/menu bar, the UI process exits and releases its in-memory page state. Showing SkillFlow again starts a fresh UI process, so the window reopens from a cold start instead of restoring the previous routed page tree and in-progress interactions.
 - Initial window sizing: on launch, SkillFlow first restores the most recently saved window size from local-only `config_local.json`; if none is saved yet, it sizes itself against the current display with a larger desktop-friendly default, clamps to the available screen, and centers the window.
-- macOS tray behavior: a lightweight helper keeps a monochrome status icon in the menu-bar status area. Closing the main window exits the UI process, but the menu-bar item remains available with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`; `Show SkillFlow` relaunches or focuses the UI window.
-- Windows tray behavior: a lightweight helper remains in the system notification area with the app icon. Closing the main window exits the UI process; the tray menu can still `Show SkillFlow` to relaunch/focus the UI, or `Exit` to terminate both helper and UI.
+- macOS tray behavior: the background `daemon` keeps a monochrome status icon in the menu-bar status area. Closing the main window or choosing `Hide SkillFlow` exits the `ui` process, but the menu-bar item remains available with `Show SkillFlow`, `Hide SkillFlow`, and `Quit SkillFlow`; `Show SkillFlow` relaunches the UI window from a fresh start when no UI process is active.
+- Windows tray behavior: the background `daemon` remains in the system notification area with the app icon. Closing the main window exits the `ui` process; the tray menu can still `Show SkillFlow` to relaunch/focus the UI, or `Exit` to terminate both `daemon` and `ui`.
 
 ---
 
@@ -943,4 +944,4 @@ Memory content files (`memory/main.md` and `memory/rules/*.md`) are included in 
 
 ---
 
-*Last updated: 2026-04-04*
+*Last updated: 2026-04-06*

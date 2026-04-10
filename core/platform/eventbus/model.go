@@ -25,6 +25,10 @@ const (
 	EventAppUpdateDownloadDone      EventType = "app.update.download.done"
 	EventAppUpdateDownloadFail      EventType = "app.update.download.fail"
 	EventAppWindowVisibilityChanged EventType = "app.window.visibility.changed"
+
+	EventMemoryContentChanged EventType = "memory:content:changed"
+	EventMemoryPushCompleted  EventType = "memory:push:completed"
+	EventMemoryStatusChanged  EventType = "memory:status:changed"
 )
 
 type Event struct {

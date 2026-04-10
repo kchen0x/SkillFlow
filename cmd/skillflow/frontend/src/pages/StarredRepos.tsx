@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
+import { OpenURL } from '../../wailsjs/go/main/App'
 import {
   ListStarredRepos, AddStarredRepo, AddStarredRepoWithCredentials, RemoveStarredRepo,
   UpdateStarredRepo, UpdateAllStarredRepos,
   ListAllStarSkills, ListRepoStarSkills,
-  ImportStarSkills, ListCategories, OpenURL,
+  ImportStarSkills, ListCategories,
   GetEnabledAgents, PushStarSkillsToAgents, PushStarSkillsToAgentsForce, CheckMissingAgentPushDirs,
-} from '../../wailsjs/go/main/App'
+} from '../lib/backend'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   Star, RefreshCw, Plus, Trash2, LayoutGrid, Folder,

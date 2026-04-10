@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ListSkills, ListCategories, MoveSkillCategory,
-  DeleteSkill, DeleteSkills, ImportLocal, UpdateSkill, CheckUpdates,
-  OpenFolderDialog, GetSkillMeta, GetConfig, SaveConfig,
-  CheckMissingAgentPushDirs, PushToAgents, PushToAgentsForce,
+  OpenFolderDialog,
 } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import CategoryPanel from '../components/CategoryPanel'
@@ -41,6 +38,12 @@ import {
   syncDashboardManualPushVisibleSelection,
   isDashboardManualPushReady,
 } from '../lib/dashboardManualPushState'
+import {
+  ListSkills, ListCategories, MoveSkillCategory,
+  DeleteSkill, DeleteSkills, ImportLocal, UpdateSkill, CheckUpdates,
+  GetSkillMeta, GetConfig, SaveConfig,
+  CheckMissingAgentPushDirs, PushToAgents, PushToAgentsForce,
+} from '../lib/backend'
 
 type SkillUpdateNotice = {
   tone: 'progress' | 'success' | 'error'
