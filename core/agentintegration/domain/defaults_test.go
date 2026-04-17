@@ -35,6 +35,7 @@ func TestDefaultProfileUsesExpectedDirectories(t *testing.T) {
 func TestDefaultProfileUsesExpectedDirectoriesForCopilot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	builtinDir := filepath.Join(home, ".copilot", "pkg", "universal", "1.0.31", "builtin-skills")
 	require.NoError(t, os.MkdirAll(builtinDir, 0o755))

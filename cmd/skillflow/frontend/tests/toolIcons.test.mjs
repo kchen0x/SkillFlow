@@ -5,7 +5,7 @@ import { getToolIconConfig } from '../.tmp-tests/src/config/toolIcons.js'
 test('getToolIconConfig returns branded config for Copilot', () => {
   const config = getToolIconConfig('copilot')
 
-  assert.notEqual(config.color, '#6b7280')
+  assert.equal(config.color, '#000000')
   assert.equal(typeof config.svg, 'function')
 })
 
